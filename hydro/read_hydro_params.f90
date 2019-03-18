@@ -549,8 +549,10 @@ subroutine read_hydro_params(nml_ok)
      if(dust)            write(*,*) '   idust    = ',idust
      if(delayed_cooling) write(*,*) '   idelay   = ',idelay
      if(sf_virial)then
-        write(*,*) '   ivirial1 = ',ivirial1
-        if(sf_compressive) write(*,*) '   ivirial2 = ',ivirial2
+        if(sf_compressive)then
+           write(*,*) '   ivirial1 = ',ivirial1
+           write(*,*) '   ivirial2 = ',ivirial2
+        end if
      endif
      if(aton)            write(*,*) '   ixion    = ',ixion
 #ifdef RT

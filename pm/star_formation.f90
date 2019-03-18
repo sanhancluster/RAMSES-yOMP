@@ -576,6 +576,16 @@ subroutine star_formation(ilevel)
                              sfr_ff(i) = 0.0
                              ok(i)     = .false.
                           endif
+                       !  Federrath+ (2012) best fit model, see Kimm+ (2017)
+                       CASE (6)
+                          alpha0    = (5.0*sigma2)/(pi*factG*d*dx_loc**2)
+                          b_turb    = 0.4
+                          phi_t     = 0.57
+                          theta     = 0.33
+                          sigs      = log(1.0+(b_turb**2)*(sigma2/cs2))
+                          scrit     = log(0.067/(theta**2)*alpha0*(sigma2/cs2))
+
+                          sfr_ff(i) = eps_star/(2.0*phi_t)*exp(3.0/8.0*sigs)*(2.0-erfc_pre_f08((sigs-scrit)/sqrt(2.0*sigs)))
                        END SELECT
                  endif
               endif
