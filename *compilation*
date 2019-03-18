@@ -1,0 +1,28 @@
+-*- mode: compilation; default-directory: "~/Documents/These/ramses-iap/" -*-
+Compilation started at Mon Jun 18 10:47:58
+
+make -C bin
+make: Entering directory '/home/ccc/Documents/These/ramses-iap/bin'
+../utils/scripts/cr_write_makefile.sh  Makefile
+mpif90 -frecord-marker=4 -ffree-line-length-none -Wall -Wextra -fPIC -fmax-errors=1 -g -fcheck=all -fbacktrace -Wno-compare-reals -Wno-unused-dummy-argument -x f95-cpp-input -ffpe-trap=zero,underflow,overflow,invalid -finit-real=nan  -DNVECTOR=32 -DNDIM=3 -DNPRE=8 -DNENER=0 -DNVAR=6 -DSOLVERhydro -c write_makefile.f90 -o write_makefile.o
+../utils/scripts/cr_write_patch.sh 
+mpif90 -frecord-marker=4 -ffree-line-length-none -Wall -Wextra -fPIC -fmax-errors=1 -g -fcheck=all -fbacktrace -Wno-compare-reals -Wno-unused-dummy-argument -x f95-cpp-input -ffpe-trap=zero,underflow,overflow,invalid -finit-real=nan  -DNVECTOR=32 -DNDIM=3 -DNPRE=8 -DNENER=0 -DNVAR=6 -DSOLVERhydro -c write_patch.f90 -o write_patch.o
+mpif90 -frecord-marker=4 -ffree-line-length-none -Wall -Wextra -fPIC -fmax-errors=1 -g -fcheck=all -fbacktrace -Wno-compare-reals -Wno-unused-dummy-argument -x f95-cpp-input -ffpe-trap=zero,underflow,overflow,invalid -finit-real=nan  -DNVECTOR=32 -DNDIM=3 -DNPRE=8 -DNENER=0 -DNVAR=6 -DSOLVERhydro -DPATCH=\'\' -DGITBRANCH=\'cleanup\' -DGITHASH=\'"26035728968cb9fb4ba9a2e7ba7f59ee9a6cc3f6"\' \
+ -DGITREPO=\'\' -DBUILDDATE=\'"06/18/18-10:47:58"\' -c ../amr/write_gitinfo.f90 -o write_gitinfo.o
+mpif90 -frecord-marker=4 -ffree-line-length-none -Wall -Wextra -fPIC -fmax-errors=1 -g -fcheck=all -fbacktrace -Wno-compare-reals -Wno-unused-dummy-argument -x f95-cpp-input -ffpe-trap=zero,underflow,overflow,invalid -finit-real=nan  -DNVECTOR=32 -DNDIM=3 -DNPRE=8 -DNENER=0 -DNVAR=6 -DSOLVERhydro -c ../pm/sink_particle.f90 -o sink_particle.o 
+../pm/sink_particle.f90:1544:33:
+
+                     levelp(indp)=nlevelmax_current
+                                 1
+Warning: Possible change of value in conversion from REAL(8) to INTEGER(4) at (1) [-Wconversion]
+../pm/sink_particle.f90:4873:77:
+
+        nAGN, iAGN_myid, ok_blast_agn, EsaveAGN, spinmagAGN, eps_AGN, X_radio)
+                                                                             1
+Warning: Type mismatch in argument ‘ind_blast’ at (1); passed REAL(8) to INTEGER(4) [-Wargument-mismatch]
+mpif90 -frecord-marker=4 -ffree-line-length-none -Wall -Wextra -fPIC -fmax-errors=1 -g -fcheck=all -fbacktrace -Wno-compare-reals -Wno-unused-dummy-argument mpi_mod.o amr_parameters.o amr_commons.o random.o pm_parameters.o pm_commons.o poisson_parameters.o dump_utils.o poisson_commons.o hydro_parameters.o hydro_commons.o cooling_module.o bisection.o sparse_mat.o clfind_commons.o gadgetreadfile.o write_makefile.o write_patch.o write_gitinfo.o read_params.o init_amr.o init_time.o init_refine.o tracer_utils.o adaptive_loop.o amr_step.o update_time.o output_amr.o flag_utils.o physical_boundaries.o virtual_boundaries.o refine_utils.o nbors_utils.o hilbert.o load_balance.o title.o sort.o cooling_fine.o units.o light_cone.o movie.o utils.o init_hydro.o init_flow_fine.o write_screen.o output_hydro.o courant_fine.o godunov_fine.o uplmde.o umuscl.o interpol_hydro.o godunov_utils.o condinit.o hydro_flag.o hydro_boundary.o boundana.o read_hydro_params.o synchro_hydro_fine.o init_part.o output_part.o rho_fine.o synchro_fine.o move_fine.o newdt_fine.o particle_tree.o add_list.o remove_list.o star_formation.o geom_types.o geom_utils.o geom_distances.o geom_volumes.o sink_particle_tracer.o sink_particle.o feedback.o clump_finder.o clump_merger.o flag_formation_sites.o init_sink.o output_sink.o mechanical_commons.o mechanical_fine.o init_poisson.o phi_fine_cg.o interpol_phi.o force_fine.o multigrid_coarse.o multigrid_fine_commons.o multigrid_fine_fine.o multigrid_fine_coarse.o gravana.o boundary_potential.o rho_ana.o output_poisson.o ramses.o -o ramses3d  
+rm write_makefile.f90
+rm write_patch.f90
+make: Leaving directory '/home/ccc/Documents/These/ramses-iap/bin'
+
+Compilation finished at Mon Jun 18 10:48:03

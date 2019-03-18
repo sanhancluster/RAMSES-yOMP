@@ -1,0 +1,95 @@
+&RUN_PARAMS
+cosmo=.false.
+pic=.true.
+poisson=.true.
+hydro=.true.
+!nrestart=19
+nremap=20
+nsubcycle=1,1,1,15*2
+ncontrol=1
+sink=.true.
+clumpfind=.false.
+/
+
+&INIT_PARAMS
+filetype='ascii'
+initfile(1)='.'
+/
+
+&BOUNDARY_PARAMS
+nboundary = 6
+bound_type= 2,2,2,2,2,2
+ibound_min=-1,+1,-1,-1,-1,-1
+ibound_max=-1,+1,+1,+1,+1,+1
+jbound_min= 0, 0,-1,+1,-1,-1
+jbound_max= 0, 0,-1,+1,+1,+1
+kbound_min= 0, 0, 0, 0,-1,+1
+kbound_max= 0, 0, 0, 0,-1,+1
+no_inflow=.true.
+/
+
+&OUTPUT_PARAMS
+tend=0.5   !30 kyr
+delta_tout=0.032   !produces 50 outputs
+/
+
+&AMR_PARAMS
+levelmin=6
+levelmax=6
+boxlen=4
+nexpand=30*2
+ngridmax=400000
+npartmax=1000000
+nsinkmax=10
+/
+
+&POISSON_PARAMS
+gravity_type=0   !Self gravity
+cg_levelmin=10
+cic_levelmax=10
+gravity_params=10.0,1,1,1E-2  !T,rcut,rho_rcut
+/
+
+&HYDRO_PARAMS
+pressure_fix=.true.
+gamma=1.0001
+courant_factor=0.8 
+slope_type=1
+scheme='muscl'
+riemann='hllc'
+beta_fix=0.5
+/
+
+&CLUMPFIND_PARAMS
+density_threshold=1.0E100  !in H_cc
+clinfo =.true.
+/
+
+&SMBH_PARAMS
+bondi=.true.      ! Activate Bondi accretion rate
+maximum_accretion=.true.
+eddington_limit=.false.
+sink_AGN=.false.   ! Activate AGN feedback
+drag_part=.false.
+drag=.false.
+/
+
+&COOLING_PARAMS
+cooling=.false.    ! Activate gas cooling
+isothermal=.true.
+/
+
+&SF_PARAMS
+T2_star=0       ! Minimum temperature of the gas through cooling
+n_star=62.3e100      ! SF is turned off
+turned off here
+eps_star=0.10
+/
+
+&REFINE_PARAMS
+mass_sph=1d-5    !Mass of a gas particle/8 in internal mass unit, but jeans_refine dominates
+m_refine=20*8.0
+interpol_var=1
+interpol_type=0
+sink_refine=.true. ! Refine at maximum level 4dx away from BHs
+/

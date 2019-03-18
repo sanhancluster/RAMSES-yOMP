@@ -1,0 +1,182 @@
+&RUN_PARAMS
+cosmo=.false.
+pic=.true.
+poisson=.true.
+hydro=.true.
+nrestart=5
+nremap=5
+nsubcycle=1,1,1,1,25*2  !1,1,1,1,1,1,15*2
+ncontrol=1
+sink=.true.
+clumpfind=.false.
+verbose=.false.
+rt=.false.
+/
+
+&INIT_PARAMS
+filetype='dice'
+initfile(1)='/panfs/panasas/cnt0022/iap6955/beckmann/ic/smallgalaxy_2Gpc'
+!initfile(1)='/panfs/panasas/cnt0022/iap6955/beckmann/ic/tiny_dice'
+!initfile(1)='/panfs/panasas/cnt0022/iap6955/beckmann/ic/DM_gas'
+/
+
+&BOUNDARY_PARAMS
+nboundary = 6
+bound_type= 0,0,0,0,0,0
+ibound_min=-1,+1,-1,-1,-1,-1
+ibound_max=-1,+1,+1,+1,+1,+1
+jbound_min= 0, 0,-1,+1,-1,-1
+jbound_max= 0, 0,-1,+1,+1,+1
+kbound_min= 0, 0, 0, 0,-1,+1
+kbound_max= 0, 0, 0, 0,-1,+1
+no_inflow=.true.
+/
+
+&OUTPUT_PARAMS
+tend=6.7
+delta_tout=6.5E-2
+/
+
+&AMR_PARAMS
+levelmin=4
+levelmax=16
+boxlen=30  !2000.0
+nexpand=30*2
+ngridmax=400000
+npartmax=5000000
+nsinkmax=10
+/
+
+&POISSON_PARAMS
+gravity_type=0
+cg_levelmin=9
+cic_levelmax=13
+gravity_params=1250.,6.8,0.0,0.15,20.0,0.1d0,2200.0
+!v200,c,spin,fgas,rcore,turb,rcut
+/
+
+
+&HYDRO_PARAMS
+pressure_fix=.true.
+gamma=1.666666667
+courant_factor=0.8 
+slope_type=1
+scheme='muscl'
+riemann='hllc'
+beta_fix=0.5
+/
+
+&CLUMPFIND_PARAMS
+density_threshold=1.0E100  !in H_cc
+clinfo =.true.
+/
+
+&SMBH_PARAMS
+bondi=.true.
+eddington_limit=.false.
+sink_AGN=.true.   ! Activate AGN feedback
+finestep_AGN=.true.
+spin_bh=.true.
+drag=.false.
+drag_part=.true.
+X_floor=1d5      ! Eddington ratio threshold between radio and quasar mode
+eAGN_T=0.15d0     ! Efficiency of the quasar mode
+TAGN=1E0          ! Temperature increase before energy release in K
+T2maxAGN=1d14     ! Maximum temperature increase due to AGN feedback
+mad_jet=.true.    ! Activate the MAD jet model (McKinney et al, 2012). Only works with 
+rAGN=0.4d0   !AGN superbubble radius in kpc => set so small it uses dx_min
+jetfrac=0d0
+jet_scalar=True
+/
+
+&COOLING_PARAMS
+cooling=.true.    ! Activate gas cooling
+metal=.true.
+z_ave=0.3
+/
+
+&SF_PARAMS
+T2_star=300       ! Minimum temperature of the gas through cooling
+n_star=1      ! SF is turned off turned off here
+eps_star=0.10
+Tcut_star=3E3   !Maximum star formation temperature
+/
+
+&FEEDBACK_PARAMS
+eta_sn=0.2
+yield=0.1          !Metals from SN
+mechanical_feedback = 2
+/
+
+&REFINE_PARAMS
+mass_sph=1d-5    !Mass of a gas particle/8 in internal mass unit, but jeans_refine dominates
+m_refine=20*8.0
+interpol_var=1
+interpol_type=0
+sink_refine=.true. ! Refine at maximum level 4dx away from BHs
+jeans_refine=32*4   !the larger the better
+/
+
+&DICE_PARAMS
+ic_file='dice_halo.g2'         ! Name of the initial conditions file
+ic_nfile=1                    ! If greater than one, look for files with name matching ic_file//'.n'
+ic_ifout=1                    ! Change ramses output index for restarts
+ic_format='Gadget2'           ! Format of the initial conditions. 'Gadget1' or 'Gadget2'
+ic_center=0.0,0.0,0.0         ! Shift center parameter. ICs are automatically shifted with boxlen/2
+ic_scale_pos=1.0              ! Scaling factor for the position vector
+ic_scale_vel=1.0              ! Scaling factor for the velocity vector
+ic_scale_mass=1.0             ! Scaling factor for the mass
+ic_scale_u=1.0                ! Scaling factor for the internal energy
+ic_scale_age=1.0              ! Scaling factor for the particles age
+ic_scale_metal=1.0            ! Scaling factor for the metallicity
+ic_head_name='HEAD'           ! Name of the Header datablock (Gadget2 format only)
+ic_pos_name='POS '            ! Name of the position vector datablock (Gadget2 format only)
+ic_vel_name='VEL '            ! Name of the velocity vector datablock (Gadget2 format only)
+ic_mass_name='MASS'           ! Name of the mass datablock (Gadget2 format only)
+ic_id_name='ID  '             ! Name of the particle identifier datablock (Gadget2 format only)
+ic_u_name='U   '              ! Name of the internal energy datablock (Gadget2 format only)
+ic_metal_name='Z   '          ! Name of the metallicity datablock (Gadget2 format only)
+ic_age_name='AGE '            ! Name of the particle age datablock (Gadget2 format only)
+IG_rho=1.0D-9                 ! Intergalactic gas density
+IG_T2=1.0D6                   ! Intergalactic gas temperature
+IG_metal=1.0D-4               ! Intergalactic gas metallicity
+amr_struct=.false.            ! Reproduce the AMR structure of the Gadget2 file resulting from a ramses to gadget conversion
+analytic_gas_profile=.true.   ! Use DM particles + analytic gas profile as initial conditions
+gadget_scale_l=3.085677581282D21 ! Gadget file length unit
+gadget_scale_v=1.0D5             ! Gadget file velocity unit
+gadget_scale_m=1.9891D43         ! Gadget file mass unit
+gadget_scale_t=3.15360e+13       ! Gadget file time unit
+ic_skip_type        = -1      ! Skip specific particle type
+cosmo_add_gas_index = -1      ! Gas particle type index for cosmo runs
+ic_mag_const=0.0,0.0,0.0      ! Background magnetic field value for x,y,z component
+ic_mag_center_x=0.0           ! x-coordinate of the magnetic field symmetry center
+ic_mag_center_y=0.0           ! y-coordinate of the magnetic field symmetry center
+ic_mag_center_z=0.0           ! z-coordinate of the magnetic field symmetry center
+ic_mag_axis_x=0.0             ! Magnetic field normal vector x-component
+ic_mag_axis_y=0.0             ! Magnetic field normal vector y-component
+ic_mag_axis_z=1.0             ! Magnetic field normal vector z-component
+ic_mag_scale_R=1.0            ! Toroidal magnetic field scalelength
+ic_mag_scale_H=1.0            ! Toroidal magnetic field scaleheight
+ic_mag_scale_B=0.0            ! Foreground toroidal magnetic field value
+/
+
+&MOVIE_PARAMS
+imovout=2000
+tendmov=7.
+imov=1
+movie=.true.
+nw_frame=512
+nh_frame=512
+levelmax_frame=16
+xcentre_frame=15.0,0.0,0.0,0.0,15.0,0.0,0.0,0.0,15.0,0.0,0.0,0.0
+ycentre_frame=15.0,0.0,0.0,0.0,15.0,0.0,0.0,0.0,15.0,0.0,0.0,0.0
+zcentre_frame=15.0,0.0,0.0,0.0,15.0,0.0,0.0,0.0,15.0,0.0,0.0,0.0
+deltax_frame=.3125, 0, .3125, 0, .3125, 0
+deltay_frame=.3125, 0, .3125, 0, .3125, 0
+deltaz_frame=.3125, 0, .3125, 0, .3125, 0
+movie_vars_txt='temp','dens','dm','stars','lum' !'vx','vy','vz','press','lum'
+proj_axis='xyz'
+/
+
+
+
