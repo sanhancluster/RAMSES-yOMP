@@ -452,23 +452,25 @@ subroutine star_formation(ilevel)
                  divv2     = divv**2
                  curlv2    = curlv**2
                  ! Advect unresolved turbulence if a decay time is defined
-                 if(sf_tdiss.gt.0d0) then
-                    if(sf_compressive)then
-                       uold(ind_cell(i),ivirial1) = max(uold(ind_cell(i),ivirial1),0d0)+sigma2_comp
-                       uold(ind_cell(i),ivirial2) = max(uold(ind_cell(i),ivirial2),0d0)+sigma2_sole
-                       sigma2_comp = uold(ind_cell(i),ivirial1)
-                       sigma2_sole = uold(ind_cell(i),ivirial2)
-                       sigma2      = sigma2_sole+sigma2_comp
+                 if(sf_model/=6)then ! avoid overwriting on refmask
+                    if(sf_tdiss.gt.0d0) then
+                       if(sf_compressive)then
+                          uold(ind_cell(i),ivirial1) = max(uold(ind_cell(i),ivirial1),0d0)+sigma2_comp
+                          uold(ind_cell(i),ivirial2) = max(uold(ind_cell(i),ivirial2),0d0)+sigma2_sole
+                          sigma2_comp = uold(ind_cell(i),ivirial1)
+                          sigma2_sole = uold(ind_cell(i),ivirial2)
+                          sigma2      = sigma2_sole+sigma2_comp
+                       else
+                          uold(ind_cell(i),ivirial1) = max(uold(ind_cell(i),ivirial1),0d0)+sigma2
+                          sigma2 = uold(ind_cell(i),ivirial1)
+                       endif
                     else
-                       uold(ind_cell(i),ivirial1) = max(uold(ind_cell(i),ivirial1),0d0)+sigma2
-                       sigma2 = uold(ind_cell(i),ivirial1)
-                    endif
-                 else
-                    if(sf_compressive)then
-                       uold(ind_cell(i),ivirial1) = sigma2_comp
-                       uold(ind_cell(i),ivirial2) = sigma2_sole
-                    else
-                       uold(ind_cell(i),ivirial1) = sigma2
+                       if(sf_compressive)then
+                          uold(ind_cell(i),ivirial1) = sigma2_comp
+                          uold(ind_cell(i),ivirial2) = sigma2_sole
+                       else
+                          uold(ind_cell(i),ivirial1) = sigma2
+                       endif
                     endif
                  endif
                  ! Density criterion
