@@ -7,7 +7,7 @@ subroutine read_hydro_params(nml_ok)
   !--------------------------------------------------
   ! Local variables
   !--------------------------------------------------
-  integer::i,idim,ifixed,nboundary_true=0
+  integer::i,idim,ifixed,nboundary_true=0,ipar
   integer ,dimension(1:MAXBOUND)::bound_type
   real(dp)::ek_bound,eta_sn_ini
   logical :: dummy
@@ -520,25 +520,36 @@ subroutine read_hydro_params(nml_ok)
   ! Hard-coded variables are rho,v*ndim,P
   ifixed=ndim+2
 #endif
-  inener=ifixed+1
-  imetal=inener+nener
-  idust=imetal
-  if(metal)idust=imetal+1
-  idelay=idust
-  if(dust)idelay=idust+1
-  ivirial1=idelay
-  ivirial2=idelay
+  ipar=ifixed+1
+  if(nener>0)then
+     inener=ipar
+     ipar=ipar+nener
+  endif
+  if(metal)then
+     imetal=ipar
+     ipar=ipar+1
+  endif
+  if(dust)then
+     idust=ipar
+     ipar=ipar+1
+  endif
   if(delayed_cooling)then
-     ivirial1=idelay+1
-     ivirial2=idelay+1
+     idelay=ipar
+     ipar=ipar+1
   endif
   if(sf_virial)then
-     if(sf_compressive) ivirial2=ivirial1+1
+     ivirial1=ipar
+     if(sf_compressive)then
+        ivirial2=ivirial+1
+        ipar=ipar+1
+     endif
+     ixion=ivirial2+1
+     ipar=ipar+2
   endif
-  ixion=ivirial2
-  if(sf_virial)ixion=ivirial2+1
-  ichem=ixion
-  if(aton)ichem=ixion+1
+  if(aton)
+     ichem=ipar
+     ipar=ipar+1
+  endif
   if(myid==1.and.hydro.and.(nvar>ndim+2)) then
      write(*,'(A50)')"__________________________________________________"
      write(*,*) 'Hydro var indices:'
