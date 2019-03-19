@@ -17,7 +17,7 @@ SOLVER = hydro
 GRACKLE = 0
 RT=0
 DICE=0
-REFMASK=0
+REFMASK=1
 # Set to 1 to use old MPI include statements instead of more recent `use mpi`.
 USE_OLD_MPI_INCLUDE = 0
 EXEC = ramses

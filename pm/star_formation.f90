@@ -452,23 +452,25 @@ subroutine star_formation(ilevel)
                  divv2     = divv**2
                  curlv2    = curlv**2
                  ! Advect unresolved turbulence if a decay time is defined
-                 if(sf_tdiss.gt.0d0) then
-                    if(sf_compressive)then
-                       uold(ind_cell(i),ivirial1) = max(uold(ind_cell(i),ivirial1),0d0)+sigma2_comp
-                       uold(ind_cell(i),ivirial2) = max(uold(ind_cell(i),ivirial2),0d0)+sigma2_sole
-                       sigma2_comp = uold(ind_cell(i),ivirial1)
-                       sigma2_sole = uold(ind_cell(i),ivirial2)
-                       sigma2      = sigma2_sole+sigma2_comp
+                 if(sf_model/=6)then ! avoid overwriting on refmask
+                    if(sf_tdiss.gt.0d0) then
+                       if(sf_compressive)then
+                          uold(ind_cell(i),ivirial1) = max(uold(ind_cell(i),ivirial1),0d0)+sigma2_comp
+                          uold(ind_cell(i),ivirial2) = max(uold(ind_cell(i),ivirial2),0d0)+sigma2_sole
+                          sigma2_comp = uold(ind_cell(i),ivirial1)
+                          sigma2_sole = uold(ind_cell(i),ivirial2)
+                          sigma2      = sigma2_sole+sigma2_comp
+                       else
+                          uold(ind_cell(i),ivirial1) = max(uold(ind_cell(i),ivirial1),0d0)+sigma2
+                          sigma2 = uold(ind_cell(i),ivirial1)
+                       endif
                     else
-                       uold(ind_cell(i),ivirial1) = max(uold(ind_cell(i),ivirial1),0d0)+sigma2
-                       sigma2 = uold(ind_cell(i),ivirial1)
-                    endif
-                 else
-                    if(sf_compressive)then
-                       uold(ind_cell(i),ivirial1) = sigma2_comp
-                       uold(ind_cell(i),ivirial2) = sigma2_sole
-                    else
-                       uold(ind_cell(i),ivirial1) = sigma2
+                       if(sf_compressive)then
+                          uold(ind_cell(i),ivirial1) = sigma2_comp
+                          uold(ind_cell(i),ivirial2) = sigma2_sole
+                       else
+                          uold(ind_cell(i),ivirial1) = sigma2
+                       endif
                     endif
                  endif
                  ! Density criterion
@@ -576,6 +578,16 @@ subroutine star_formation(ilevel)
                              sfr_ff(i) = 0.0
                              ok(i)     = .false.
                           endif
+                       !  Federrath+ (2012) best fit model, see Kimm+ (2017) but with no jeans criterion, equivalent to NH
+                       CASE (6)
+                          alpha0    = (5.0*sigma2)/(pi*factG*d*dx_loc**2)
+                          b_turb    = 0.4
+                          phi_t     = 0.57
+                          theta     = 0.33
+                          sigs      = log(1.0+(b_turb**2)*(sigma2/cs2))
+                          scrit     = log(0.067/(theta**2)*alpha0*(sigma2/cs2))
+
+                          sfr_ff(i) = eps_star/2.0*phi_t*exp(3.0/8.0*sigs)*(2.0-erfc_pre_f08((sigs-scrit)/sqrt(2.0*sigs)))
                        END SELECT
                  endif
               endif

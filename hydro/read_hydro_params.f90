@@ -548,14 +548,17 @@ subroutine read_hydro_params(nml_ok)
      if(metal)           write(*,*) '   imetal   = ',imetal
      if(dust)            write(*,*) '   idust    = ',idust
      if(delayed_cooling) write(*,*) '   idelay   = ',idelay
-     if(sf_virial)then
-        write(*,*) '   ivirial1 = ',ivirial1
-        if(sf_compressive) write(*,*) '   ivirial2 = ',ivirial2
+     if(sf_virial .and. sf_model /= 6)then
+           write(*,*) '   ivirial1 = ',ivirial1
+        if(sf_compressive)then
+           write(*,*) '   ivirial2 = ',ivirial2
+        end if
      endif
      if(aton)            write(*,*) '   ixion    = ',ixion
 #ifdef RT
      if(rt) write(*,*) '   iIons    = ',ichem
 #endif
+     if(ivar_refine>0)write(*,*) '   refmask  = ',ivar_refine
      write(*,'(A50)')"__________________________________________________"
   endif
 
