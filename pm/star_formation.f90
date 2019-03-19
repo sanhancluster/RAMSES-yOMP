@@ -306,19 +306,21 @@ subroutine star_formation(ilevel)
         end do
 
 
-        if(sf_virial)then
+        if(sf_model/=0)then
            do i=1,ngrid
               ! if cell is a leaf cell
               if (ok(i)) then
-                 ! Subgrid turbulence decay
-                 if(sf_tdiss.gt.0d0) then
-                    if(sf_compressive) then
-                       tdec = sf_tdiss*dx_loc/sqrt(uold(ind_cell(i),ivirial1)+uold(ind_cell(i),ivirial2))
-                       if(uold(ind_cell(i),ivirial1).gt.0d0) uold(ind_cell(i),ivirial1) = uold(ind_cell(i),ivirial1)*exp(-dtold(ilevel)/tdec)
-                       if(uold(ind_cell(i),ivirial2).gt.0d0) uold(ind_cell(i),ivirial2) = uold(ind_cell(i),ivirial2)*exp(-dtold(ilevel)/tdec)
-                    else
-                       tdec = sf_tdiss*dx_loc/sqrt(uold(ind_cell(i),ivirial1))
-                       if(uold(ind_cell(i),ivirial1).gt.0d0) uold(ind_cell(i),ivirial1) = uold(ind_cell(i),ivirial1)*exp(-dtold(ilevel)/tdec)
+                 ! Subgrid turbulence deca
+                 if(sf_virial)then
+                    if(sf_tdiss.gt.0d0) then
+                       if(sf_compressive) then
+                          tdec = sf_tdiss*dx_loc/sqrt(uold(ind_cell(i),ivirial1)+uold(ind_cell(i),ivirial2))
+                          if(uold(ind_cell(i),ivirial1).gt.0d0) uold(ind_cell(i),ivirial1) = uold(ind_cell(i),ivirial1)*exp(-dtold(ilevel)/tdec)
+                          if(uold(ind_cell(i),ivirial2).gt.0d0) uold(ind_cell(i),ivirial2) = uold(ind_cell(i),ivirial2)*exp(-dtold(ilevel)/tdec)
+                       else
+                          tdec = sf_tdiss*dx_loc/sqrt(uold(ind_cell(i),ivirial1))
+                          if(uold(ind_cell(i),ivirial1).gt.0d0) uold(ind_cell(i),ivirial1) = uold(ind_cell(i),ivirial1)*exp(-dtold(ilevel)/tdec)
+                       endif
                     endif
                  endif
                  d         = uold(ind_cell(i),1)
@@ -452,7 +454,7 @@ subroutine star_formation(ilevel)
                  divv2     = divv**2
                  curlv2    = curlv**2
                  ! Advect unresolved turbulence if a decay time is defined
-                 if(sf_model/=6)then ! avoid overwriting on refmask
+                 if(sf_virial)then ! avoid overwriting on refmask
                     if(sf_tdiss.gt.0d0) then
                        if(sf_compressive)then
                           uold(ind_cell(i),ivirial1) = max(uold(ind_cell(i),ivirial1),0d0)+sigma2_comp
@@ -477,9 +479,6 @@ subroutine star_formation(ilevel)
                  if(d<=d0) ok(i)=.false.
                  if(ok(i)) then
                     SELECT CASE (sf_model)
-                       ! Classical density threshold
-                       CASE (0)
-                          sfr_ff(i) = eps_star
                        ! Multi-ff KM model
                        CASE (1)
                           ! Virial parameter
@@ -593,18 +592,23 @@ subroutine star_formation(ilevel)
               endif
            end do
         else
-           ! Density criterion
            do i=1,ngrid
+              ! Density criterion
               d=uold(ind_cell(i),1)
-              if(d<=d0) ok(i)=.false.
-           end do
-           ! Temperature criterion
-           do i=1,ngrid
-              T2=uold(ind_cell(i),5)*scale_T2*(gamma-1.0)
-              nH=max(uold(ind_cell(i),1),smallr)*scale_nH
-              T_poly=T2_star*(nH/nISM)**(g_star-1.0)
-              T2=T2-T_poly
-              if(T2>2e4) ok(i)=.false.
+              if(d<=d0)then
+                 ok(i)=.false.
+              else
+                 ! Temperature criterion
+                 T2=uold(ind_cell(i),5)*scale_T2*(gamma-1.0)
+                 nH=max(uold(ind_cell(i),1),smallr)*scale_nH
+                 T_poly=T2_star*(nH/nISM)**(g_star-1.0)
+                 T2=T2-T_poly
+                 if(T2>2e4)then
+                    ok(i)=.false.
+                 else
+                    sfr_ff(i) = eps_star
+                 endif
+              endif
            end do
         endif
 
@@ -625,7 +629,6 @@ subroutine star_formation(ilevel)
               mcell=d*vol_loc
               ! Free fall time of an homogeneous sphere
               tstar= .5427*sqrt(1.0/(factG*max(d,smallr)))
-              if(.not.sf_virial) sfr_ff(i) = eps_star
               ! Gas mass to be converted into stars
               mgas=dtnew(ilevel)*(sfr_ff(i)/tstar)*mcell
               ! Poisson mean
