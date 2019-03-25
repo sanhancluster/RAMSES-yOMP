@@ -2916,6 +2916,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
         do idim=1,ndim
            r2=r2+(xp(ind_part(j),idim)-xsink(isink,idim))**2
         end do
+        ! weight given by kernel function where cloud particles sit
         weight=exp(-r2/r2k(isink))
 
         d=max(uold(indp(j),1), smallr)
@@ -2960,6 +2961,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
         else
            acc_mass=dMBHoverdt(isink)* weight/total_volume(isink)*dtnew(ilevel)
         end if
+        ! avoid numerial instability due to absorbing too much fraction of cell mass
         acc_mass=max( min(acc_mass, (d-floorB)*vol_loc), 0d0)
 
         if(spin_bh)then
@@ -3140,6 +3142,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
      call tracer2sink(ind_tracer, proba_tracer, &
           xsink_loc, ind_sink, ii, dx_loc)
   end if
+
 
 
 end subroutine accrete_bondi

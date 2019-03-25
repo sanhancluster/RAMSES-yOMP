@@ -540,13 +540,13 @@ subroutine read_hydro_params(nml_ok)
   if(sf_virial)then
      ivirial1=ipar
      if(sf_compressive)then
-        ivirial2=ivirial+1
+        ivirial2=ivirial1+1
         ipar=ipar+1
      endif
      ixion=ivirial2+1
      ipar=ipar+2
   endif
-  if(aton)
+  if(aton)then
      ichem=ipar
      ipar=ipar+1
   endif
