@@ -48,9 +48,10 @@ module amr_commons
   integer ,dimension(1:MAXLEVEL)::n1,n2,n3
 
   ! Level related arrays
-  real(dp),dimension(1:MAXLEVEL)::dtold,dtnew ! Time step at each level
-  real(dp),dimension(1:MAXLEVEL)::rho_max     ! Maximum density at each level
-  integer ,dimension(1:MAXLEVEL)::nsubcycle=2 ! Subcycling at each level
+  real(dp),dimension(1:MAXLEVEL)::dtold,dtnew    ! Time step at each level
+  real(dp),dimension(1:MAXLEVEL)::rho_max        ! Maximum density at each level
+  integer ,dimension(1:MAXLEVEL)::nsubcycle=2    ! Subcycling at each level
+  integer ,dimension(1:MAXLEVEL)::load_weights=1 ! Additional weights to cost-based load balancing
 
   ! Pointers for each level linked list
   integer,allocatable,dimension(:,:)::headl
