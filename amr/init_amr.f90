@@ -319,8 +319,8 @@ subroutine init_amr
         call clean_stop
      end if
      ! Old output times
-     tout(1:noutput2)=tout2(1:noutput2)
-     aout(1:noutput2)=aout2(1:noutput2)
+     ! tout(1:noutput2)=tout2(1:noutput2)
+     ! aout(1:noutput2)=aout2(1:noutput2)
      iout=iout2
      ifout=ifout2
      if(ifout.gt.nrestart+1) ifout=nrestart+1

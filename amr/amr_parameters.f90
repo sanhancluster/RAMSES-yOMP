@@ -114,6 +114,7 @@ module amr_parameters
   logical::output_now=.false. ! write output next step
   real(dp)::walltime_hrs=-1.  ! Wallclock time for submitted job
   real(dp)::minutes_dump=1.   ! Dump an output minutes before walltime ends
+  logical::wall_stop=.true.   ! Stop when non-scheduled dump is finished
 
   ! Lightcone parameters
   real(dp)::thetay_cone=12.5

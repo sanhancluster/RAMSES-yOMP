@@ -29,7 +29,7 @@ subroutine read_params
   ! Namelist definitions
   !--------------------------------------------------
   namelist/run_params/clumpfind,cosmo,pic,sink,sinkprops,lightcone,poisson,hydro,rt,verbose,debug &
-       & ,nrestart,ncontrol,nstepmax,nsubcycle,nremap,ordering &
+       & ,nrestart,ncontrol,nstepmax,nsubcycle,load_weights,nremap,ordering &
        & ,bisec_tol,static,overload,cost_weighting,aton,nrestart_quad,restart_remap &
        & ,static_dm,static_gas,static_stars,convert_birth_times,use_proper_time,remap_pscalar
   namelist/output_params/noutput,foutput,aout,tout &
@@ -374,30 +374,32 @@ subroutine read_params
   ! Rearrange level dependent arrays
   !-----------------------------------
   do i=nlevelmax,levelmin,-1
-     nexpand   (i)=nexpand   (i-levelmin+1)
-     nsubcycle (i)=nsubcycle (i-levelmin+1)
-     r_refine  (i)=r_refine  (i-levelmin+1)
-     a_refine  (i)=a_refine  (i-levelmin+1)
-     b_refine  (i)=b_refine  (i-levelmin+1)
-     x_refine  (i)=x_refine  (i-levelmin+1)
-     y_refine  (i)=y_refine  (i-levelmin+1)
-     z_refine  (i)=z_refine  (i-levelmin+1)
-     m_refine  (i)=m_refine  (i-levelmin+1)
-     exp_refine(i)=exp_refine(i-levelmin+1)
-     initfile  (i)=initfile  (i-levelmin+1)
+     nexpand     (i)=nexpand     (i-levelmin+1)
+     nsubcycle   (i)=nsubcycle   (i-levelmin+1)
+     load_weights(i)=load_weights(i-levelmin+1)
+     r_refine    (i)=r_refine    (i-levelmin+1)
+     a_refine    (i)=a_refine    (i-levelmin+1)
+     b_refine    (i)=b_refine    (i-levelmin+1)
+     x_refine    (i)=x_refine    (i-levelmin+1)
+     y_refine    (i)=y_refine    (i-levelmin+1)
+     z_refine    (i)=z_refine    (i-levelmin+1)
+     m_refine    (i)=m_refine    (i-levelmin+1)
+     exp_refine  (i)=exp_refine  (i-levelmin+1)
+     initfile    (i)=initfile    (i-levelmin+1)
   end do
   do i=1,levelmin-1
-     nexpand   (i)= 1
-     nsubcycle (i)= 1
-     r_refine  (i)=-1.0
-     a_refine  (i)= 1.0
-     b_refine  (i)= 1.0
-     x_refine  (i)= 0.0
-     y_refine  (i)= 0.0
-     z_refine  (i)= 0.0
-     m_refine  (i)=-1.0
-     exp_refine(i)= 2.0
-     initfile  (i)= ' '
+     nexpand     (i)= 1
+     nsubcycle   (i)= 1
+     load_weights(i)= 1
+     r_refine    (i)=-1.0
+     a_refine    (i)= 1.0
+     b_refine    (i)= 1.0
+     x_refine    (i)= 0.0
+     y_refine    (i)= 0.0
+     z_refine    (i)= 0.0
+     m_refine    (i)=-1.0
+     exp_refine  (i)= 2.0
+     initfile    (i)= ' '
   end do
 
   if(.not.cosmo)then

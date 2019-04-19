@@ -318,10 +318,12 @@ subroutine cmp_new_cpu_map
 
   ! Compute time step related cost
   if(cost_weighting)then
-     niter_cost(levelmin)=1
+     niter_cost(levelmin)=load_weights(levelmin)
      if (nlevelmax - levelmin - 1 > 31) write(*,*) 'Warning load_balance: niter_cost may need to become a kind=8 integer'
      do ilevel=levelmin+1,nlevelmax
         niter_cost(ilevel)=nsubcycle(ilevel-1)*niter_cost(ilevel-1)
+        ! Additional weights to cost array
+        niter_cost(ilevel)=niter_cost(ilevel)*load_weights(ilevel)/load_weights(ilevel-1)
      end do
   else
      niter_cost(levelmin:nlevelmax)=1
@@ -427,7 +429,7 @@ subroutine cmp_new_cpu_map
                     ncell_loc=ncell_loc+1
                     isub=(dom(ncell_loc)-1)/ncpu+1
                     ncell_sub(isub)=ncell_sub(isub)+1
-                    flag1(ncell)=8*10 ! Magic number
+                    flag1(ncell)=8*10 ! Magic number, relative cost between particle and cells
                     if(pic)then
                        ! Add more load for tracer particles
                        if (tracer .and. ilevel >= tracer_first_balance_levelmin) then
@@ -443,6 +445,7 @@ subroutine cmp_new_cpu_map
                        stop
                     endif
                     flag1(ncell)=flag1(ncell)*niter_cost(ilevel)
+
                     npart_sub(isub)=npart_sub(isub)+flag1(ncell)
                     hilbert_key(ncell)=order_max(ncell_loc)
                  end if
