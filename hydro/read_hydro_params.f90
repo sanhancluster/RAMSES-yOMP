@@ -317,9 +317,9 @@ subroutine read_hydro_params(nml_ok)
      nml_ok=.false.
   endif
 #ifdef SOLVERmhd
-  if(metal.and.nvar<(ndim+5))then
+  if(dust.and.nvar<(ndim+5))then
 #else
-  if(metal.and.nvar<(ndim+4))then
+  if(dust.and.nvar<(ndim+4))then
 #endif
      if(myid==1)write(*,*)'Error: dust needs nvar >= ndim+4'
      if(myid==1)write(*,*)'Make sure METALS = 1 and NVAR_EXTRA > 0 in the Makefile and recompile'
