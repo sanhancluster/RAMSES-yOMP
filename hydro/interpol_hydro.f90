@@ -232,10 +232,10 @@ subroutine interpol_hydro(u1,u2,nn)
   integer::i,j,ivar,idim,ind,ix,iy,iz
   real(dp)::oneover_twotondim
   real(dp),dimension(1:twotondim,1:3)::xc
-  real(dp),dimension(1:nvector,0:twondim),save::a
-  real(dp),dimension(1:nvector,1:ndim),save::w
-  real(dp),dimension(1:nvector),save::ekin,mom
-  real(dp),dimension(1:nvector),save::erad
+  real(dp),dimension(1:nvector,0:twondim)::a
+  real(dp),dimension(1:nvector,1:ndim)::w
+  real(dp),dimension(1:nvector)::ekin,mom
+  real(dp),dimension(1:nvector)::erad
 #if NENER>0
   integer::irad
 #endif
@@ -431,9 +431,9 @@ subroutine compute_limiter_central(a,w,nn)
   integer::i,j,idim,ind,ix,iy,iz
   real(dp),dimension(1:twotondim,1:3)::xc
   real(dp)::xxc
-  real(dp),dimension(1:nvector,1:twotondim),save::ac
-  real(dp),dimension(1:nvector),save::corner,kernel,diff_corner,diff_kernel
-  real(dp),dimension(1:nvector),save::max_limiter,min_limiter,limiter
+  real(dp),dimension(1:nvector,1:twotondim)::ac
+  real(dp),dimension(1:nvector)::corner,kernel,diff_corner,diff_kernel
+  real(dp),dimension(1:nvector)::max_limiter,min_limiter,limiter
 
   ! Set position of cell centers relative to grid center
   do ind=1,twotondim

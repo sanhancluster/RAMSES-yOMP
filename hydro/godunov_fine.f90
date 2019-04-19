@@ -14,7 +14,7 @@ subroutine godunov_fine(ilevel)
   ! On exit, unew has been updated.
   !--------------------------------------------------------------------------
   integer::i,igrid,ncache,ngrid
-  integer,dimension(1:nvector),save::ind_grid
+  integer,dimension(1:nvector)::ind_grid
 
   if(numbtot(1,ilevel)==0)return
   if(static)return
@@ -22,6 +22,7 @@ subroutine godunov_fine(ilevel)
 
   ! Loop over active grids by vector sweeps
   ncache=active(ilevel)%ngrid
+!$OMP parallel do private(igrid,ngrid,ind_grid)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -449,8 +450,10 @@ end subroutine add_pdv_source_terms
 !###########################################################
 !###########################################################
 subroutine godfine1(ind_grid,ncache,ilevel)
-  use amr_commons
-  use hydro_commons
+  use hydro_parameters
+
+  use amr_commons,only:son,father
+  use hydro_commons,only:uold,unew,fluxes,divu,enew,pstarold
   use poisson_commons
   implicit none
   integer::ilevel,ncache
@@ -465,20 +468,20 @@ subroutine godfine1(ind_grid,ncache,ilevel)
   ! and stored in array unew(:), both at the current level and at the
   ! coarser level if necessary.
   !-------------------------------------------------------------------
-  integer ,dimension(1:nvector,1:threetondim     ),save::nbors_father_cells
-  integer ,dimension(1:nvector,1:twotondim       ),save::nbors_father_grids
-  integer ,dimension(1:nvector,0:twondim         ),save::ibuffer_father
-  real(dp),dimension(1:nvector,0:twondim  ,1:nvar),save::u1
-  real(dp),dimension(1:nvector,1:twotondim,1:nvar),save::u2
+  integer ,dimension(1:nvector,1:threetondim     )::nbors_father_cells
+  integer ,dimension(1:nvector,1:twotondim       )::nbors_father_grids
+  integer ,dimension(1:nvector,0:twondim         )::ibuffer_father
+  real(dp),dimension(1:nvector,0:twondim  ,1:nvar)::u1
+  real(dp),dimension(1:nvector,1:twotondim,1:nvar)::u2
 
-  real(dp),dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2,1:nvar),save::uloc
-  real(dp),dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2,1:ndim),save::gloc=0.0d0
-  real(dp),dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2),save::ploc=0.0d0
-  real(dp),dimension(1:nvector,if1:if2,jf1:jf2,kf1:kf2,1:nvar,1:ndim),save::flux
-  real(dp),dimension(1:nvector,if1:if2,jf1:jf2,kf1:kf2,1:2,1:ndim),save::tmp
-  logical ,dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2),save::ok
+  real(dp),dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2,1:nvar)::uloc
+  real(dp),dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2,1:ndim)::gloc=0.0d0
+  real(dp),dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2)::ploc=0.0d0
+  real(dp),dimension(1:nvector,if1:if2,jf1:jf2,kf1:kf2,1:nvar,1:ndim)::flux
+  real(dp),dimension(1:nvector,if1:if2,jf1:jf2,kf1:kf2,1:2,1:ndim)::tmp
+  logical ,dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2)::ok
 
-  integer,dimension(1:nvector),save::igrid_nbor,ind_cell,ind_buffer,ind_exist,ind_nexist
+  integer,dimension(1:nvector)::igrid_nbor,ind_cell,ind_buffer,ind_exist,ind_nexist
 
   integer::i,j,ivar,idim,ind_son,ind_father,iskip,nbuffer
   integer::i0,j0,k0,i1,j1,k1,i2,j2,k2,i3,j3,k3,nx_loc,nb_noneigh,nexist
@@ -690,6 +693,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
      end do
      end do
   end do
+
   !--------------------------------------
   ! Conservative update at level ilevel
   !--------------------------------------
