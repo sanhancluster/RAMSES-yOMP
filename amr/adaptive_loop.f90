@@ -20,6 +20,7 @@ subroutine adaptive_loop
   character(len=1000)::filename
   logical::ic_sink=.false.
   integer::ilevel,idim,ivar
+  character(LEN=80)::str
 
 #ifndef WITHOUTMPI
   tt1=MPI_WTIME()

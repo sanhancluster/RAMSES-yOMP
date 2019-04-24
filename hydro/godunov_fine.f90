@@ -22,7 +22,6 @@ subroutine godunov_fine(ilevel)
 
   ! Loop over active grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$OMP parallel do private(igrid,ngrid,ind_grid)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -399,48 +398,6 @@ subroutine add_pdv_source_terms(ilevel)
      ! End loop over cells
   end do
   ! End loop over grids
-
-  return
-
-  ! This is the old technique based on the "pressure fix" option.
-
-  ! Update thermal internal energy
-  if(pressure_fix)then
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
-        do i=1,active(ilevel)%ngrid
-           ind_cell1=active(ilevel)%igrid(i)+iskip
-           ! Compute old thermal energy
-           d=max(uold(ind_cell1,1),smallr)
-           u=0.0; v=0.0; w=0.0
-           if(ndim>0)u=uold(ind_cell1,2)/d
-           if(ndim>1)v=uold(ind_cell1,3)/d
-           if(ndim>2)w=uold(ind_cell1,4)/d
-           eold=uold(ind_cell1,ndim+2)-0.5*d*(u**2+v**2+w**2)
-#if NENER>0
-           do irad=1,nener
-              eold=eold-uold(ind_cell1,ndim+2+irad)
-           end do
-#endif
-           ! Add pdV term
-           enew(ind_cell1)=enew(ind_cell1) &
-                & +(gamma-1.0d0)*eold*divu(ind_cell1) ! Note: here divu=-div.u*dt
-        end do
-     end do
-  end if
-
-#if NENER>0
-  do irad=1,nener
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
-        do i=1,active(ilevel)%ngrid
-           ind_cell1=active(ilevel)%igrid(i)+iskip
-           unew(ind_cell1,ndim+2+irad)=unew(ind_cell1,ndim+2+irad) &
-                & +(gamma_rad(irad)-1.0d0)*uold(ind_cell1,ndim+2+irad)*divu(ind_cell1) ! Note: here divu=-div.u*dt
-        end do
-     end do
-  end do
-#endif
 
 111 format('   Entering add_pdv_source_terms for level ',i2)
 

@@ -451,6 +451,7 @@ recursive subroutine amr_step(ilevel,icount)
   ! Move particles
   !---------------
   ! Move other particles
+                               call timer('particles - move fine','start')
   if(pic)then
      if(static_dm.or.static_stars)then
         call move_fine_static(ilevel) ! Only remaining particles

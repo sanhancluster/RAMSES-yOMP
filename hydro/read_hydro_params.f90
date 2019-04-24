@@ -337,7 +337,7 @@ subroutine read_hydro_params(nml_ok)
      M_SNII=19.134730
      eta_sn=0.20913717
   else if(TRIM(star_imf).eq.'chabrier')then
-     M_SNII=19.134730 !TODO
+     M_SNII=10. !TODO
      eta_sn=0.313706  !TODO
   else if(TRIM(star_imf).ne.'')then
      write(*,*) 'your star_imf seems wrong -->'//TRIM(star_imf)
