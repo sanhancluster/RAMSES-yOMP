@@ -161,6 +161,7 @@ end subroutine init_tree
 !################################################################
 !################################################################
 !################################################################
+!################################################################
 subroutine make_tree_fine(ilevel)
   use pm_commons
   use amr_commons
@@ -181,7 +182,10 @@ subroutine make_tree_fine(ilevel)
   real(dp),dimension(1:3)::skip_loc
   integer::igrid,jgrid,ipart,jpart,next_part
   integer::ig,ip,npart1,icpu
-  integer,dimension(1:nvector),save::ind_grid,ind_part,ind_grid_part
+  integer,dimension(1:nvector)::ind_grid,ind_part,ind_grid_part
+
+  integer :: ithr,ngrid1,ngrid2,kgrid
+  integer,dimension(1:nthr) :: head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr
 
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
@@ -196,50 +200,81 @@ subroutine make_tree_fine(ilevel)
   if(ndim>2)skip_loc(3)=dble(kcoarse_min)
   scale=boxlen/dble(nx_loc)
 
-  ! Loop over cpus
-  do icpu=1,ncpu
-     igrid=headl(icpu,ilevel)
-     ig=0
-     ip=0
-     ! Loop over grids
-     do jgrid=1,numbl(icpu,ilevel)
-        npart1=numbp(igrid)  ! Number of particles in the grid
-        if(npart1>0)then
-           ig=ig+1
-           ind_grid(ig)=igrid
-           ipart=headp(igrid)
-           ! Loop over particles
-           do jpart=1,npart1
-              ! Save next particle  <--- Very important !!!
-              next_part=nextp(ipart)
-              if(ig==0)then
-                 ig=1
-                 ind_grid(ig)=igrid
-              end if
-              ip=ip+1
-              ind_part(ip)=ipart
-              ind_grid_part(ip)=ig
-              ! Gather nvector particles
-              if(ip==nvector)then
-                 call check_tree(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
-                 ip=0
-                 ig=0
-              end if
-              ipart=next_part  ! Go to next particle
-           end do
-           ! End loop over particles
-        end if
-        igrid=next(igrid)   ! Go to next grid
-     end do
-     ! End loop over grids
-     if(ip>0)call check_tree(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+#ifdef _OPENMP
+  call cpu_parallel_link_all(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr)
+#else
+  head_thr(1)=headl(myid,ilevel)
+  ngrid_thr(1)=numbl(myid,ilevel)
+  npart_thr(1)=1
+  icpu_thr(1)=1
+  jgrid_thr(1)=1
+#endif
+!$omp parallel do private(ithr,icpu,igrid,jgrid,kgrid,npart1,ipart,next_part,jpart,ip,ig,ind_grid,ind_part,ind_grid_part,ngrid1,ngrid2)
+  do ithr=1,nthr
+     ngrid1=ngrid_thr(ithr)
+     if(ngrid1>0 .and. npart_thr(ithr)>0) then
+        ip=0
+        ig=0
+        igrid=head_thr(ithr)
+        icpu=icpu_thr(ithr)
+        jgrid=jgrid_thr(ithr)
+
+        kgrid=1
+        ngrid2=numbl(icpu,ilevel)
+
+        do ! Loop over cpus,grids
+           if(kgrid>ngrid1)exit
+           if(jgrid>ngrid2) then
+              icpu=icpu+1
+              jgrid=1
+              ngrid2=numbl(icpu,ilevel)
+              igrid=headl(icpu,ilevel)
+              cycle
+           end if
+
+           npart1=numbp(igrid)
+
+           if(npart1>0)then
+              ig=ig+1
+              ind_grid(ig)=igrid
+              ipart=headp(igrid)
+              ! Loop over particles
+              do jpart=1,npart1
+                 ! Save next particle  <--- Very important !!!
+                 next_part=nextp(ipart)
+                 if(ig==0)then
+                    ig=1
+                    ind_grid(ig)=igrid
+                 end if
+                 ip=ip+1
+                 ind_part(ip)=ipart
+                 ind_grid_part(ip)=ig
+                 ! Gather nvector particles
+                 if(ip==nvector)then
+                    call check_tree(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+                    ip=0
+                    ig=0
+                 end if
+                 ipart=next_part  ! Go to next particle
+              end do
+              ! End loop over particles
+           end if
+
+           kgrid=kgrid+1
+           jgrid=jgrid+1
+
+           igrid=next(igrid)
+        end do
+        if(ip>0)call check_tree(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+     endif
   end do
-  ! End loop over cpus
+
 
   ! Periodic boundaries
   if(sink)then
-     do idim=1,ndim
-        do ipart=1,nsink
+!$omp parallel do private(ipart,idim)
+     do ipart=1,nsink
+        do idim=1,ndim
            if(xsink(ipart,idim)/scale+skip_loc(idim)<0.0d0) &
                 & xsink(ipart,idim)=xsink(ipart,idim)+(xbound(idim)-skip_loc(idim))*scale
            if(xsink(ipart,idim)/scale+skip_loc(idim)>=xbound(idim)) &
@@ -270,14 +305,14 @@ subroutine check_tree(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   real(dp)::dx,xxx,scale
   real(dp),dimension(1:3)::xbound
   ! Grid-based arrays
-  integer ,dimension(1:nvector,1:threetondim),save::nbors_father_cells
-  integer ,dimension(1:nvector,1:twotondim),save::nbors_father_grids
-  real(dp),dimension(1:nvector,1:ndim),save::x0
-  integer ,dimension(1:nvector),save::ind_father
+  integer ,dimension(1:nvector,1:threetondim)::nbors_father_cells
+  integer ,dimension(1:nvector,1:twotondim)::nbors_father_grids
+  real(dp),dimension(1:nvector,1:ndim)::x0
+  integer ,dimension(1:nvector)::ind_father
   ! Particle-based arrays
-  integer,dimension(1:nvector),save::ind_son,igrid_son
-  integer,dimension(1:nvector),save::list1,list2
-  logical,dimension(1:nvector),save::ok
+  integer,dimension(1:nvector)::ind_son,igrid_son
+  integer,dimension(1:nvector)::list1,list2
+  logical,dimension(1:nvector)::ok
   real(dp),dimension(1:3)::skip_loc
 
   ! Mesh spacing in that level
@@ -330,10 +365,15 @@ subroutine check_tree(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
      end do
      do j = 1, np
         if (.not. ok(j)) then
-           write(*,*)xp(ind_part(j), :),x0(ind_grid_part(j), :)*scale, typep(ind_part(j))%family
+           write(*,*)xp(ind_part(j), :),x0(ind_grid_part(j), :)*scale, idp(ind_part(j)), typep(ind_part(j))%family
         end if
      end do
-     stop 1
+     if(is_tracer(typep(ind_part(j))))then
+        write(*,*)'Continuing...'
+     else
+        stop 1
+     end if
+
   end if
 
   ! Compute neighboring grid index
@@ -391,7 +431,11 @@ subroutine kill_tree_fine(ilevel)
   !------------------------------------------------------------------------
   integer::igrid,jgrid,ipart,jpart,next_part
   integer::i,ig,ip,npart1,icpu
-  integer,dimension(1:nvector),save::ind_grid,ind_part,ind_grid_part
+  integer,dimension(1:nvector)::ind_grid,ind_part,ind_grid_part
+
+  integer :: ithr,ngrid1,ngrid2,kgrid
+  integer,dimension(1:nthr) :: head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr
+
 
   if(numbtot(1,ilevel)==0)return
   if(ilevel==nlevelmax)return
@@ -399,11 +443,13 @@ subroutine kill_tree_fine(ilevel)
   if(verbose)write(*,111)ilevel
 
   ! Reset all linked lists at level ilevel+1
+!$omp parallel do private(i) schedule(dynamic,nvector)
   do i=1,active(ilevel+1)%ngrid
      headp(active(ilevel+1)%igrid(i))=0
      tailp(active(ilevel+1)%igrid(i))=0
      numbp(active(ilevel+1)%igrid(i))=0
   end do
+!$omp parallel do private(icpu,i) schedule(dynamic)
   do icpu=1,ncpu
      do i=1,reception(icpu,ilevel+1)%ngrid
         headp(reception(icpu,ilevel+1)%igrid(i))=0
@@ -414,44 +460,73 @@ subroutine kill_tree_fine(ilevel)
 
   ! Sort particles between ilevel and ilevel+1
 
-  ! Loop over cpus
-  do icpu=1,ncpu
-     igrid=headl(icpu,ilevel)
-     ig=0
-     ip=0
-     ! Loop over grids
-     do jgrid=1,numbl(icpu,ilevel)
-        npart1=numbp(igrid)  ! Number of particles in the grid
-        if(npart1>0)then
-           ig=ig+1
-           ind_grid(ig)=igrid
-           ipart=headp(igrid)
-           ! Loop over particles
-           do jpart=1,npart1
-              ! Save next particle   <--- Very important !!!
-              next_part=nextp(ipart)
-              if(ig==0)then
-                 ig=1
-                 ind_grid(ig)=igrid
-              end if
-              ip=ip+1
-              ind_part(ip)=ipart
-              ind_grid_part(ip)=ig
-              if(ip==nvector)then
-                 call kill_tree(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
-                 ip=0
-                 ig=0
-              end if
-              ipart=next_part  ! Go to next particle
-           end do
-           ! End loop over particles
-        end if
-        igrid=next(igrid)   ! Go to next grid
-     end do
-     ! End loop over grids
-     if(ip>0)call kill_tree(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+#ifdef _OPENMP
+  call cpu_parallel_link_all(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr)
+#else
+  head_thr(1)=headl(myid,ilevel)
+  ngrid_thr(1)=numbl(myid,ilevel)
+  npart_thr(1)=1
+  icpu_thr(1)=1
+  jgrid_thr(1)=1
+#endif
+!$omp parallel do private(ithr,icpu,igrid,jgrid,kgrid,npart1,ipart,next_part,jpart,ip,ig,ind_grid,ind_part,ind_grid_part,ngrid1,ngrid2) num_threads(MAX(4, nthr/4))
+  do ithr=1,nthr
+     ngrid1=ngrid_thr(ithr)
+     if(ngrid1>0 .and. npart_thr(ithr)>0) then
+        ip=0
+        ig=0
+        igrid=head_thr(ithr)
+        icpu=icpu_thr(ithr)
+        jgrid=jgrid_thr(ithr)
+
+        kgrid=1
+        ngrid2=numbl(icpu,ilevel)
+
+        do ! Loop over cpus,grids
+           if(kgrid>ngrid1)exit
+           if(jgrid>ngrid2) then
+              icpu=icpu+1
+              jgrid=1
+              ngrid2=numbl(icpu,ilevel)
+              igrid=headl(icpu,ilevel)
+              cycle
+           end if
+
+           npart1=numbp(igrid)
+
+           if(npart1>0)then
+              ig=ig+1
+              ind_grid(ig)=igrid
+              ipart=headp(igrid)
+              ! Loop over particles
+              do jpart=1,npart1
+                 ! Save next particle   <--- Very important !!!
+                 next_part=nextp(ipart)
+                 if(ig==0)then
+                    ig=1
+                    ind_grid(ig)=igrid
+                 end if
+                 ip=ip+1
+                 ind_part(ip)=ipart
+                 ind_grid_part(ip)=ig
+                 if(ip==nvector)then
+                    call kill_tree(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+                    ip=0
+                    ig=0
+                 end if
+                 ipart=next_part  ! Go to next particle
+              end do
+              ! End loop over particles
+           end if
+
+           kgrid=kgrid+1
+           jgrid=jgrid+1
+
+           igrid=next(igrid)
+        end do
+        if(ip>0)call kill_tree(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+     endif
   end do
-  ! End loop over cpus
 
 111 format('   Entering kill_tree_fine for level ',I2)
 
@@ -473,11 +548,11 @@ subroutine kill_tree(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   integer::i,j,idim,nx_loc
   real(dp)::dx,xxx,scale
   ! Grid based arrays
-  real(dp),dimension(1:nvector,1:ndim),save::x0
+  real(dp),dimension(1:nvector,1:ndim)::x0
   ! Particle based arrays
-  integer,dimension(1:nvector),save::igrid_son,ind_son
-  integer,dimension(1:nvector),save::list1,list2
-  logical,dimension(1:nvector),save::ok
+  integer,dimension(1:nvector)::igrid_son,ind_son
+  integer,dimension(1:nvector)::list1,list2
+  logical,dimension(1:nvector)::ok
   real(dp),dimension(1:3)::skip_loc
 
   ! Mesh spacing in that level
@@ -533,12 +608,10 @@ subroutine kill_tree(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
         list2(j)=igrid_son(j)
      end if
   end do
-
   ! Remove particles from their original linked lists
   call remove_list(ind_part,list1,ok,np)
   ! Add particles to their new linked lists
   call add_list(ind_part,list2,ok,np)
-
 end subroutine kill_tree
 !################################################################
 !################################################################
@@ -1181,25 +1254,38 @@ subroutine reset_tracer_move_flag(ilevel)
 
   integer :: ipart, jpart, next_part, jgrid, npart1, igrid
 
-  ! Loop over grids
-  igrid = headl(myid, ilevel)
-  do jgrid = 1, numbl(myid, ilevel)
-     npart1 = numbp(igrid)  ! Number of particles in the grid
-     if (npart1 > 0) then
-        ipart = headp(igrid)
-        ! Loop over particles
-        do jpart = 1, npart1
-           ! Save next particle  <---- Very important !!!
-           next_part = nextp(ipart)
+  !OMP
+  integer :: ithr
+  integer,dimension(1:nthr) :: head_thr,ngrid_thr
 
-           if (is_tracer(typep(ipart))) then
-              move_flag(ipart) = max(move_flag(ipart) - 1, 0)
-           end if
-           ipart = next_part  ! Go to next particle
-        end do
-     end if
-     igrid = next(igrid)   ! Go to next grid
-  end do
+#ifdef _OPENMP
+  call parallel_link_tracer(headl(myid,ilevel),numbl(myid,ilevel),head_thr,ngrid_thr)
+#else
+  head_thr(1)=headl(myid,ilevel)
+  ngrid_thr(1)=numbl(myid,ilevel)
+#endif
+!$omp parallel do private(ithr,igrid,jgrid,npart1,ipart,next_part,jpart)
+  do ithr=1,nthr
+     igrid=head_thr(ithr)
+     ! Loop over grids
+     do jgrid=1,ngrid_thr(ithr)
+        npart1 = numbp(igrid)  ! Number of particles in the grid
+        if (npart1 > 0) then
+           ipart = headp(igrid)
+           ! Loop over particles
+           do jpart = 1, npart1
+              ! Save next particle  <---- Very important !!!
+              next_part = nextp(ipart)
+
+              if (is_tracer(typep(ipart))) then
+                 move_flag(ipart) = max(move_flag(ipart) - 1, 0)
+              end if
+              ipart = next_part  ! Go to next particle
+           end do
+        end if
+        igrid=next(igrid)   ! Go to next grid
+     end do ! End loop over grids
+   end do ! End loop over threads
 
 end subroutine reset_tracer_move_flag
 

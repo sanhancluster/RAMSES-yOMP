@@ -165,9 +165,6 @@ subroutine init_sink
      allocate(most_massive_sink(1:nsinkmax))
      most_massive_sink=0
 
-     ! This tables is here to speed up the computation
-     allocate(sink_cell(1:nsinkmax))
-     sink_cell=0
   end if
 
   eps_sink=0.057190958d0

@@ -162,10 +162,12 @@ subroutine cmp_residual_mg_fine(ilevel)
    ngrid=active(ilevel)%ngrid
 
    ! Loop over cells
+!$omp parallel default(firstprivate) shared(active,flag2,son,nbor,phi,f)
    do ind=1,twotondim
       iskip_amr = ncoarse+(ind-1)*ngridmax
 
       ! Loop over active grids
+!$omp do
       do igrid_mg=1,ngrid
          igrid_amr = active(ilevel)%igrid(igrid_mg)
          icell_amr = iskip_amr + igrid_amr
@@ -231,7 +233,9 @@ subroutine cmp_residual_mg_fine(ilevel)
          ! Store ***MINUS THE RESIDUAL*** in f(:,1), using BC-modified RHS
          f(icell_amr,1) = -oneoverdx2*( nb_sum - dtwondim*phi_c )+f(icell_amr,2)
       end do
+!$omp end do
    end do
+!$omp end parallel
 
 end subroutine cmp_residual_mg_fine
 
@@ -257,9 +261,11 @@ subroutine cmp_residual_norm2_fine(ilevel, norm2)
 
    norm2 = 0.0d0
    ! Loop over cells
+!$omp parallel default(firstprivate) shared(active,f) reduction(+:norm2)
    do ind=1,twotondim
       iskip_amr = ncoarse+(ind-1)*ngridmax
       ! Loop over active grids
+!$omp do
       do igrid_mg=1,ngrid
          igrid_amr = active(ilevel)%igrid(igrid_mg)
          icell_amr = iskip_amr + igrid_amr
@@ -268,7 +274,9 @@ subroutine cmp_residual_norm2_fine(ilevel, norm2)
          end if
          norm2 = norm2 + f(icell_amr,1)**2
       end do
+!$omp end do nowait
    end do
+!$omp end parallel
    norm2 = dx2*norm2
 
 end subroutine cmp_residual_norm2_fine
@@ -355,6 +363,7 @@ subroutine gauss_seidel_mg_fine(ilevel,redstep)
    ngrid=active(ilevel)%ngrid
 
    ! Loop over cells, with red/black ordering
+!$omp parallel default(firstprivate) shared(active,flag2,son,nbor,phi,f,safe_mode)
    do ind0=1,twotondim/2      ! Only half of the cells for a red or black sweep
       if(redstep) then
          ind = ired  (ndim,ind0)
@@ -365,6 +374,7 @@ subroutine gauss_seidel_mg_fine(ilevel,redstep)
       iskip_amr = ncoarse+(ind-1)*ngridmax
 
       ! Loop over active grids
+!$omp do
       do igrid_mg=1,ngrid
          igrid_amr = active(ilevel)%igrid(igrid_mg)
          icell_amr = iskip_amr + igrid_amr
@@ -434,7 +444,9 @@ subroutine gauss_seidel_mg_fine(ilevel,redstep)
             phi(icell_amr) = (nb_sum - dx2*f(icell_amr,2)) / (dtwondim - weight)
          end if
       end do
+!$omp end do nowait
    end do
+!$omp end parallel
 end subroutine gauss_seidel_mg_fine
 
 ! ------------------------------------------------------------------------
@@ -523,10 +535,12 @@ subroutine restrict_residual_fine_reverse(ifinelevel)
    icoarselevel=ifinelevel-1
 
    ! Loop over fine cells of the myid active comm
+!$omp parallel default(firstprivate) shared(active,active_mg,f,cpu_map,father,lookup_mg)
    do ind_f_cell=1,twotondim
       iskip_f_amr=ncoarse+(ind_f_cell-1)*ngridmax
 
       ! Loop over fine grids of myid
+!$omp do
       do igrid_f_mg=1,active(ifinelevel)%ngrid
          igrid_f_amr=active(ifinelevel)%igrid(igrid_f_mg)
          icell_f_amr=igrid_f_amr+iskip_f_amr
@@ -552,7 +566,9 @@ subroutine restrict_residual_fine_reverse(ifinelevel)
          active_mg(cpu_amr,icoarselevel)%u(icell_c_mg,2)=&
             active_mg(cpu_amr,icoarselevel)%u(icell_c_mg,2)+res
       end do
+!$omp end do nowait
    end do
+!$omp end parallel
 end subroutine restrict_residual_fine_reverse
 
 ! ------------------------------------------------------------------------
@@ -574,10 +590,10 @@ subroutine interpolate_and_correct_fine(ifinelevel)
    real(dp), dimension(1:8)     :: bbb
    integer,  dimension(1:8,1:8) :: ccc
 
-   integer,  dimension(1:nvector), save               :: igrid_f_amr, icell_amr
-   integer,  dimension(1:nvector,1:threetondim), save :: nbors_father_cells
-   integer,  dimension(1:nvector,1:twotondim), save   :: nbors_father_grids
-   real(dp), dimension(1:nvector), save               :: corr
+   integer,  dimension(1:nvector)                :: igrid_f_amr, icell_amr
+   integer,  dimension(1:nvector,1:threetondim)  :: nbors_father_cells
+   integer,  dimension(1:nvector,1:twotondim)    :: nbors_father_grids
+   real(dp), dimension(1:nvector)                :: corr
 
    ! Local constants
    a = 1.0D0/4.0D0**ndim
@@ -599,6 +615,7 @@ subroutine interpolate_and_correct_fine(ifinelevel)
 
    ! Loop over fine grids by vector sweeps
    ngrid_f=active(ifinelevel)%ngrid
+!$omp parallel do default(firstprivate) shared(active,active_mg,father,cpu_map,lookup_mg,f,phi) schedule(dynamic,nchunk)
    do istart=1,ngrid_f,nvector
 
       ! Gather nvector grids
@@ -656,6 +673,7 @@ subroutine interpolate_and_correct_fine(ifinelevel)
       ! End loop over cells
 
    end do
+!$omp end parallel do
    ! End loop over grids
 end subroutine interpolate_and_correct_fine
 

@@ -24,6 +24,7 @@ contains
     logical, save :: firstCall = .true.
 
     if (firstCall) then
+!$omp critical
        skip_loc=(/0.0d0, 0.0d0, 0.0d0/)
        if(ndim>0) skip_loc(1) = dble(icoarse_min)
        if(ndim>1) skip_loc(2) = dble(jcoarse_min)
@@ -33,6 +34,7 @@ contains
        scale = boxlen/dble(nx_loc)
 
        firstCall = .false.
+!$omp end critical
     end if
 
   end subroutine initialize_skip_loc
@@ -281,11 +283,13 @@ contains
     integer, dimension(1:twotondim/2), intent(out) :: locs
 
     integer, save, dimension(1:6, 1:4) :: mapping
-    logical, save :: firstCall = .true.
+    logical, save:: firstCall = .true.
 
-    integer, save :: twotondimo2 = twotondim/2
+    integer,save :: twotondimo2
 
     if (firstCall) then
+!$omp critical
+	   twotondimo2 = twotondim/2
        mapping(1, 1:4) = (/1, 3, 5, 7/) ! left cells
        mapping(2, 1:4) = (/2, 4, 6, 8/) ! right cells
        mapping(3, 1:4) = (/1, 2, 5, 6/) ! top cells
@@ -294,6 +298,7 @@ contains
        mapping(6, 1:4) = (/5, 6, 7, 8/) ! back cells
 
        firstCall = .false.
+!$omp end critical
     end if
 
     locs(1:twotondimo2) = mapping(direction, 1:twotondimo2)
@@ -310,9 +315,11 @@ contains
     integer, save, dimension(1:6, 1:4) :: mapping
     logical, save :: firstCall = .true.
 
-    integer, save :: twotondimo2 = twotondim/2
+    integer, save :: twotondimo2
 
     if (firstCall) then
+!$omp critical
+	   twotondimo2 = twotondim/2
        mapping(1, 1:4) = (/1, 3, 5, 7/) ! left cells
        mapping(2, 1:4) = (/2, 4, 6, 8/) ! right cells
        mapping(3, 1:4) = (/1, 2, 5, 6/) ! top cells
@@ -321,6 +328,7 @@ contains
        mapping(6, 1:4) = (/5, 6, 7, 8/) ! back cells
 
        firstCall = .false.
+!$omp end critical
     end if
 
     locs(1:twotondimo2) = mapping(direction, 1:twotondimo2)

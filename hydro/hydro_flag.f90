@@ -13,20 +13,20 @@ subroutine hydro_flag(ilevel)
   integer::i,j,ncache,nok,ix,iy,iz,iskip
   integer::igrid,ind,idim,ngrid,ivar
   integer::nx_loc
-  integer,dimension(1:nvector),save::ind_grid,ind_cell
-  integer,dimension(1:nvector,0:twondim),save::igridn
-  integer,dimension(1:nvector,1:twondim),save::indn
+  integer,dimension(1:nvector)::ind_grid,ind_cell
+  integer,dimension(1:nvector,0:twondim)::igridn
+  integer,dimension(1:nvector,1:twondim)::indn
 
-  logical,dimension(1:nvector),save::ok
+  logical,dimension(1:nvector)::ok
 
   real(dp)::dx,dx_loc,scale
   real(dp),dimension(1:3)::skip_loc
   real(dp),dimension(1:twotondim,1:3)::xc
-  real(dp),dimension(1:nvector,1:ndim),save::xx
+  real(dp),dimension(1:nvector,1:ndim)::xx
 #ifdef SOLVERmhd
-  real(dp),dimension(1:nvector,1:nvar+3),save::uug,uum,uud
+  real(dp),dimension(1:nvector,1:nvar+3)::uug,uum,uud
 #else
-  real(dp),dimension(1:nvector,1:nvar),save::uug,uum,uud
+  real(dp),dimension(1:nvector,1:nvar)::uug,uum,uud
 #endif
 
   if(numbtot(1,ilevel)==0)return
@@ -78,6 +78,7 @@ subroutine hydro_flag(ilevel)
 
   ! Loop over active grids
   ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid,i,ind_grid,igridn,ind,iskip,ind_cell,ok,indn,j,idim,uug,uum,uud,xx,nok) schedule(dynamic,nchunk)
   do igrid=1,ncache,nvector
 
      ! Gather nvector grids
@@ -170,8 +171,9 @@ subroutine hydro_flag(ilevel)
         do i=1,ngrid
            if(ok(i))flag1(ind_cell(i))=1
         end do
-
+!$omp critical
         nflag=nflag+nok
+!$omp end critical
      end do
      ! End loop over cells
 

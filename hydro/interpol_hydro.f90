@@ -11,9 +11,8 @@ subroutine upload_fine(ilevel)
   ! This routine performs a restriction operation (averaging down)
   ! for the hydro variables.
   !----------------------------------------------------------------------
-  integer::i,ncache,igrid,ngrid,ind,iskip,nsplit,icell
-  integer,dimension(1:nvector),save::ind_grid,ind_cell,ind_split
-  logical,dimension(1:nvector),save::ok
+  integer::i,ncache,igrid,ngrid,ind
+  integer,dimension(1:nvector)::ind_grid
 
   if(ilevel==nlevelmax)return
   if(numbtot(1,ilevel)==0)return
@@ -21,11 +20,37 @@ subroutine upload_fine(ilevel)
 
   ! Loop over active grids by vector sweeps
   ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(dynamic,nchunk)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
         ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
      end do
+
+     call upfine1(ind_grid,ngrid,ilevel)
+  end do
+  ! End loop over grids
+
+111 format('   Entering upload_fine for level',i2)
+
+end subroutine upload_fine
+!##########################################################################
+!##########################################################################
+!##########################################################################
+!##########################################################################
+!##########################################################################
+subroutine upfine1(ind_grid,ngrid,ilevel)
+  use amr_commons
+  use hydro_commons
+  implicit none
+  integer::ilevel
+  !----------------------------------------------------------------------
+  ! This routine performs a restriction operation (averaging down)
+  ! for the hydro variables.
+  !----------------------------------------------------------------------
+  integer::i,ngrid,ind,iskip,nsplit,icell
+  integer,dimension(1:nvector)::ind_grid,ind_cell,ind_split
+  logical,dimension(1:nvector)::ok
 
      ! Loop over cells
      do ind=1,twotondim
@@ -58,14 +83,8 @@ subroutine upload_fine(ilevel)
         end if
 
      end do
-     ! End loop over cells
 
-  end do
-  ! End loop over grids
-
-111 format('   Entering upload_fine for level',i2)
-
-end subroutine upload_fine
+end subroutine upfine1
 !##########################################################################
 !##########################################################################
 !##########################################################################
@@ -83,8 +102,8 @@ subroutine upl(ind_cell,ncell)
   ! interpol_tar=1: use rho, rho u and rho epsilon
   !---------------------------------------------------------------------
   integer ::ivar,i,idim,ind_son,iskip_son
-  integer ,dimension(1:nvector),save::igrid_son,ind_cell_son
-  real(dp),dimension(1:nvector),save::getx,ekin,erad
+  integer ,dimension(1:nvector)::igrid_son,ind_cell_son
+  real(dp),dimension(1:nvector)::getx,ekin,erad
 #if NENER>0
   integer::irad
 #endif
@@ -232,10 +251,10 @@ subroutine interpol_hydro(u1,u2,nn)
   integer::i,j,ivar,idim,ind,ix,iy,iz
   real(dp)::oneover_twotondim
   real(dp),dimension(1:twotondim,1:3)::xc
-  real(dp),dimension(1:nvector,0:twondim),save::a
-  real(dp),dimension(1:nvector,1:ndim),save::w
-  real(dp),dimension(1:nvector),save::ekin,mom
-  real(dp),dimension(1:nvector),save::erad
+  real(dp),dimension(1:nvector,0:twondim)::a
+  real(dp),dimension(1:nvector,1:ndim)::w
+  real(dp),dimension(1:nvector)::ekin,mom
+  real(dp),dimension(1:nvector)::erad
 #if NENER>0
   integer::irad
 #endif
@@ -431,9 +450,9 @@ subroutine compute_limiter_central(a,w,nn)
   integer::i,j,idim,ind,ix,iy,iz
   real(dp),dimension(1:twotondim,1:3)::xc
   real(dp)::xxc
-  real(dp),dimension(1:nvector,1:twotondim),save::ac
-  real(dp),dimension(1:nvector),save::corner,kernel,diff_corner,diff_kernel
-  real(dp),dimension(1:nvector),save::max_limiter,min_limiter,limiter
+  real(dp),dimension(1:nvector,1:twotondim)::ac
+  real(dp),dimension(1:nvector)::corner,kernel,diff_corner,diff_kernel
+  real(dp),dimension(1:nvector)::max_limiter,min_limiter,limiter
 
   ! Set position of cell centers relative to grid center
   do ind=1,twotondim

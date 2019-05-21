@@ -352,12 +352,16 @@ subroutine refine_fine(ilevel)
   integer::ind,iskip,icpu,ibound
   integer::ncreate_tmp,nkill_tmp
   logical::boundary_region
-  integer,dimension(1:nvector),save::ind_grid,ind_cell
-  integer,dimension(1:nvector),save::ind_grid_tmp,ind_cell_tmp
-  logical,dimension(1:nvector),save::ok
+  integer,dimension(1:nvector)::ind_grid,ind_cell
+  integer,dimension(1:nvector)::ind_grid_tmp,ind_cell_tmp
+  logical,dimension(1:nvector)::ok
 #ifdef LONGINT
   integer(i8b)::tmp_long
 #endif
+
+  ! OMP
+  integer :: ithr,ngrid_now
+  integer,dimension(1:nthr) :: icpu_thr,igrid_thr,ngrid_thr
 
   if(ilevel==nlevelmax)return
   if(numbtot(1,ilevel)==0)return
@@ -378,35 +382,165 @@ subroutine refine_fine(ilevel)
   ! Refine cells marked for refinement
   !------------------------------------
   ncreate=0
-  do icpu=1,ncpu+nboundary  ! Loop over cpus and boundaries
-     if(icpu==myid)then
-        ibound=0
-        boundary_region=.false.
-        ncache=active(ilevel)%ngrid
-     else if(icpu<=ncpu)then
-        ibound=0
-        boundary_region=.false.
-        ncache=reception(icpu,ilevel)%ngrid
-     else
-        ibound=icpu-ncpu
-        boundary_region=.true.
-        ncache=boundary(ibound,ilevel)%ngrid
-     end if
+
+  ! Loop over active grids
+  ibound=0
+  boundary_region=.false.
+  ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid,ind_grid) &
+!$omp & private(ind,iskip,i,ind_cell,ok,ncreate_tmp,icell,ind_grid_tmp,ind_cell_tmp) reduction(+:ncreate) schedule(dynamic,nchunk)
+  do igrid=1,ncache,nvector  ! Loop over grids
+     ngrid=MIN(nvector,ncache-igrid+1)
+     do i=1,ngrid
+        ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
+     end do
+     ! Loop over cells
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
+        do i=1,ngrid
+           ind_cell(i)=iskip+ind_grid(i)
+        end do
+        ! Gather flagged, unrefined and authorized cells
+        do i=1,ngrid
+           ok(i)= flag2(ind_cell(i))==1 .and. &
+                & flag1(ind_cell(i))==1 .and. &
+                & son  (ind_cell(i))==0
+        end do
+        ! Count cells for refinement
+        ncreate_tmp=0
+        do i=1,ngrid
+           if(ok(i))ncreate_tmp=ncreate_tmp+1
+        end do
+        ncreate=ncreate+ncreate_tmp
+
+        ! Check for free memory
+        if(ncreate_tmp>=numbf) then
+           write(*,*)'No more free memory'
+           write(*,*)'Increase ngridmax'
+#ifndef WITHOUTMPI
+           call MPI_ABORT(MPI_COMM_WORLD,1,info)
+#else
+           stop
+#endif
+        end if
+
+        ! Refine selected cells
+        if(ncreate_tmp>0)then
+           icell=0
+           do i=1,ngrid
+              if(ok(i))then
+                 icell=icell+1
+                 ind_grid_tmp(icell)=ind_grid(i)
+                 ind_cell_tmp(icell)=ind_cell(i)
+              end if
+           end do
+           call pre_make_grid_fine_hook(ind_grid_tmp, ind_cell_tmp, ind, &
+                & ilevel+1, ncreate_tmp, ibound, boundary_region)
+           call make_grid_fine(ind_grid_tmp,ind_cell_tmp,ind, &
+                & ilevel+1,ncreate_tmp,ibound,boundary_region)
+           call post_make_grid_fine_hook(ind_grid_tmp, ind_cell_tmp, ind, &
+                & ilevel+1, ncreate_tmp, ibound, boundary_region)
+        end if
+     end do
+  end do
+
+
+  ! Loop over reception grids
+  ibound=0
+  boundary_region=.false.
+  call cpu_parallel_reception(ilevel,icpu_thr,igrid_thr,ngrid_thr)
+!$omp parallel do private(ithr,icpu,igrid,ncache,ngrid_now,ngrid,ind_grid) &
+!$omp & private(ind,iskip,i,ind_cell,ok,ncreate_tmp,icell,ind_grid_tmp,ind_cell_tmp) reduction(+:ncreate)
+  do ithr=1,nthr
+     if(ngrid_thr(ithr)==0)cycle
+     icpu=icpu_thr(ithr)
+     igrid=igrid_thr(ithr)
+     ncache=reception(icpu,ilevel)%ngrid
+
+     ngrid_now=0
+     ! Loop over grids,cpus by vector sweeps
+     do
+        if(ngrid_now>=ngrid_thr(ithr))exit
+        if(igrid>ncache)then
+           icpu=icpu+1
+           igrid=1
+           ncache=reception(icpu,ilevel)%ngrid
+           cycle
+        end if
+
+        ngrid=MIN(nvector,ncache-igrid+1)
+        do i=1,ngrid
+           ind_grid(i)=reception(icpu,ilevel)%igrid(igrid+i-1)
+        end do
+
+        ! Do something with ind_grid
+        ! Loop over cells
+        do ind=1,twotondim
+           iskip=ncoarse+(ind-1)*ngridmax
+           do i=1,ngrid
+              ind_cell(i)=iskip+ind_grid(i)
+           end do
+           ! Gather flagged, unrefined and authorized cells
+           do i=1,ngrid
+              ok(i)= flag2(ind_cell(i))==1 .and. &
+                   & flag1(ind_cell(i))==1 .and. &
+                   & son  (ind_cell(i))==0
+           end do
+           ! Count cells for refinement
+           ncreate_tmp=0
+           do i=1,ngrid
+              if(ok(i))ncreate_tmp=ncreate_tmp+1
+           end do
+           ncreate=ncreate+ncreate_tmp
+
+           ! Check for free memory
+           if(ncreate_tmp>=numbf) then
+              write(*,*)'No more free memory'
+              write(*,*)'Increase ngridmax'
+#ifndef WITHOUTMPI
+              call MPI_ABORT(MPI_COMM_WORLD,1,info)
+#else
+              stop
+#endif
+           end if
+
+           ! Refine selected cells
+           if(ncreate_tmp>0)then
+              icell=0
+              do i=1,ngrid
+                 if(ok(i))then
+                    icell=icell+1
+                    ind_grid_tmp(icell)=ind_grid(i)
+                    ind_cell_tmp(icell)=ind_cell(i)
+                 end if
+              end do
+              call pre_make_grid_fine_hook(ind_grid_tmp, ind_cell_tmp, ind, &
+                   & ilevel+1, ncreate_tmp, ibound, boundary_region)
+              call make_grid_fine(ind_grid_tmp,ind_cell_tmp,ind, &
+                   & ilevel+1,ncreate_tmp,ibound,boundary_region)
+              call post_make_grid_fine_hook(ind_grid_tmp, ind_cell_tmp, ind, &
+                   & ilevel+1, ncreate_tmp, ibound, boundary_region)
+           end if
+        end do
+        ! End ind_grid usage
+
+        ngrid_now=ngrid_now+ngrid
+        igrid=igrid+nvector
+     end do
+     ! End loop over grids,cpus
+  end do
+  ! End loop over threads
+
+
+  ! Loop over boundary grids
+  do ibound=1,nboundary  ! Loop over cpus and boundaries
+     boundary_region=.true.
+     ncache=boundary(ibound,ilevel)%ngrid
      do igrid=1,ncache,nvector  ! Loop over grids
         ngrid=MIN(nvector,ncache-igrid+1)
-        if(myid==icpu)then
-           do i=1,ngrid
-              ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
-           end do
-        else if(icpu<=ncpu)then
-           do i=1,ngrid
-              ind_grid(i)=reception(icpu,ilevel)%igrid(igrid+i-1)
-           end do
-        else
-           do i=1,ngrid
-              ind_grid(i)=boundary(ibound,ilevel)%igrid(igrid+i-1)
-           end do
-        end if
+        do i=1,ngrid
+           ind_grid(i)=boundary(ibound,ilevel)%igrid(igrid+i-1)
+        end do
         ! Loop over cells
         do ind=1,twotondim
            iskip=ncoarse+(ind-1)*ngridmax
@@ -465,35 +599,147 @@ subroutine refine_fine(ilevel)
   ! it is refined, then destroy its child grid.
   !-----------------------------------------------------
   nkill=0
-  do icpu=1,ncpu+nboundary  ! Loop over cpus and boundaries
-     if(icpu==myid)then
-        ibound=0
-        boundary_region=.false.
-        ncache=active(ilevel)%ngrid
-     else if(icpu<=ncpu)then
-        ibound=0
-        boundary_region=.false.
-        ncache=reception(icpu,ilevel)%ngrid
-     else
-        ibound=icpu-ncpu
-        boundary_region=.true.
-        ncache=boundary(ibound,ilevel)%ngrid
-     end if
-     do igrid=1,ncache,nvector  ! Loop over grids
-        ngrid=MIN(nvector,ncache-igrid+1)
-        if(myid==icpu)then
+
+  ! Loop over active grids
+  ibound=0
+  boundary_region=.false.
+  ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid,ind_grid) &
+!$omp & private(ind,iskip,i,ind_cell,ok,nkill_tmp,icell,ind_cell_tmp) reduction(+:nkill)
+  do igrid=1,ncache,nvector  ! Loop over grids
+     ngrid=MIN(nvector,ncache-igrid+1)
+     do i=1,ngrid
+        ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
+     end do
+     do ind=1,twotondim     ! Loop over cells
+        iskip=ncoarse+(ind-1)*ngridmax
+        do i=1,ngrid
+           ind_cell(i)=iskip+ind_grid(i)
+        end do
+        if(shrink)then
+           ! Gather unauthorized and refined cells
            do i=1,ngrid
-              ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
-           end do
-        else if(icpu<=ncpu)then
-           do i=1,ngrid
-              ind_grid(i)=reception(icpu,ilevel)%igrid(igrid+i-1)
+              ok(i)= flag2(ind_cell(i))==0 .and. &
+                   & son  (ind_cell(i))>0
            end do
         else
+           ! Gather unflagged and refined cells
            do i=1,ngrid
-              ind_grid(i)=boundary(ibound,ilevel)%igrid(igrid+i-1)
+              ok(i)= flag1(ind_cell(i))==0 .and. &
+                   & son  (ind_cell(i))>0
            end do
+        endif
+        ! Count cells for de-refinement
+        nkill_tmp=0
+        do i=1,ngrid
+           if(ok(i))then
+              nkill_tmp=nkill_tmp+1
+           end if
+        end do
+        nkill=nkill+nkill_tmp
+        ! De-refine selected cells
+        if(nkill_tmp>0)then
+           icell=0
+           do i=1,ngrid
+              if(ok(i))then
+                 icell=icell+1
+                 ind_cell_tmp(icell)=ind_cell(i)
+              end if
+           end do
+           call pre_kill_grid_hook(ind_cell_tmp,ilevel+1,nkill_tmp,ibound,boundary_region)
+           call kill_grid(ind_cell_tmp,ilevel+1,nkill_tmp,ibound,boundary_region)
+           call post_kill_grid_hook(ind_cell_tmp,ilevel+1,nkill_tmp,ibound,boundary_region)
         end if
+     end do  ! End loop over cells
+  end do
+
+  ! Loop over reception grids
+  ibound=0
+  boundary_region=.false.
+  call cpu_parallel_reception(ilevel,icpu_thr,igrid_thr,ngrid_thr)
+!$omp parallel do private(ithr,icpu,igrid,ncache,ngrid_now,ngrid,ind_grid) &
+!$omp & private(ind,iskip,i,ind_cell,ok,nkill_tmp,icell,ind_cell_tmp) reduction(+:nkill)
+  do ithr=1,nthr
+     if(ngrid_thr(ithr)==0)cycle
+     icpu=icpu_thr(ithr)
+     igrid=igrid_thr(ithr)
+     ncache=reception(icpu,ilevel)%ngrid
+
+     ngrid_now=0
+     ! Loop over grids,cpus by vector sweeps
+     do
+        if(ngrid_now>=ngrid_thr(ithr))exit
+        if(igrid>ncache)then
+           icpu=icpu+1
+           igrid=1
+           ncache=reception(icpu,ilevel)%ngrid
+           cycle
+        end if
+
+        ngrid=MIN(nvector,ncache-igrid+1)
+        do i=1,ngrid
+           ind_grid(i)=reception(icpu,ilevel)%igrid(igrid+i-1)
+        end do
+
+        ! Do something with ind_grid
+        do ind=1,twotondim     ! Loop over cells
+           iskip=ncoarse+(ind-1)*ngridmax
+           do i=1,ngrid
+              ind_cell(i)=iskip+ind_grid(i)
+           end do
+           if(shrink)then
+              ! Gather unauthorized and refined cells
+              do i=1,ngrid
+                 ok(i)= flag2(ind_cell(i))==0 .and. &
+                      & son  (ind_cell(i))>0
+              end do
+           else
+              ! Gather unflagged and refined cells
+              do i=1,ngrid
+                 ok(i)= flag1(ind_cell(i))==0 .and. &
+                      & son  (ind_cell(i))>0
+              end do
+           endif
+           ! Count cells for de-refinement
+           nkill_tmp=0
+           do i=1,ngrid
+              if(ok(i))then
+                 nkill_tmp=nkill_tmp+1
+              end if
+           end do
+           nkill=nkill+nkill_tmp
+           ! De-refine selected cells
+           if(nkill_tmp>0)then
+              icell=0
+              do i=1,ngrid
+                 if(ok(i))then
+                    icell=icell+1
+                    ind_cell_tmp(icell)=ind_cell(i)
+                 end if
+              end do
+              call pre_kill_grid_hook(ind_cell_tmp,ilevel+1,nkill_tmp,ibound,boundary_region)
+              call kill_grid(ind_cell_tmp,ilevel+1,nkill_tmp,ibound,boundary_region)
+              call post_kill_grid_hook(ind_cell_tmp,ilevel+1,nkill_tmp,ibound,boundary_region)
+           end if
+        end do  ! End loop over cells
+        ! End ind_grid usage
+
+        ngrid_now=ngrid_now+ngrid
+        igrid=igrid+nvector
+     end do
+     ! End loop over grids,cpus
+  end do
+  ! End loop over threads
+
+
+  do ibound=1,nboundary  ! Loop over cpus and boundaries
+     boundary_region=.true.
+     ncache=boundary(ibound,ilevel)%ngrid
+     do igrid=1,ncache,nvector  ! Loop over grids
+        ngrid=MIN(nvector,ncache-igrid+1)
+        do i=1,ngrid
+           ind_grid(i)=boundary(ibound,ilevel)%igrid(igrid+i-1)
+        end do
         do ind=1,twotondim     ! Loop over cells
            iskip=ncoarse+(ind-1)*ngridmax
            do i=1,ngrid
@@ -595,28 +841,28 @@ subroutine make_grid_fine(ind_grid,ind_cell,ind,ilevel,nn,ibound,boundary_region
   !--------------------------------------------------------------
   integer ::idim,igrid,iskip,icpu
   integer ::i,j,ix,iy,iz,ivar,nx_loc
-  integer ,dimension(1:nvector)          ,save::ind_grid_son
-  integer ,dimension(1:nvector,0:twondim),save::ind_fathers
-  integer ,dimension(1:nvector,0:twondim),save::igridn
-  integer ,dimension(1:nvector,1:twondim),save::indn
+  integer ,dimension(1:nvector)          ::ind_grid_son
+  integer ,dimension(1:nvector,0:twondim)::ind_fathers
+  integer ,dimension(1:nvector,0:twondim)::igridn
+  integer ,dimension(1:nvector,1:twondim)::indn
 
   real(dp)::dx,dx_loc,scale
   real(dp),dimension(1:3)::xc,skip_loc
 #ifdef SOLVERmhd
-  real(dp),dimension(1:nvector,0:twondim  ,1:nvar+3),save::u1
-  real(dp),dimension(1:nvector,1:twotondim,1:nvar+3),save::u2
-  integer ,dimension(1:nvector,0:twondim),save::ind1
+  real(dp),dimension(1:nvector,0:twondim  ,1:nvar+3)::u1
+  real(dp),dimension(1:nvector,1:twotondim,1:nvar+3)::u2
+  integer ,dimension(1:nvector,0:twondim)::ind1
 #else
-  real(dp),dimension(1:nvector,0:twondim  ,1:nvar),save::u1
-  real(dp),dimension(1:nvector,1:twotondim,1:nvar),save::u2
+  real(dp),dimension(1:nvector,0:twondim  ,1:nvar)::u1
+  real(dp),dimension(1:nvector,1:twotondim,1:nvar)::u2
 #endif
 #ifdef RT
-  real(dp),dimension(1:nvector,0:twondim  ,1:nrtvar),save::urt1
-  real(dp),dimension(1:nvector,1:twotondim,1:nrtvar),save::urt2
+  real(dp),dimension(1:nvector,0:twondim  ,1:nrtvar)::urt1
+  real(dp),dimension(1:nvector,1:twotondim,1:nrtvar)::urt2
 #endif
 
-  real(dp),dimension(1:nvector,1:ndim),save::xx
-  integer ,dimension(1:nvector),save::cc
+  real(dp),dimension(1:nvector,1:ndim)::xx
+  integer ,dimension(1:nvector)::cc
 
   logical::error
 
@@ -631,6 +877,7 @@ subroutine make_grid_fine(ind_grid,ind_cell,ind,ilevel,nn,ibound,boundary_region
   dx_loc=dx*scale
 
   ! Get nn new grids from free memory
+!$omp critical
   do i=1,nn
      igrid=headf
      ind_grid_son(i)=igrid
@@ -638,6 +885,7 @@ subroutine make_grid_fine(ind_grid,ind_cell,ind,ilevel,nn,ibound,boundary_region
      numbf=numbf-1
      used_mem=ngridmax-numbf
   end do
+!$omp end critical
 
   ! Set new grids position
   iz=(ind-1)/4
@@ -724,6 +972,7 @@ subroutine make_grid_fine(ind_grid,ind_cell,ind,ilevel,nn,ibound,boundary_region
   end if
 
   ! Connect news grids to level ilevel linked list
+!$omp critical
   if(boundary_region)then
      do i=1,nn
         igrid=ind_grid_son(i)
@@ -760,6 +1009,7 @@ subroutine make_grid_fine(ind_grid,ind_cell,ind,ilevel,nn,ibound,boundary_region
         end if
      end do
   end if
+!$omp end critical
 
   ! Interpolate parent variables to get new children ones
   if(.not.init .and. .not.balance)then
@@ -920,7 +1170,7 @@ subroutine kill_grid(ind_cell,ilevel,nn,ibound,boundary_region)
   !----------------------------------------------------
   integer::igrid,iskip,icpu
   integer::i,j,idim,ind,ivar
-  integer,dimension(1:nvector),save::ind_grid_son,ind_cell_son
+  integer,dimension(1:nvector)::ind_grid_son,ind_cell_son
 #ifdef RT
   real(dp),dimension(nIons)::xion
 #endif
@@ -948,6 +1198,7 @@ subroutine kill_grid(ind_cell,ilevel,nn,ibound,boundary_region)
   end do
 
   ! Disconnect son grids from level ilevel linked list
+!$omp critical
   if(boundary_region)then
      do i=1,nn
         igrid=ind_grid_son(i)
@@ -994,6 +1245,7 @@ subroutine kill_grid(ind_cell,ilevel,nn,ibound,boundary_region)
         numbl(icpu,ilevel)=numbl(icpu,ilevel)-1
      end do
   end if
+!$omp end critical
 
   ! Reset grid variables
   do idim=1,ndim
@@ -1088,6 +1340,7 @@ subroutine kill_grid(ind_cell,ilevel,nn,ibound,boundary_region)
   end do
 
   ! Put son grids at the tail of the free memory linked list
+!$omp critical
   do i=1,nn
      igrid=ind_grid_son(i)
      next(tailf)=igrid
@@ -1096,5 +1349,6 @@ subroutine kill_grid(ind_cell,ilevel,nn,ibound,boundary_region)
      tailf=igrid
      numbf=numbf+1
   end do
+!$omp end critical
 
 end subroutine kill_grid

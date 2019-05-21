@@ -162,7 +162,7 @@ subroutine output_timer(write_file, filename)
      do i = 1,ntimer
         call MPI_GATHER(real(time(i),kind=8),1,MPI_REAL8,vtime,1,MPI_REAL8,0,MPI_COMM_WORLD,mpi_err)
         if (id_is_one) then
-           if (maxval(vtime)/gtotal > 0.001) then
+           if (maxval(vtime)/gtotal > 0.0001) then
               avtime  = sum(vtime) / ncpu ! average time used
               imn     = minloc(vtime,1)
               imx     = maxloc(vtime,1)

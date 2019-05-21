@@ -5,6 +5,9 @@ subroutine init_amr
   use poisson_commons
   use bisection
   use mpi_mod
+#ifdef _OPENMP
+  use omp_lib
+#endif
   implicit none
   integer::i,idim,ncell,iskip,ind,ncache,ilevel,ibound,nboundary2
   integer::ncpu2,ndim2,nx2,ny2,nz2,ngridmax2,nlevelmax2
@@ -24,6 +27,7 @@ subroutine init_amr
   character(LEN=80)::fileloc
   character(LEN=5)::nchar,ncharcpu
   integer,parameter::tag=1100
+  integer :: mythr
 #ifndef WITHOUTMPI
   integer::dummy_io,info2,info
 #endif
@@ -531,5 +535,12 @@ subroutine init_amr
      end do
 
   end if
+
+#ifdef _OPENMP
+!$omp parallel private(mythr)
+  mythr=omp_get_thread_num()+1
+  if(mythr==1)nthr=omp_get_num_threads()
+!$omp end parallel
+#endif
 
 end subroutine init_amr

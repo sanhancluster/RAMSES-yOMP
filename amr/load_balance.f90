@@ -31,6 +31,7 @@ subroutine load_balance
 #ifndef WITHOUTMPI
   if(myid==1)write(*,*)'Load balancing AMR grid...'
 
+  call timer('load balance - tree', 'start')
   ! Put all particle in main tree trunk
   if(pic.and.(.not.init))then
      call make_tree_fine(levelmin)
@@ -51,11 +52,13 @@ subroutine load_balance
   !-------------------------------------------
   ! Compute new cpu map using chosen ordering
   !-------------------------------------------
+  call timer('load balance - cmp', 'start')
   call cmp_new_cpu_map
 
   !------------------------------------------------------
   ! Expand boundaries to account for new mesh partition
   !------------------------------------------------------
+  call timer('load balance - expand', 'start')
   call flag_coarse
   call refine_coarse
   call build_comm(1)
@@ -72,6 +75,7 @@ subroutine load_balance
   !--------------------------------------
   ! Update physical boundary conditions
   !--------------------------------------
+  call timer('load balance - update', 'start')
   do ilevel=nlevelmax,1,-1
      if(hydro)then
 #ifdef SOLVERmhd
@@ -113,6 +117,7 @@ subroutine load_balance
   !--------------------------------------
   ! Rearrange octs between cpus
   !--------------------------------------
+  call timer('load balance - rearrange', 'start')
   do ilevel=1,nlevelmax
      do icpu=1,ncpu
         if(icpu==myid)then
@@ -180,6 +185,7 @@ subroutine load_balance
   !--------------------------------------
   ! Compute new grid number statistics
   !--------------------------------------
+  call timer('load balance - mpi', 'start')
   do ilevel=1,nlevelmax
      comm_buffin(ilevel,1)=numbl(myid,ilevel)
      comm_buffin(ilevel,2)=numbl(myid,ilevel)
@@ -199,6 +205,7 @@ subroutine load_balance
   !--------------------------------------
   ! Set old cpu map to new cpu map
   !--------------------------------------
+  call timer('load balance - remap', 'start')
   if(ordering/='bisection') then
      bound_key=bound_key2
   else
@@ -242,6 +249,7 @@ subroutine load_balance
   !--------------------------------------------
   ! Shrink boundaries around new mesh partition
   !--------------------------------------------
+  call timer('load balance - shrink', 'start')
   shrink=.true.
   do i=nlevelmax-1,1,-1
      call flag_fine(i,2)
@@ -289,11 +297,11 @@ subroutine cmp_new_cpu_map
   integer::icpu,isub,idom
   integer::nxny,ix,iy,iz,iskip
   integer::ind_long
-  integer,dimension(1:nvector),save::ind_grid,ind_cell
+  integer,dimension(1:nvector)::ind_grid,ind_cell
 
   real(dp)::dx,scale
   real(dp),dimension(1:twotondim,1:3)::xc
-  real(dp),dimension(1:nvector,1:ndim),save::xx
+  real(dp),dimension(1:nvector,1:ndim)::xx
   real(kind=8)::incost_tot,local_cost,cell_cost
   real(kind=8),dimension(0:ndomain)::incost_new,incost_old
   integer(kind=8),dimension(1:overload)::npart_sub
@@ -301,11 +309,11 @@ subroutine cmp_new_cpu_map
   integer,dimension(1:overload)::ncell_sub
   real(kind=8),dimension(1:ndomain)::cost_loc,cost_old,cost_new
   real(qdp),dimension(0:ndomain)::bound_key_loc
-  integer,dimension(1:nvector),save::dom
-  real(qdp),dimension(1:nvector),save::order_min,order_max
-  integer,dimension(1:MAXLEVEL),save::niter_cost
+  integer,dimension(1:nvector)::dom
+  real(qdp),dimension(1:nvector)::order_min,order_max
+  integer,dimension(1:MAXLEVEL)::niter_cost
 
-  real(dp),dimension(1:1,1:ndim),save :: xx_tmp
+  real(dp),dimension(1:1,1:ndim) :: xx_tmp
   integer,dimension(1:1),save :: c_tmp
 #ifdef QUADHILBERT
   real(kind=8),dimension(0:ndomain)::bigdbl,bigtmp
@@ -587,6 +595,7 @@ subroutine cmp_new_cpu_map
      end do
      ncache=active(ilevel)%ngrid
      ! Loop over grids by vector sweeps
+!$omp parallel do private(igrid,ngrid,ind_grid,iskip,ind_cell,xx,order_max,xx_tmp,c_tmp) schedule(dynamic)
      do igrid=1,ncache,nvector
         ! Gather nvector grids
         ngrid=MIN(nvector,ncache-igrid+1)
@@ -651,7 +660,7 @@ subroutine cmp_cpumap(x,c,nn)
   integer ,dimension(1:nvector), intent(out)::c
 
   integer::i,idom
-  real(qdp),dimension(1:nvector),save::order
+  real(qdp),dimension(1:nvector)::order
 
   if(ordering /= 'bisection') then
      call cmp_ordering(x,order,nn)
@@ -721,7 +730,7 @@ subroutine cmp_ordering(x,order,nn)
   ! according to its position in space and for the chosen
   ! ordering. Position x are in user units.
   !-----------------------------------------------------
-  integer,dimension(1:nvector),save::ix,iy,iz
+  integer,dimension(1:nvector)::ix,iy,iz
   integer::i,ncode,bit_length,nx_loc
   integer::temp
   real(kind=8)::scale,bscale
@@ -831,7 +840,7 @@ subroutine cmp_minmaxorder(x,order_min,order_max,dx,nn)
   ! key contained in the input cell and for the chosen
   ! ordering.
   !-----------------------------------------------------
-  integer,dimension(1:nvector),save::ix,iy,iz
+  integer,dimension(1:nvector)::ix,iy,iz
   integer::i,ncode,bit_length,nx_loc
 
   real(dp)::dxx,dxmin

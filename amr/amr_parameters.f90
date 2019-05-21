@@ -52,6 +52,12 @@ module amr_parameters
   integer,parameter::nvector=NVECTOR
 #endif
 
+#ifndef OMP_NCHUNK
+  integer,parameter::nchunk=1  ! Size of OpenMP chunk size
+#else
+  integer,parameter::nchunk=OMP_NCHUNK
+#endif
+
   integer, parameter :: nstride = 65536
 
   ! Run control

@@ -25,6 +25,7 @@
 !=============================================================================
 module cooling_module
   use amr_parameters
+  use amr_commons,ONLY:uEXP,uEXP10
   implicit none
   logical :: verbose_cooling=.false.
 
@@ -194,7 +195,7 @@ subroutine set_model(Nmodel,J0in_in,J0min_in,alpha_in,normfacJ0_in,zreioniz_in, 
 !                 -1 : defaut defini dans le module
 ! J0in_in (dble) : valeur du J0 utilisee pour Teyssier et Theuns
 !            Exemple : J0in_in=1.d-22
-!            J0in_in <= 0 utilise le defaut defini dans le module
+!            J0in_in <= 0 utilise le defaut defini dans le moduleR
 ! J0min_in (dble) : valeur du J0min ou J0min_ref (voir option realistic_ne)
 !            utilisee dans tous les modeles a grand redshift
 !            Exemple : J0min_in=1.d-29
@@ -1067,8 +1068,8 @@ subroutine cmp_metals(T2,nH,mu,metal_tot,metal_prime,aexp)
   else ! Theuns or Teyssier
      ux=1d-4*J0simple(aexp)/1d-22/nH
   endif
-  g_courty=c1*(TT/TT0)**alpha1+c2*exp(-TTC/TT)
-  g_courty_prime=(c1*alpha1*(TT/TT0)**alpha1+c2*exp(-TTC/TT)*TTC/TT)/TT
+  g_courty=c1*(TT/TT0)**alpha1+c2*uEXP(-TTC/TT)
+  g_courty_prime=(c1*alpha1*(TT/TT0)**alpha1+c2*uEXP(-TTC/TT)*TTC/TT)/TT
   f_courty=1d0/(1d0+ux/g_courty)
   f_courty_prime=ux/g_courty/(1d0+ux/g_courty)**2*g_courty_prime/g_courty
 
@@ -1100,8 +1101,8 @@ subroutine cmp_metals(T2,nH,mu,metal_tot,metal_prime,aexp)
      lcool2=-31.522879+2.0*lTT-20.0/TT-TT*4.342944d-5
      lcool2_prime=2d0+(20d0/TT-TT*4.342944d-5)*log(10d0)
      ! Total metal cooling and temperature derivative
-     metal_tot=10d0**lcool1+10d0**lcool2
-     metal_prime=(10d0**lcool1*lcool1_prime+10d0**lcool2*lcool2_prime)/metal_tot
+     metal_tot=uEXP10(lcool1)+uEXP10(lcool2)
+     metal_prime=(uEXP10(lcool1)*lcool1_prime+uEXP10(lcool2)*lcool2_prime)/metal_tot
      metal_prime=metal_prime*f_courty+metal_tot*f_courty_prime
      metal_tot=metal_tot*f_courty
   else
@@ -1298,9 +1299,9 @@ function cool_exc(ispec,T)
   real(kind=8)   ::T,cool_exc,T5
   T5=1.d-5*T
   cool_exc = 0.0
-  if(ispec==HI  )cool_exc = 7.50D-19/(1.+sqrt(T5))              *exp(-118348.D0/T)
-  if(ispec==HEI )cool_exc = 9.10D-27/(1.+sqrt(T5))/(T**0.1687D0)*exp(-13179.D0/T)
-  if(ispec==HEII)cool_exc = 5.54D-17/(1.+sqrt(T5))/(T**0.397D0 )*exp(-473638.D0/T)
+  if(ispec==HI  )cool_exc = 7.50D-19/(1.+sqrt(T5))              *uEXP(-118348.D0/T)
+  if(ispec==HEI )cool_exc = 9.10D-27/(1.+sqrt(T5))/(T**0.1687D0)*uEXP(-13179.D0/T)
+  if(ispec==HEII)cool_exc = 5.54D-17/(1.+sqrt(T5))/(T**0.397D0 )*uEXP(-473638.D0/T)
   return
 end function cool_exc
 !=======================================================================
@@ -1323,7 +1324,7 @@ function cool_die(T)
 !=======================================================================
   implicit none
   real(kind=8) :: T,cool_die
-  cool_die=1.24D-13*T**(-1.5D0)*exp(-470000.D0/T)*(1.D0+0.3D0*exp(-94000.D0/T))
+  cool_die=1.24D-13*T**(-1.5D0)*uEXP(-470000.D0/T)*(1.D0+0.3D0*uEXP(-94000.D0/T))
   return
 end function cool_die
 !=======================================================================
@@ -1346,7 +1347,7 @@ function taux_die(T)
 !=======================================================================
   implicit none
   real(kind=8) :: T,taux_die
-  taux_die=1.9D-3*T**(-1.5D0)*exp(-470000.D0/T)*(1.D0+0.3D0*exp(-94000.D0/T))
+  taux_die=1.9D-3*T**(-1.5D0)*uEXP(-470000.D0/T)*(1.D0+0.3D0*uEXP(-94000.D0/T))
   return
 end function taux_die
 !=======================================================================
@@ -1358,9 +1359,9 @@ function cool_ion(ispec,T)
   real(kind=8)   ::T5
   T5 = 1.d-05*T
   cool_ion = 0.0
-  if(ispec==HI  )cool_ion = dumfac_ion*1.27D-21*SQRT(T)/(1.+SQRT(T5))*EXP(-157809.1D0/T)
-  if(ispec==HEI )cool_ion = dumfac_ion*9.38D-22*SQRT(T)/(1.+SQRT(T5))*EXP(-285335.4D0/T)
-  if(ispec==HEII)cool_ion = dumfac_ion*4.95D-22*SQRT(T)/(1.+SQRT(T5))*EXP(-631515.0D0/T)
+  if(ispec==HI  )cool_ion = dumfac_ion*1.27D-21*SQRT(T)/(1.+SQRT(T5))*uEXP(-157809.1D0/T)
+  if(ispec==HEI )cool_ion = dumfac_ion*9.38D-22*SQRT(T)/(1.+SQRT(T5))*uEXP(-285335.4D0/T)
+  if(ispec==HEII)cool_ion = dumfac_ion*4.95D-22*SQRT(T)/(1.+SQRT(T5))*uEXP(-631515.0D0/T)
   return
 end function cool_ion
 !=======================================================================
@@ -1390,9 +1391,9 @@ function taux_ion(ispec,T)
   real(kind=8)   :: T5
   T5 = 1.d-05*T
   taux_ion = 0.0
-  if(ispec==HI  )taux_ion = dumfac_ion*5.85D-11*SQRT(T)/(1.+SQRT(T5))*EXP(-157809.1D0/T)
-  if(ispec==HEI )taux_ion = dumfac_ion*2.38D-11*SQRT(T)/(1.+SQRT(T5))*EXP(-285335.4D0/T)
-  if(ispec==HEII)taux_ion = dumfac_ion*5.68D-12*SQRT(T)/(1.+SQRT(T5))*EXP(-631515.0D0/T)
+  if(ispec==HI  )taux_ion = dumfac_ion*5.85D-11*SQRT(T)/(1.+SQRT(T5))*uEXP(-157809.1D0/T)
+  if(ispec==HEI )taux_ion = dumfac_ion*2.38D-11*SQRT(T)/(1.+SQRT(T5))*uEXP(-285335.4D0/T)
+  if(ispec==HEII)taux_ion = dumfac_ion*5.68D-12*SQRT(T)/(1.+SQRT(T5))*uEXP(-631515.0D0/T)
   return
 end function taux_ion
 !=======================================================================
@@ -1626,6 +1627,5 @@ function HsurH0(z,omega0,omegaL,OmegaR)
   real(kind=8) :: HsurH0,z,omega0,omegaL,omegaR
   HsurH0=sqrt(Omega0*(1.d0+z)**3+OmegaR*(1.d0+z)**2+OmegaL)
 end function HsurH0
-
 end module cooling_module
 
