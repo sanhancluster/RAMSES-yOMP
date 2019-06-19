@@ -39,6 +39,7 @@ contains
     integer, dimension(1:nAGN_), intent(in) :: ind_blast_
 
     integer, intent(in) :: nAGN_
+    integer :: iAGN
 
     nAGN = nAGN_
     if (allocated(xAGN)) then
@@ -47,29 +48,33 @@ contains
 
     allocate(xAGN(1:nAGN, 1:ndim), jAGN(1:nAGN, 1:ndim), mAGN(1:nAGN), dAGNcell(1:nAGN), &
          ind_blast(1:nAGN), jet_mode_AGN(1:nAGN))
-    xAGN(:, :)      = xAGN_(:, :)           ! Position of the AGN
-    jAGN(:, :)      = jAGN_(:, :)           ! Spin of the AGN
-    mAGN(:)         = mAGN_(:)              ! Mass send in feedback
-    dAGNcell(:)     = dAGNcell_(:)          ! Mass of the central cell
-    ind_blast(:)    = ind_blast_(:)         ! Index of the cell
-    jet_mode_AGN(:) = X_radio_(:) < X_floor ! True when in jet mode
+!$omp parallel do private(iAGN)
+    do iAGN=1,nAGN
+       xAGN(iAGN, :)      = xAGN_(iAGN, :)           ! Position of the AGN
+       jAGN(iAGN, :)      = jAGN_(iAGN, :)           ! Spin of the AGN
+       mAGN(iAGN)         = mAGN_(iAGN)              ! Mass send in feedback
+       dAGNcell(iAGN)     = dAGNcell_(iAGN)          ! Mass of the central cell
+       ind_blast(iAGN)    = ind_blast_(iAGN)         ! Index of the cell
+       jet_mode_AGN(iAGN) = X_radio_(iAGN) < X_floor ! True when in jet mode
+    end do
   end subroutine prepare_MC_tracer_to_jet
 
   subroutine MC_tracer_to_jet(ilevel)
     ! This routines treats the MC tracers to move them in the jet.
     ! It is called at each level and only moves particles at *this
     ! level*
-
+    use random, ONLY:IRandNumSize
     use amr_parameters, only: rAGN
+    use omp_lib
     integer, intent(in) :: ilevel
 
 #ifdef WITHOUTMPI
     integer :: MPI_STATUS_SIZE = 1
 #endif
     integer :: iAGN, ipart, i,  ii, jj, ncache
-    integer, dimension(1:nvector), save :: ind_AGN, ind_part, ind_grid, ind_cell
+    integer, dimension(1:nvector), save :: ind_grid, ind_cell
     real(dp) :: proba, rand
-    real(dp), dimension(1:nvector, 1:ndim), save ::AGN_pos, AGN_j, buffer_j, buffer_pos
+    real(dp), dimension(1:nvector, 1:ndim), save ::AGN_pos, AGN_j
     real(dp), dimension(1:nvector), save ::AGN_mass, AGN_cell_mass
     real(dp) :: rmax, scale, scale_l, scale_t, scale_d, scale_v, scale_nH, scale_T2, scale_m
     real(dp) :: dx_min
@@ -78,15 +83,24 @@ contains
     logical, dimension(1:nvector), save :: AGN_ok, grid_ok
     logical :: ok
 
-    integer :: j
+    integer, dimension(1:nvector), save :: ind_AGN, ind_part
+    real(dp), dimension(1:nvector, 1:ndim), save :: buffer_j, buffer_pos
+    integer, save :: j
+!$omp threadprivate(j,ind_AGN,ind_part,buffer_j,buffer_pos)
     integer, dimension(:), allocatable, save :: sendbuf, recvbuf
     integer, dimension(:), allocatable, save :: reqsend, reqrecv
     integer, dimension(:, :), allocatable, save :: statuses
+
+    ! OMP
+    integer,dimension(1:IRandNumSize),save :: ompseed
+!$omp threadprivate(ompseed)
+
     if (.not. allocated(sendbuf)) then
        allocate(sendbuf(1:ncpu), recvbuf(1:ncpu))
        allocate(reqsend(1:6*ncpu), reqrecv(1:6*ncpu))
        allocate(statuses(1:MPI_STATUS_SIZE, 1:4*ncpu))
     end if
+
 
     if (verbose) write(*, *) ' Entering treat_MC_tracers at level', ilevel
     call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
@@ -96,6 +110,12 @@ contains
     dx_min=scale*0.5d0**(nlevelmax-nlevelsheld) / aexp
     rmax = max(dx_min * scale_l, rAGN * cgs%kpc)
     rmax = rmax/scale_l
+
+!$omp parallel
+    ! Give slight offsets for each OMP threads
+    ompseed=MOD(tracer_seed+omp_get_thread_num(),4096)
+!$omp end parallel
+    call ranf(tracer_seed,rand)
 
     !----------------------------------------
     ! Select the AGNs in jet mode, and get their particles
@@ -111,6 +131,7 @@ contains
     ! particles are detached from the correct grid.
     ii = 0
     ! Look on AGN (vectorized)
+!$omp parallel do private(jj,ncache,ii,iAGN,proba,ipart,i,ok,rand)
     do jj = 1, nAGN, nvector
        ncache = min(nvector, nAGN - jj + 1)
        do ii = 1, ncache
@@ -159,7 +180,7 @@ contains
 
                 if (ok) then
                    ! Draw random number
-                   call ranf(tracer_seed, rand)
+                   call ranf(ompseed, rand)
 
                    if (rand < proba) then
                       j = j + 1
@@ -171,7 +192,7 @@ contains
                       if (j == nvector) then
                          call tracer2jet(ind_AGN, ind_part, &
                               buffer_pos, buffer_j, &
-                              nvector, rmax)
+                              nvector, rmax, ompseed)
                          j = 0
                       end if
                    end if
@@ -182,11 +203,13 @@ contains
        end do ! end cache loop
     end do ! end loop on AGN
 
+!$omp parallel
     if (j > 0) then
        call tracer2jet(ind_AGN, ind_part, &
             buffer_pos, buffer_j,&
-            j, rmax)
+            j, rmax, ompseed)
     end if
+!$omp end parallel
 
     call tracer_particle_send_fine(ilevel)
 
@@ -194,7 +217,8 @@ contains
 
   end subroutine MC_tracer_to_jet
 
-  subroutine tracer2jet(ind_AGN, ind_part, AGN_pos, AGN_j, npart, rmax)
+  subroutine tracer2jet(ind_AGN, ind_part, AGN_pos, AGN_j, npart, rmax, ompseed)
+    use random, ONLY:IRandNumSize
     ! Compute the position of the particle within the jet
     ! On exit, the array itmpp contains the target CPU
     integer, intent(in), dimension(1:nvector) :: ind_AGN, ind_part
@@ -203,10 +227,12 @@ contains
     integer, intent(in) :: npart
 
     real(dp) :: radius2, hh, ux(3), uy(3), uz(3), rmax2, xx, yy
-    real(dp), dimension(1:nvector, 1:3), save :: newPos
-    integer, dimension(1:nvector), save :: cpus
+    real(dp), dimension(1:nvector, 1:3) :: newPos
+    integer, dimension(1:nvector) :: cpus
     integer :: i
     logical :: ok
+
+    integer,dimension(1:IRandNumSize) :: ompseed
 
     rmax2 = rmax**2
     !----------------------------------------
@@ -215,13 +241,13 @@ contains
     do i = 1, npart
        ok = .false.
        do while (.not. ok)
-          call ranf(tracer_seed, hh)
+          call ranf(ompseed, hh)
           ! Draw a position following a normal law between -1 and 1 (in rmax unit)
           xx = 2
           yy = 2
           do while (norm2([xx, yy]) > 1)
-             call gaussdev(tracer_seed, xx)
-             call gaussdev(tracer_seed, yy)
+             call gaussdev(ompseed, xx)
+             call gaussdev(ompseed, yy)
           end do
 
           hh = (hh - 0.5_dp) * 4 * rmax ! *4 to include the spherical caps
@@ -755,11 +781,12 @@ subroutine tracer2othersink(ind_tracer, isink_new_part, xsink_loc, np)
 
 end subroutine tracer2othersink
 
-subroutine tracer2sink(ind_tracer, proba, xsink_loc, isink, nattach, dx_loc)
+subroutine tracer2sink(ind_tracer, proba, xsink_loc, isink, nattach, dx_loc, ompseed)
   ! Attach tracers to a sink (accretion onto the BH)
   use amr_commons
   use random, only : ranf
-  use pm_commons, only : tracer_seed, typep, partp, move_flag, FAM_TRACER_CLOUD
+  use pm_commons, only : typep, partp, move_flag, FAM_TRACER_CLOUD
+  use random, ONLY:IRandNumSize
   implicit none
 
   integer, intent(in) :: nattach
@@ -768,12 +795,17 @@ subroutine tracer2sink(ind_tracer, proba, xsink_loc, isink, nattach, dx_loc)
   real(dp), dimension(1:nvector, 1:3), intent(in) :: xsink_loc
   real(dp), intent(in) :: dx_loc
 
-  logical, dimension(1:nvector), save :: attach = .false.
+  logical, dimension(1:nvector) :: attach
   integer :: i
+
+  integer,dimension(1:IRandNumSize) :: ompseed
+
   real(dp) :: r
 
+  attach = .false.
+
   do i = 1, nattach
-     call ranf(tracer_seed, r)
+     call ranf(ompseed, r)
      attach(i) = r < proba(i)
   end do
 

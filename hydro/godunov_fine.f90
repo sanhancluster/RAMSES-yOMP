@@ -5,6 +5,7 @@
 subroutine godunov_fine(ilevel)
   use amr_commons
   use hydro_commons
+  use omp_lib
   implicit none
   integer::ilevel
   !--------------------------------------------------------------------------
@@ -14,7 +15,7 @@ subroutine godunov_fine(ilevel)
   ! On exit, unew has been updated.
   !--------------------------------------------------------------------------
   integer::i,igrid,ncache,ngrid
-  integer,dimension(1:nvector),save::ind_grid
+  integer,dimension(1:nvector)::ind_grid
 
   if(numbtot(1,ilevel)==0)return
   if(static)return
@@ -22,6 +23,7 @@ subroutine godunov_fine(ilevel)
 
   ! Loop over active grids by vector sweeps
   ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid,i,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -56,23 +58,19 @@ subroutine set_unew(ilevel)
   if(verbose)write(*,111)ilevel
 
   ! Set unew to uold for myid cells
-  do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
-     do ivar=1,nvar
-        do i=1,active(ilevel)%ngrid
+!$omp parallel do private(ind,iskip,ivar,i,d,u,v,w,e) schedule(static,nvector)
+  do i=1,active(ilevel)%ngrid
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
+        do ivar=1,nvar
            unew(active(ilevel)%igrid(i)+iskip,ivar) = uold(active(ilevel)%igrid(i)+iskip,ivar)
         end do
-     end do
-     if(momentum_feedback)then
-        do i=1,active(ilevel)%ngrid
-           pstarnew(active(ilevel)%igrid(i)+iskip) = 0.0
-        end do
-     endif
-     if(pressure_fix)then
-        do i=1,active(ilevel)%ngrid
+        if(momentum_feedback)then
+              pstarnew(active(ilevel)%igrid(i)+iskip) = 0.0
+        endif
+        if(pressure_fix)then
            divu(active(ilevel)%igrid(i)+iskip) = 0.0
-        end do
-        do i=1,active(ilevel)%ngrid
+
            d=max(uold(active(ilevel)%igrid(i)+iskip,1),smallr)
            u=0.0; v=0.0; w=0.0
            if(ndim>0)u=uold(active(ilevel)%igrid(i)+iskip,2)/d
@@ -85,31 +83,32 @@ subroutine set_unew(ilevel)
            end do
 #endif
            enew(active(ilevel)%igrid(i)+iskip)=e
-        end do
-     end if
+        end if
+     end do
   end do
 
   ! Set unew to 0 for virtual boundary cells
-  do icpu=1,ncpu
+!$omp parallel do private(ind,iskip,ivar,i,d,u,v,w,e,icpu) collapse(2) schedule(dynamic,nchunk)
   do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
-     do ivar=1,nvar
-        do i=1,reception(icpu,ilevel)%ngrid
-           unew(reception(icpu,ilevel)%igrid(i)+iskip,ivar)=0.0
+     do icpu=1,ncpu
+        iskip=ncoarse+(ind-1)*ngridmax
+        do ivar=1,nvar
+           do i=1,reception(icpu,ilevel)%ngrid
+              unew(reception(icpu,ilevel)%igrid(i)+iskip,ivar)=0.0
+           end do
         end do
+        if(momentum_feedback)then
+           do i=1,reception(icpu,ilevel)%ngrid
+              pstarnew(reception(icpu,ilevel)%igrid(i)+iskip) = 0.0
+           end do
+        endif
+        if(pressure_fix)then
+           do i=1,reception(icpu,ilevel)%ngrid
+              divu(reception(icpu,ilevel)%igrid(i)+iskip) = 0.0
+              enew(reception(icpu,ilevel)%igrid(i)+iskip) = 0.0
+           end do
+        end if
      end do
-     if(momentum_feedback)then
-        do i=1,reception(icpu,ilevel)%ngrid
-           pstarnew(reception(icpu,ilevel)%igrid(i)+iskip) = 0.0
-        end do
-     endif
-     if(pressure_fix)then
-        do i=1,reception(icpu,ilevel)%ngrid
-           divu(reception(icpu,ilevel)%igrid(i)+iskip) = 0.0
-           enew(reception(icpu,ilevel)%igrid(i)+iskip) = 0.0
-        end do
-     end if
-  end do
   end do
 
 111 format('   Entering set_unew for level ',i2)
@@ -155,21 +154,18 @@ subroutine set_uold(ilevel)
   endif
 
   ! Set uold to unew for myid cells
-  do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
-     do ivar=1,nvar
-        do i=1,active(ilevel)%ngrid
-           uold(active(ilevel)%igrid(i)+iskip,ivar) = unew(active(ilevel)%igrid(i)+iskip,ivar)
+!$omp parallel do private(ind,iskip,ivar,i,ind_cell,d,u,v,w,e_kin,e_cons,e_prim,div,e_trunc) schedule(static,nvector)
+  do i=1,active(ilevel)%ngrid
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
+        do ivar=1,nvar
+              uold(active(ilevel)%igrid(i)+iskip,ivar) = unew(active(ilevel)%igrid(i)+iskip,ivar)
         end do
-     end do
-     if(momentum_feedback)then
-        do i=1,active(ilevel)%ngrid
-           pstarold(active(ilevel)%igrid(i)+iskip) = pstarnew(active(ilevel)%igrid(i)+iskip)
-        end do
-     endif
-     if(pressure_fix)then
-        ! Correct total energy if internal energy is too small
-        do i=1,active(ilevel)%ngrid
+        if(momentum_feedback)then
+              pstarold(active(ilevel)%igrid(i)+iskip) = pstarnew(active(ilevel)%igrid(i)+iskip)
+        endif
+        if(pressure_fix)then
+           ! Correct total energy if internal energy is too small
            ind_cell=active(ilevel)%igrid(i)+iskip
            d=max(uold(ind_cell,1),smallr)
            u=0.0; v=0.0; w=0.0
@@ -190,8 +186,8 @@ subroutine set_uold(ilevel)
            if(e_cons<e_trunc)then
               uold(ind_cell,ndim+2)=e_prim+e_kin
            end if
-        end do
-     end if
+        end if
+     end do
   end do
 
 111 format('   Entering set_uold for level ',i2)
@@ -219,9 +215,10 @@ subroutine add_gravity_source_terms(ilevel)
   if(verbose)write(*,111)ilevel
 
   ! Add gravity source term at time t with half time step
-  do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
-     do i=1,active(ilevel)%ngrid
+!$omp parallel do private(ind,iskip,i,ind_cell,d,u,v,w,e_kin,d_old,e_prim,fact) schedule(static,nvector)
+  do i=1,active(ilevel)%ngrid
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
         ind_cell=active(ilevel)%igrid(i)+iskip
         d=max(unew(ind_cell,1),smallr)
         u=0.0; v=0.0; w=0.0
@@ -260,25 +257,11 @@ subroutine add_pdv_source_terms(ilevel)
   use amr_commons
   use hydro_commons
   implicit none
-  integer::ilevel
-  !---------------------------------------------------------
-  ! This routine adds the pdV source term to the internal
-  ! energy equation and to the non-thermal energy equations.
-  !---------------------------------------------------------
-  integer::i,ind,iskip,nx_loc,ind_cell1
-  integer::ncache,igrid,ngrid,idim,id1,ig1,ih1,id2,ig2,ih2
   integer,dimension(1:3,1:2,1:8)::iii,jjj
-  real(dp)::scale,dx,dx_loc,d,u,v,w,eold
-
-  integer ,dimension(1:nvector),save::ind_grid,ind_cell
-  integer ,dimension(1:nvector,0:twondim),save::igridn
-  integer ,dimension(1:nvector,1:ndim),save::ind_left,ind_right
-  real(dp),dimension(1:nvector,1:ndim,1:ndim),save::velg,veld
-  real(dp),dimension(1:nvector,1:ndim),save::dx_g,dx_d
-  real(dp),dimension(1:nvector),save::divu_loc
-#if NENER>0
-  integer::irad
-#endif
+  real(dp)::scale,dx,dx_loc
+  integer::i,ncache,igrid,ngrid,ilevel,nx_loc
+  integer ,dimension(1:nvector)::ind_grid
+  common /omp_addpdv/ scale,dx,dx_loc,iii,jjj,nx_loc
 
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
@@ -295,151 +278,16 @@ subroutine add_pdv_source_terms(ilevel)
   iii(3,1,1:8)=(/5,5,5,5,0,0,0,0/); jjj(3,1,1:8)=(/5,6,7,8,1,2,3,4/)
   iii(3,2,1:8)=(/0,0,0,0,6,6,6,6/); jjj(3,2,1:8)=(/5,6,7,8,1,2,3,4/)
 
-  ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
-
-     ! Gather nvector grids
-     ngrid=MIN(nvector,ncache-igrid+1)
+     ngrid = MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
         ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
      end do
-
-     ! Gather neighboring grids
-     do i=1,ngrid
-        igridn(i,0)=ind_grid(i)
-     end do
-     do idim=1,ndim
-        do i=1,ngrid
-           ind_left (i,idim)=nbor(ind_grid(i),2*idim-1)
-           ind_right(i,idim)=nbor(ind_grid(i),2*idim  )
-           igridn(i,2*idim-1)=son(ind_left (i,idim))
-           igridn(i,2*idim  )=son(ind_right(i,idim))
-        end do
-     end do
-
-     ! Loop over cells
-     do ind=1,twotondim
-
-        ! Compute central cell index
-        iskip=ncoarse+(ind-1)*ngridmax
-        do i=1,ngrid
-           ind_cell(i)=iskip+ind_grid(i)
-        end do
-
-        ! Gather all neighboring velocities
-        do idim=1,ndim
-           id1=jjj(idim,1,ind); ig1=iii(idim,1,ind)
-           ih1=ncoarse+(id1-1)*ngridmax
-           do i=1,ngrid
-              if(igridn(i,ig1)>0)then
-                 velg(i,idim,1:ndim) = uold(igridn(i,ig1)+ih1,2:ndim+1)/max(uold(igridn(i,ig1)+ih1,1),smallr)
-                 dx_g(i,idim) = dx_loc
-              else
-                 velg(i,idim,1:ndim) = uold(ind_left(i,idim),2:ndim+1)/max(uold(ind_left(i,idim),1),smallr)
-                 dx_g(i,idim) = dx_loc*1.5_dp
-              end if
-           enddo
-           id2=jjj(idim,2,ind); ig2=iii(idim,2,ind)
-           ih2=ncoarse+(id2-1)*ngridmax
-           do i=1,ngrid
-              if(igridn(i,ig2)>0)then
-                 veld(i,idim,1:ndim)= uold(igridn(i,ig2)+ih2,2:ndim+1)/max(uold(igridn(i,ig2)+ih2,1),smallr)
-                 dx_d(i,idim)=dx_loc
-              else
-                 veld(i,idim,1:ndim)= uold(ind_right(i,idim),2:ndim+1)/max(uold(ind_right(i,idim),1),smallr)
-                 dx_d(i,idim)=dx_loc*1.5_dp
-              end if
-           enddo
-        end do
-        ! End loop over dimensions
-
-        ! Compute divu = Trace G
-        divu_loc(1:ngrid)=0.0d0
-        do i=1,ngrid
-           do idim=1,ndim
-              divu_loc(i) = divu_loc(i) + (veld(i,idim,idim)-velg(i,idim,idim)) &
-                   &                    / (dx_g(i,idim)     +dx_d(i,idim))
-           enddo
-        end do
-
-        ! Update thermal internal energy
-        if(pressure_fix)then
-           do i=1,ngrid
-              ! Compute old thermal energy
-              d=max(uold(ind_cell(i),1),smallr)
-              u=0.0; v=0.0; w=0.0
-              if(ndim>0)u=uold(ind_cell(i),2)/d
-              if(ndim>1)v=uold(ind_cell(i),3)/d
-              if(ndim>2)w=uold(ind_cell(i),4)/d
-              eold=uold(ind_cell(i),ndim+2)-0.5*d*(u**2+v**2+w**2)
-#if NENER>0
-              do irad=1,nener
-                 eold=eold-uold(ind_cell(i),ndim+2+irad)
-              end do
-#endif
-              ! Add -pdV term
-              enew(ind_cell(i))=enew(ind_cell(i)) &
-                   & -(gamma-1.0d0)*eold*divu_loc(i)*dtnew(ilevel)
-           end do
-        end if
-
-#if NENER>0
-        do irad=1,nener
-           do i=1,ngrid
-              ! Add -pdV term
-              unew(ind_cell(i),ndim+2+irad)=unew(ind_cell(i),ndim+2+irad) &
-                & -(gamma_rad(irad)-1.0d0)*uold(ind_cell(i),ndim+2+irad)*divu_loc(i)*dtnew(ilevel)
-           end do
-        end do
-#endif
-
-     enddo
-     ! End loop over cells
-  end do
+     call addpdv1(ind_grid,ngrid,ilevel)
+  enddo
   ! End loop over grids
-
-  return
-
-  ! This is the old technique based on the "pressure fix" option.
-
-  ! Update thermal internal energy
-  if(pressure_fix)then
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
-        do i=1,active(ilevel)%ngrid
-           ind_cell1=active(ilevel)%igrid(i)+iskip
-           ! Compute old thermal energy
-           d=max(uold(ind_cell1,1),smallr)
-           u=0.0; v=0.0; w=0.0
-           if(ndim>0)u=uold(ind_cell1,2)/d
-           if(ndim>1)v=uold(ind_cell1,3)/d
-           if(ndim>2)w=uold(ind_cell1,4)/d
-           eold=uold(ind_cell1,ndim+2)-0.5*d*(u**2+v**2+w**2)
-#if NENER>0
-           do irad=1,nener
-              eold=eold-uold(ind_cell1,ndim+2+irad)
-           end do
-#endif
-           ! Add pdV term
-           enew(ind_cell1)=enew(ind_cell1) &
-                & +(gamma-1.0d0)*eold*divu(ind_cell1) ! Note: here divu=-div.u*dt
-        end do
-     end do
-  end if
-
-#if NENER>0
-  do irad=1,nener
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
-        do i=1,active(ilevel)%ngrid
-           ind_cell1=active(ilevel)%igrid(i)+iskip
-           unew(ind_cell1,ndim+2+irad)=unew(ind_cell1,ndim+2+irad) &
-                & +(gamma_rad(irad)-1.0d0)*uold(ind_cell1,ndim+2+irad)*divu(ind_cell1) ! Note: here divu=-div.u*dt
-        end do
-     end do
-  end do
-#endif
 
 111 format('   Entering add_pdv_source_terms for level ',i2)
 
@@ -448,7 +296,130 @@ end subroutine add_pdv_source_terms
 !###########################################################
 !###########################################################
 !###########################################################
+subroutine addpdv1(ind_grid,ngrid,ilevel)
+  use amr_commons
+  use hydro_commons
+  implicit none
+  integer::ilevel
+  !---------------------------------------------------------
+  ! This routine adds the pdV source term to the internal
+  ! energy equation and to the non-thermal energy equations.
+  !---------------------------------------------------------
+  integer::i,ind,iskip,nx_loc,ind_cell1
+  integer::ngrid,idim,id1,ig1,ih1,id2,ig2,ih2
+  integer,dimension(1:3,1:2,1:8)::iii,jjj
+  real(dp)::scale,dx,dx_loc,d,u,v,w,eold
+
+  integer ,dimension(1:nvector)::ind_grid,ind_cell
+  integer ,dimension(1:nvector,0:twondim)::igridn
+  integer ,dimension(1:nvector,1:ndim)::ind_left,ind_right
+  real(dp),dimension(1:nvector,1:ndim,1:ndim)::velg,veld
+  real(dp),dimension(1:nvector,1:ndim)::dx_g,dx_d
+  real(dp),dimension(1:nvector)::divu_loc
+#if NENER>0
+  integer::irad
+#endif
+  common /omp_addpdv/ scale,dx,dx_loc,iii,jjj,nx_loc
+
+  ! Gather neighboring grids
+  do i=1,ngrid
+	  igridn(i,0)=ind_grid(i)
+  end do
+  do idim=1,ndim
+	  do i=1,ngrid
+		  ind_left (i,idim)=nbor(ind_grid(i),2*idim-1)
+		  ind_right(i,idim)=nbor(ind_grid(i),2*idim  )
+		  igridn(i,2*idim-1)=son(ind_left (i,idim))
+		  igridn(i,2*idim  )=son(ind_right(i,idim))
+	  end do
+  end do
+
+  ! Loop over cells
+  do ind=1,twotondim
+
+	  ! Compute central cell index
+	  iskip=ncoarse+(ind-1)*ngridmax
+	  do i=1,ngrid
+		  ind_cell(i)=iskip+ind_grid(i)
+	  end do
+
+	  ! Gather all neighboring velocities
+	  do idim=1,ndim
+		  id1=jjj(idim,1,ind); ig1=iii(idim,1,ind)
+		  ih1=ncoarse+(id1-1)*ngridmax
+		  do i=1,ngrid
+			  if(igridn(i,ig1)>0)then
+				  velg(i,idim,1:ndim) = uold(igridn(i,ig1)+ih1,2:ndim+1)/max(uold(igridn(i,ig1)+ih1,1),smallr)
+				  dx_g(i,idim) = dx_loc
+			  else
+				  velg(i,idim,1:ndim) = uold(ind_left(i,idim),2:ndim+1)/max(uold(ind_left(i,idim),1),smallr)
+				  dx_g(i,idim) = dx_loc*1.5_dp
+			  end if
+		  enddo
+		  id2=jjj(idim,2,ind); ig2=iii(idim,2,ind)
+		  ih2=ncoarse+(id2-1)*ngridmax
+		  do i=1,ngrid
+			  if(igridn(i,ig2)>0)then
+				  veld(i,idim,1:ndim)= uold(igridn(i,ig2)+ih2,2:ndim+1)/max(uold(igridn(i,ig2)+ih2,1),smallr)
+				  dx_d(i,idim)=dx_loc
+			  else
+				  veld(i,idim,1:ndim)= uold(ind_right(i,idim),2:ndim+1)/max(uold(ind_right(i,idim),1),smallr)
+				  dx_d(i,idim)=dx_loc*1.5_dp
+			  end if
+		  enddo
+	  end do
+	  ! End loop over dimensions
+
+	  ! Compute divu = Trace G
+	  divu_loc(1:ngrid)=0.0d0
+	  do i=1,ngrid
+		  do idim=1,ndim
+			  divu_loc(i) = divu_loc(i) + (veld(i,idim,idim)-velg(i,idim,idim)) &
+					 &                    / (dx_g(i,idim)     +dx_d(i,idim))
+		  enddo
+	  end do
+
+	  ! Update thermal internal energy
+	  if(pressure_fix)then
+		  do i=1,ngrid
+			  ! Compute old thermal energy
+			  d=max(uold(ind_cell(i),1),smallr)
+			  u=0.0; v=0.0; w=0.0
+			  if(ndim>0)u=uold(ind_cell(i),2)/d
+			  if(ndim>1)v=uold(ind_cell(i),3)/d
+			  if(ndim>2)w=uold(ind_cell(i),4)/d
+			  eold=uold(ind_cell(i),ndim+2)-0.5*d*(u**2+v**2+w**2)
+#if NENER>0
+			  do irad=1,nener
+				  eold=eold-uold(ind_cell(i),ndim+2+irad)
+			  end do
+#endif
+			  ! Add -pdV term
+			  enew(ind_cell(i))=enew(ind_cell(i)) &
+					 & -(gamma-1.0d0)*eold*divu_loc(i)*dtnew(ilevel)
+		  end do
+	  end if
+
+#if NENER>0
+	  do irad=1,nener
+		  do i=1,ngrid
+			  ! Add -pdV term
+			  unew(ind_cell(i),ndim+2+irad)=unew(ind_cell(i),ndim+2+irad) &
+				 & -(gamma_rad(irad)-1.0d0)*uold(ind_cell(i),ndim+2+irad)*divu_loc(i)*dtnew(ilevel)
+		  end do
+	  end do
+#endif
+
+  enddo
+  ! End loop over cells
+end subroutine addpdv1
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
 subroutine godfine1(ind_grid,ncache,ilevel)
+  use hydro_parameters
+
   use amr_commons
   use hydro_commons
   use poisson_commons
@@ -465,20 +436,20 @@ subroutine godfine1(ind_grid,ncache,ilevel)
   ! and stored in array unew(:), both at the current level and at the
   ! coarser level if necessary.
   !-------------------------------------------------------------------
-  integer ,dimension(1:nvector,1:threetondim     ),save::nbors_father_cells
-  integer ,dimension(1:nvector,1:twotondim       ),save::nbors_father_grids
-  integer ,dimension(1:nvector,0:twondim         ),save::ibuffer_father
-  real(dp),dimension(1:nvector,0:twondim  ,1:nvar),save::u1
-  real(dp),dimension(1:nvector,1:twotondim,1:nvar),save::u2
+  integer ,dimension(1:nvector,1:threetondim     )::nbors_father_cells
+  integer ,dimension(1:nvector,1:twotondim       )::nbors_father_grids
+  integer ,dimension(1:nvector,0:twondim         )::ibuffer_father
+  real(dp),dimension(1:nvector,0:twondim  ,1:nvar)::u1
+  real(dp),dimension(1:nvector,1:twotondim,1:nvar)::u2
 
-  real(dp),dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2,1:nvar),save::uloc
-  real(dp),dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2,1:ndim),save::gloc=0.0d0
-  real(dp),dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2),save::ploc=0.0d0
-  real(dp),dimension(1:nvector,if1:if2,jf1:jf2,kf1:kf2,1:nvar,1:ndim),save::flux
-  real(dp),dimension(1:nvector,if1:if2,jf1:jf2,kf1:kf2,1:2,1:ndim),save::tmp
-  logical ,dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2),save::ok
+  real(dp),dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2,1:nvar)::uloc
+  real(dp),dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2,1:ndim)::gloc
+  real(dp),dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2)::ploc
+  real(dp),dimension(1:nvector,if1:if2,jf1:jf2,kf1:kf2,1:nvar,1:ndim)::flux
+  real(dp),dimension(1:nvector,if1:if2,jf1:jf2,kf1:kf2,1:2,1:ndim)::tmp
+  logical ,dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2)::ok
 
-  integer,dimension(1:nvector),save::igrid_nbor,ind_cell,ind_buffer,ind_exist,ind_nexist
+  integer,dimension(1:nvector)::igrid_nbor,ind_cell,ind_buffer,ind_exist,ind_nexist
 
   integer::i,j,ivar,idim,ind_son,ind_father,iskip,nbuffer
   integer::i0,j0,k0,i1,j1,k1,i2,j2,k2,i3,j3,k3,nx_loc,nb_noneigh,nexist
@@ -493,6 +464,8 @@ subroutine godfine1(ind_grid,ncache,ilevel)
   nx_loc=icoarse_max-icoarse_min+1
   scale=boxlen/dble(nx_loc)
   dx=0.5D0**ilevel*scale
+
+  ploc=0.0d0; gloc=0.0d0;
 
   ! Integer constants
   i1min=0; i1max=0; i2min=0; i2max=0; i3min=1; i3max=1
@@ -618,13 +591,13 @@ subroutine godfine1(ind_grid,ncache,ilevel)
   end do
   end do
   end do
-  ! End loop over neighboring grids
 
+  ! End loop over neighboring grids
   !-----------------------------------------------
   ! Compute flux using second-order Godunov method
   !-----------------------------------------------
-  call unsplit(uloc,gloc,ploc,flux,tmp,dx,dx,dx,dtnew(ilevel),ncache)
 
+  call unsplit(uloc,gloc,ploc,flux,tmp,dx,dx,dx,dtnew(ilevel),ncache)
   !--------------------------------------
   ! Store the fluxes for later use
   !--------------------------------------
@@ -690,6 +663,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
      end do
      end do
   end do
+
   !--------------------------------------
   ! Conservative update at level ilevel
   !--------------------------------------
@@ -852,5 +826,4 @@ subroutine godfine1(ind_grid,ncache,ilevel)
 
   end do
   ! End loop over dimensions
-
 end subroutine godfine1

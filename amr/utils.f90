@@ -29,7 +29,7 @@ module utils
   real(dp), parameter, public :: pi = atan(1._dp) * 4._dp
   integer, parameter, public :: AGN_integration_depth = 6
   integer, parameter, public :: AGN_VOLUME_INTEGRATION_MC = 1, AGN_VOLUME_INTEGRATION_bisect = 2
-  integer, parameter, public :: AGN_integration = AGN_VOLUME_INTEGRATION_bisect
+  integer, parameter, public :: AGN_integration = 0
 
   public :: distance3d, draw_normal, find_grid_containing, normalize_position, cell2grid, grid_level
   public :: debug_grid, find_grid_containing_max

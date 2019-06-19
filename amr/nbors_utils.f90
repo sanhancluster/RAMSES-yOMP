@@ -17,10 +17,10 @@ subroutine get3cubefather(ind_cell_father,nbors_father_cells,&
   !------------------------------------------------------------------
   integer::i,j,nxny,i1,j1,k1,ind,iok
   integer::i1min,i1max,j1min,j1max,k1min,k1max,ind_father
-  integer,dimension(1:nvector),save::ix,iy,iz,iix,iiy,iiz
-  integer,dimension(1:nvector),save::pos,ind_grid_father,ind_grid_ok
-  integer,dimension(1:nvector,1:threetondim),save::nbors_father_ok
-  integer,dimension(1:nvector,1:twotondim),save::nbors_grids_ok
+  integer,dimension(1:nvector)::ix,iy,iz,iix,iiy,iiz
+  integer,dimension(1:nvector)::pos,ind_grid_father,ind_grid_ok
+  integer,dimension(1:nvector,1:threetondim)::nbors_father_ok
+  integer,dimension(1:nvector,1:twotondim)::nbors_grids_ok
   logical::oups
 
   nxny=nx*ny
@@ -131,9 +131,9 @@ subroutine get3cubefather(ind_cell_father,nbors_father_cells,&
               ind_father=1+i1+2*j1+4*k1
               do i=1,ncell
                  nbors_father_grids(i,ind_father)=1 &
-                      & +(iix(i)/2) &
-                      & +(iiy(i)/2)*(nx/2) &
-                      & +(iiz(i)/2)*(nxny/4)
+                      & +(ISHFT(iix(i), -1)) &
+                      & +(ISHFT(iiy(i), -1))*(ISHFT(nx,-1)) &
+                      & +(ISHFT(iiz(i),-1))*(ISHFT(nxny,-2))
               end do
            end do
         end do
@@ -214,12 +214,16 @@ subroutine get3cubepos(ind_grid,ind,nbors_father_cells,nbors_father_grids,ng)
   integer::jj,jjmin,jjmax
   integer::kk,kkmin,kkmax
   integer::icell,igrid,inbor
-  integer,dimension(1:8)::iii=(/1,2,1,2,1,2,1,2/)
-  integer,dimension(1:8)::jjj=(/3,3,4,4,3,3,4,4/)
-  integer,dimension(1:8)::kkk=(/5,5,5,5,6,6,6,6/)
+  integer,dimension(1:8)::iii
+  integer,dimension(1:8)::jjj
+  integer,dimension(1:8)::kkk
   integer,dimension(1:27,1:8,1:3)::lll,mmm
-  integer,dimension(1:nvector),save::ind_grid1,ind_grid2,ind_grid3
-  integer,dimension(1:nvector,1:twotondim),save::nbors_grids
+  integer,dimension(1:nvector)::ind_grid1,ind_grid2,ind_grid3
+  integer,dimension(1:nvector,1:twotondim)::nbors_grids
+
+  iii=(/1,2,1,2,1,2,1,2/)
+  jjj=(/3,3,4,4,3,3,4,4/)
+  kkk=(/5,5,5,5,6,6,6,6/)
 
   call getindices3cube(lll,mmm)
 
@@ -415,10 +419,10 @@ subroutine getnborfather(ind_cell,ind_father,ncell,ilevel)
   !-----------------------------------------------------------------
   integer::nxny,i,idim,j,iok,ind
   integer,dimension(1:3)::ibound,iskip1,iskip2
-  integer,dimension(1:nvector,1:3),save::ix
-  integer,dimension(1:nvector),save::ind_grid_father,pos
-  integer,dimension(1:nvector,0:twondim),save::igridn,igridn_ok
-  integer,dimension(1:nvector,1:twondim),save::icelln_ok
+  integer,dimension(1:nvector,1:3)::ix
+  integer,dimension(1:nvector)::ind_grid_father,pos
+  integer,dimension(1:nvector,0:twondim)::igridn,igridn_ok
+  integer,dimension(1:nvector,1:twondim)::icelln_ok
 
   nxny=nx*ny
 

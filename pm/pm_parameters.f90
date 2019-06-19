@@ -66,5 +66,7 @@ module pm_parameters
 
   integer :: tracer_first_balance_levelmin = -1  ! Set to >0 to add more weight on level finer than this
   integer :: tracer_first_balance_part_per_cell = 0 ! Typical initial number of parts per cell
+  real(dp):: tracer_per_cell = -1.0              ! Initial number of tracer parts per cell (active only for 'inplace' and tracer_mass is not set)
+  integer :: tracer_level = -1                   ! Level of cell that puts tracer on (active only with tracer_per_cell)
 
 end module pm_parameters

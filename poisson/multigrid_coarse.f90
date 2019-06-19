@@ -72,28 +72,31 @@ subroutine multigrid_coarse(ilevel,icount)
   scale=boxlen/dble(nx_loc)
   fourpi=4.D0*ACOS(-1.0D0)*scale
   if(cosmo)fourpi=1.5D0*omega_m*aexp*scale
-  do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
-     do i=1,active(ilevel)%ngrid
+!$omp parallel do private(i,ind,iskip) schedule(static,nvector)
+  do i=1,active(ilevel)%ngrid
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
         phi(active(ilevel)%igrid(i)+iskip)=phi(active(ilevel)%igrid(i)+iskip)/fourpi
      end do
   end do
   ! Update boundaries for phi
   call make_virtual_fine_dp(phi(1),ilevel)
   ! Update physical boundaries for phi
-  do ibound=1,nboundary
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
-        do i=1,boundary(ibound,ilevel)%ngrid
+!$omp parallel do private(i,ibound,ind,iskip) schedule(static,nvector)
+  do i=1,boundary(ibound,ilevel)%ngrid
+     do ibound=1,nboundary
+        do ind=1,twotondim
+           iskip=ncoarse+(ind-1)*ngridmax
            phi(boundary(ibound,ilevel)%igrid(i)+iskip)=0d0
         end do
      end do
   end do
 
   ! Substract rho_tot to rho
-  do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
-     do i=1,active(ilevel)%ngrid
+!$omp parallel do private(i,ind,iskip) schedule(static,nvector)
+  do i=1,active(ilevel)%ngrid
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
         rho(active(ilevel)%igrid(i)+iskip)=rho(active(ilevel)%igrid(i)+iskip)-rho_tot
      end do
   end do
@@ -113,9 +116,10 @@ subroutine multigrid_coarse(ilevel,icount)
 #endif
 #endif
   floor=prec*sqrt(fact*dble(twotondim*numbtot(1,ilevel)))*rho_tot
-  do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
-     do i=1,active(ilevel)%ngrid
+!$omp parallel do private(i,ind,iskip) reduction(+:rhs_norm) schedule(static,nvector)
+  do i=1,active(ilevel)%ngrid
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
         rhs_norm=rhs_norm+fact*rho(active(ilevel)%igrid(i)+iskip)*rho(active(ilevel)%igrid(i)+iskip)
      end do
   end do
@@ -146,9 +150,10 @@ subroutine multigrid_coarse(ilevel,icount)
   !----------------------------------------
   error=0.0d0; error_all=0.0d0
   fact=(oneoversix*dx2)**2/dble(twotondim*numbtot(1,ilevel))
-  do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
-     do i=1,active(ilevel)%ngrid
+!$omp parallel do private(i,ind,iskip) reduction(+:error) schedule(static,nvector)
+  do i=1,active(ilevel)%ngrid
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
         error=error+fact*f(active(ilevel)%igrid(i)+iskip,1)*f(active(ilevel)%igrid(i)+iskip,1)
      end do
   end do
@@ -202,9 +207,10 @@ subroutine multigrid_coarse(ilevel,icount)
   !----------------------------------------
   error=0.0d0; error_all=0.0d0
   fact=(oneoversix*dx2)**2/dble(twotondim*numbtot(1,ilevel))
-  do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
-     do i=1,active(ilevel)%ngrid
+!$omp parallel do private(i,ind,iskip) reduction(+:error) schedule(static,nvector)
+  do i=1,active(ilevel)%ngrid
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
         error=error+fact*f(active(ilevel)%igrid(i)+iskip,1)*f(active(ilevel)%igrid(i)+iskip,1)
      end do
   end do
@@ -231,27 +237,30 @@ subroutine multigrid_coarse(ilevel,icount)
   scale=boxlen/dble(nx_loc)
   fourpi=4.D0*ACOS(-1.0D0)*scale
   if(cosmo)fourpi=1.5D0*omega_m*aexp*scale
-  do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
-     do i=1,active(ilevel)%ngrid
+!$omp parallel do private(ind,iskip,i) schedule(static,nvector)
+  do i=1,active(ilevel)%ngrid
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
         phi(active(ilevel)%igrid(i)+iskip)=phi(active(ilevel)%igrid(i)+iskip)*fourpi
      end do
   end do
   ! Update boundaries for phi
   call make_virtual_fine_dp(phi(1),ilevel)
   ! Update physical boundaries for phi
-  do ibound=1,nboundary
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
-        do i=1,boundary(ibound,ilevel)%ngrid
+!$omp parallel do private(ibound,ind,iskip,i) schedule(static,nvector)
+  do i=1,boundary(ibound,ilevel)%ngrid
+     do ibound=1,nboundary
+        do ind=1,twotondim
+           iskip=ncoarse+(ind-1)*ngridmax
            phi(boundary(ibound,ilevel)%igrid(i)+iskip)=0d0
         end do
      end do
   end do
   ! Add rho_tot to rho
-  do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
-     do i=1,active(ilevel)%ngrid
+!$omp parallel do private(ind,iskip,i) schedule(static,nvector)
+  do i=1,active(ilevel)%ngrid
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
         rho(active(ilevel)%igrid(i)+iskip)=rho(active(ilevel)%igrid(i)+iskip)+rho_tot
      end do
   end do
@@ -291,9 +300,10 @@ recursive subroutine multigrid_iterator(ilevel)
   ! Compute first guess as the diagonal solution
   !---------------------------------------------
   fact=oneoversix*dx2
-  do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
-     do i=1,active(ilevel)%ngrid
+!$omp parallel do private(i,ind,iskip) schedule(static,nvector)
+  do i=1,active(ilevel)%ngrid
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
         phi(active(ilevel)%igrid(i)+iskip)=-fact*rho(active(ilevel)%igrid(i)+iskip)
      end do
   end do
@@ -356,11 +366,9 @@ subroutine gauss_seidel(ilevel,redstep)
   real(kind=8)::oneoversix,dx,dx2
   integer,dimension(1:3,1:4)::ired,iblack
   integer,dimension(1:3,1:2,1:8)::iii,jjj
+  integer,dimension(1:nvector)::ind_grid
 
-  integer,dimension(1:nvector),save::ind_grid,ind_cell
-  integer,dimension(1:nvector,0:twondim),save::igridn
-  real(dp),dimension(1:nvector,1:ndim),save::phig,phid
-  real(dp),dimension(1:nvector),save::residu
+  common /omp_gauss_seidel/ired,iblack,iii,jjj,dx,dx2,oneoversix
 
   ! Set constants
   dx=0.5d0**ilevel
@@ -382,74 +390,107 @@ subroutine gauss_seidel(ilevel,redstep)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
-
      ! Gather nvector grids
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
-        ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
+       ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
      end do
-
-     ! Gather neighboring grids
-     do i=1,ngrid
-        igridn(i,0)=ind_grid(i)
-     end do
-     do idim=1,ndim
-        do i=1,ngrid
-           igridn(i,2*idim-1)=son(nbor(ind_grid(i),2*idim-1))
-           igridn(i,2*idim  )=son(nbor(ind_grid(i),2*idim  ))
-        end do
-     end do
-
-     ! Loop over red or black cells
-     do ind0=1,twotondim/2
-        if(redstep)then
-           ind=ired  (ndim,ind0)
-        else
-           ind=iblack(ndim,ind0)
-        end if
-
-        do idim=1,ndim
-           id1=jjj(idim,1,ind); ig1=iii(idim,1,ind)
-           ih1=ncoarse+(id1-1)*ngridmax
-           do i=1,ngrid
-              phig(i,idim)=phi(igridn(i,ig1)+ih1)
-           end do
-           id2=jjj(idim,2,ind); ig2=iii(idim,2,ind)
-           ih2=ncoarse+(id2-1)*ngridmax
-           do i=1,ngrid
-              phid(i,idim)=phi(igridn(i,ig2)+ih2)
-           end do
-        end do
-
-        iskip=ncoarse+(ind-1)*ngridmax
-        do i=1,ngrid
-           ind_cell(i)=iskip+ind_grid(i)
-        end do
-
-        ! Compute new potential using old neighbors potential
-        do i=1,ngrid
-           residu(i)=0.0d0
-        end do
-        do idim=1,ndim
-           do i=1,ngrid
-              residu(i)=residu(i)+oneoversix*(phig(i,idim)+phid(i,idim))
-           end do
-        end do
-        do i=1,ngrid
-           residu(i)=residu(i)-oneoversix*dx2*rho(ind_cell(i))
-        end do
-        do i=1,ngrid
-           phi(ind_cell(i))=residu(i)
-        end do
-
-     end do
-     ! Loop over cells
+     call gseidel1(ind_grid,ngrid,ilevel,redstep)
 
   end do
   ! Loop over grids
 
 end subroutine gauss_seidel
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
+subroutine gseidel1(ind_grid,ngrid,ilevel,redstep)
+  use amr_commons
+  use pm_commons
+  use poisson_commons
+  implicit none
+  integer::ilevel
+  logical::redstep
+  !------------------------------------------------------------------
+  ! This routine computes one relaxation sweep
+  ! for one Gauss-Seidel iteration.
+  !------------------------------------------------------------------
+  integer::i,ind0,idim,ngrid,ind,iskip
+  integer::id1,id2,ig1,ig2,ih1,ih2
+  real(kind=8)::oneoversix,dx,dx2
+  integer,dimension(1:3,1:4)::ired,iblack
+  integer,dimension(1:3,1:2,1:8)::iii,jjj
+
+  integer,dimension(1:nvector)::ind_grid,ind_cell
+  integer,dimension(1:nvector,0:twondim)::igridn
+  real(dp),dimension(1:nvector,1:ndim)::phig,phid
+  real(dp),dimension(1:nvector)::residu
+
+  common /omp_gauss_seidel/ired,iblack,iii,jjj,dx,dx2,oneoversix
+
+
+  ! Gather neighboring grids
+  do i=1,ngrid
+     igridn(i,0)=ind_grid(i)
+  end do
+  do idim=1,ndim
+     do i=1,ngrid
+        igridn(i,2*idim-1)=son(nbor(ind_grid(i),2*idim-1))
+        igridn(i,2*idim  )=son(nbor(ind_grid(i),2*idim  ))
+     end do
+  end do
+
+  ! Loop over red or black cells
+  do ind0=1,twotondim/2
+     if(redstep)then
+        ind=ired  (ndim,ind0)
+     else
+        ind=iblack(ndim,ind0)
+     end if
+
+     do idim=1,ndim
+        id1=jjj(idim,1,ind); ig1=iii(idim,1,ind)
+        ih1=ncoarse+(id1-1)*ngridmax
+        do i=1,ngrid
+           phig(i,idim)=phi(igridn(i,ig1)+ih1)
+        end do
+        id2=jjj(idim,2,ind); ig2=iii(idim,2,ind)
+        ih2=ncoarse+(id2-1)*ngridmax
+        do i=1,ngrid
+           phid(i,idim)=phi(igridn(i,ig2)+ih2)
+        end do
+     end do
+
+     iskip=ncoarse+(ind-1)*ngridmax
+     do i=1,ngrid
+        ind_cell(i)=iskip+ind_grid(i)
+     end do
+
+     ! Compute new potential using old neighbors potential
+     do i=1,ngrid
+        residu(i)=0.0d0
+     end do
+     do idim=1,ndim
+        do i=1,ngrid
+           residu(i)=residu(i)+oneoversix*(phig(i,idim)+phid(i,idim))
+        end do
+     end do
+     do i=1,ngrid
+        residu(i)=residu(i)-oneoversix*dx2*rho(ind_cell(i))
+     end do
+     do i=1,ngrid
+        phi(ind_cell(i))=residu(i)
+     end do
+
+  end do
+     ! Loop over cells
+
+
+
+end subroutine gseidel1
 !###########################################################
 !###########################################################
 !###########################################################
@@ -469,10 +510,9 @@ subroutine cmp_residual_mg(ilevel)
   real(kind=8)::oneoversix,dx,dx2
   integer,dimension(1:3,1:2,1:8)::iii,jjj
 
-  integer ,dimension(1:nvector),save::ind_grid,ind_cell
-  integer ,dimension(1:nvector,0:twondim),save::igridn
-  real(dp),dimension(1:nvector,1:ndim),save::phig,phid
-  real(kind=8),dimension(1:nvector),save::residu
+  integer ,dimension(1:nvector)::ind_grid
+
+  common /omp_cmp_residual_mg/ iii,jjj, dx,dx2,oneoversix
 
   ! Set constants
   dx=0.5d0**ilevel
@@ -488,6 +528,7 @@ subroutine cmp_residual_mg(ilevel)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
 
      ! Gather nvector grids
@@ -495,6 +536,36 @@ subroutine cmp_residual_mg(ilevel)
      do i=1,ngrid
         ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
      end do
+     call cmpresmg1(ind_grid,ngrid,ilevel)
+
+  end do
+  ! End loop over grids
+
+end subroutine cmp_residual_mg
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
+subroutine cmpresmg1(ind_grid,ngrid,ilevel)
+  use amr_commons
+  use pm_commons
+  use poisson_commons
+  implicit none
+  integer::ilevel
+  !------------------------------------------------------------------
+  ! This routine computes the residual r = b - A x
+  ! and stores it in f(i,1)
+  !------------------------------------------------------------------
+  integer::i,idim,ngrid,ncache,ind,iskip
+  integer::id1,id2,ig1,ig2,ih1,ih2
+  real(kind=8)::oneoversix,dx,dx2
+  integer,dimension(1:3,1:2,1:8)::iii,jjj
+
+  integer ,dimension(1:nvector)::ind_grid,ind_cell
+  integer ,dimension(1:nvector,0:twondim)::igridn
+  real(dp),dimension(1:nvector,1:ndim)::phig,phid
+  real(kind=8),dimension(1:nvector)::residu
+  common /omp_cmp_residual_mg/ iii,jjj, dx,dx2,oneoversix
 
      ! Gather neighboring grids
      do i=1,ngrid
@@ -543,10 +614,9 @@ subroutine cmp_residual_mg(ilevel)
      end do
      ! End loop over cells
 
-  end do
-  ! End loop over grids
 
-end subroutine cmp_residual_mg
+
+end subroutine cmpresmg1
 !###########################################################
 !###########################################################
 !###########################################################
@@ -569,7 +639,7 @@ subroutine restriction_fine(ilevel,multigrid)
   ! solver, the restriction is necessary in any case.
   !-------------------------------------------------------------------
   integer ::ind,i,icpu,ncache,igrid,ngrid,iskip,ibound,nx_loc
-  integer,dimension(1:nvector),save::ind_grid
+  integer,dimension(1:nvector)::ind_grid
   real(kind=8)::dx,dx_loc,scale,vol_loc
 
   if(numbtot(1,ilevel)==0)return
@@ -583,24 +653,27 @@ subroutine restriction_fine(ilevel,multigrid)
   vol_loc=dx_loc**ndim
 
   ! Initialize density field to zero
-  do icpu=1,ncpu
-     do ind=1,twotondim
+!$omp parallel do private(icpu,ind,iskip,i) collapse(2) schedule(static,nchunk)
+  do ind=1,twotondim
+     do icpu=1,ncpu
         iskip=ncoarse+(ind-1)*ngridmax
         do i=1,reception(icpu,ilevel)%ngrid
            rho(reception(icpu,ilevel)%igrid(i)+iskip)=0.0D0
         end do
      end do
   end do
-  do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
-     do i=1,active(ilevel)%ngrid
+!$omp parallel do private(ind,iskip,i) schedule(static,nvector)
+  do i=1,active(ilevel)%ngrid
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
         rho(active(ilevel)%igrid(i)+iskip)=0.0D0
      end do
   end do
-  do ibound=1,nboundary
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
-        do i=1,boundary(ibound,ilevel)%ngrid
+!$omp parallel do private(ibound,ind,iskip,i) schedule(static,nvector)
+  do i=1,boundary(ibound,ilevel)%ngrid
+     do ibound=1,nboundary
+        do ind=1,twotondim
+           iskip=ncoarse+(ind-1)*ngridmax
            rho(boundary(ibound,ilevel)%igrid(i)+iskip)=0.0D0
         end do
      end do
@@ -609,6 +682,7 @@ subroutine restriction_fine(ilevel,multigrid)
   ! Perform a restriction over split cells (ilevel+1)
   if(ilevel<nlevelmax)then
      ncache=active(ilevel+1)%ngrid
+!$omp parallel do private(igrid,ngrid,i,ind_grid) schedule(static,nchunk)
      do igrid=1,ncache,nvector
         ! Gather nvector grids
         ngrid=MIN(nvector,ncache-igrid+1)
@@ -638,10 +712,10 @@ subroutine restrict(ind_grid,ngrid,ilevel,multigrid)
   integer,dimension(1:nvector)::ind_grid
   !
   !
-  integer ,dimension(1:nvector),save::ind_cell,ind_cell_father
-  integer ,dimension(1:nvector,1:threetondim),save::nbors_father_cells
-  integer ,dimension(1:nvector,1:twotondim),save::nbors_father_grids
-  real(dp),dimension(1:nvector),save::new_rho
+  integer ,dimension(1:nvector)::ind_cell,ind_cell_father
+  integer ,dimension(1:nvector,1:threetondim)::nbors_father_cells
+  integer ,dimension(1:nvector,1:twotondim)::nbors_father_grids
+  real(dp),dimension(1:nvector)::new_rho
 
   real(dp)::a,b,c,d,coeff
   real(dp),dimension(1:8)::bbb
@@ -689,7 +763,7 @@ subroutine restrict(ind_grid,ngrid,ilevel,multigrid)
         end do
         ! Gather rho in temporary array
         do i=1,ngrid
-           new_rho(i)=rho(ind_cell_father(i))
+           new_rho(i)=0d0
         end do
         ! Perform CIC projection
         if(multigrid)then
@@ -703,7 +777,8 @@ subroutine restrict(ind_grid,ngrid,ilevel,multigrid)
         end if
         ! Update array rho
         do i=1,ngrid
-           rho(ind_cell_father(i))=new_rho(i)
+!$omp atomic update
+           rho(ind_cell_father(i))=rho(ind_cell_father(i))+new_rho(i)
         end do
 
      end do
@@ -727,10 +802,12 @@ subroutine prolong(ilevel)
   real(dp),dimension(1:8)::bbb
   integer,dimension(1:8,1:8)::ccc
 
-  integer ,dimension(1:nvector),save::ind_grid,ind_cell
-  integer ,dimension(1:nvector,1:threetondim),save::nbors_father_cells
-  integer ,dimension(1:nvector,1:twotondim),save::nbors_father_grids
-  real(dp),dimension(1:nvector),save::new_rho
+  integer ,dimension(1:nvector)::ind_grid,ind_cell
+  integer ,dimension(1:nvector,1:threetondim)::nbors_father_cells
+  integer ,dimension(1:nvector,1:twotondim)::nbors_father_grids
+  real(dp),dimension(1:nvector)::new_rho
+  common /prolong_1/ind_grid,ind_cell, nbors_father_cells, nbors_father_grids, new_rho
+!$omp threadprivate(/prolong_1/)
 
   ! Local constants
   a = 1.0D0/4.0D0**ndim
@@ -751,6 +828,7 @@ subroutine prolong(ilevel)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid,i,ind,iskip, ind_average, ind_father, coeff) schedule(static,nchunk)
   do igrid=1,ncache,nvector
 
      ! Gather nvector grids
@@ -786,6 +864,7 @@ subroutine prolong(ilevel)
 
         ! Correct potential
         do i=1,ngrid
+!$omp atomic
            phi(ind_cell(i))=phi(ind_cell(i))+new_rho(i)
         end do
 

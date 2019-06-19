@@ -47,15 +47,19 @@ subroutine authorize_fine(ilevel)
   integer::ismooth,ibound,ngrid,i,ncache,iskip,igrid,ind,icpu
   integer::ix,iy,iz,idim,nx_loc,isub
   integer,dimension(1:3)::n_nbor
-  integer,dimension(1:nvector),save::ind_grid,ind_cell
-  integer,dimension(1:nvector,0:twondim),save::igridn
+  integer,dimension(1:nvector)::ind_grid,ind_cell
+  integer,dimension(1:nvector,0:twondim)::igridn
   real(dp)::dx,dx_loc,scale
   real(dp),dimension(1:3)::skip_loc
   real(dp),dimension(1:twotondim,1:3)::xc
-  real(dp),dimension(1:nvector,1:ndim),save::xx
-  real(qdp),dimension(1:nvector),save::order_min,order_max
+  real(dp),dimension(1:nvector,1:ndim)::xx
+  real(qdp),dimension(1:nvector)::order_min,order_max
   logical::test
   real(dp),dimension(1:ndim)::xmin,xmax
+
+  ! OMP
+  integer :: ithr,ngrid_now
+  integer,dimension(1:nthr) :: icpu_thr,igrid_thr,ngrid_thr
 
   if(ilevel==nlevelmax)return
   if(verbose)write(*,111)ilevel
@@ -85,6 +89,7 @@ subroutine authorize_fine(ilevel)
   ! Authorize all myid grids (needed for uploads)
   ncache=active(ilevel)%ngrid
   ! Loop over grids by vector sweeps
+!$omp parallel do private(igrid,ngrid,i,ind_grid,ind,iskip,ind_cell) schedule(static,nchunk)
   do igrid=1,ncache,nvector
      ! Gather nvector grids
      ngrid=MIN(nvector,ncache-igrid+1)
@@ -106,16 +111,33 @@ subroutine authorize_fine(ilevel)
   end do
   ! End loop over grids
 
-  ! Authorize virtual cells that contains myid children cells
-  do icpu=1,ncpu
+  call cpu_parallel_reception(ilevel,icpu_thr,igrid_thr,ngrid_thr)
+  ! Loop over threads
+!$omp parallel do private(ithr,icpu,igrid,ncache,ngrid_now,ngrid,ind_grid) &
+!$omp & private(ind,iskip,ind_cell,idim,xx,order_min,order_max,isub,test,xmin,xmax)
+  do ithr=1,nthr
+     if(ngrid_thr(ithr)==0)cycle
+     icpu=icpu_thr(ithr)
+     igrid=igrid_thr(ithr)
      ncache=reception(icpu,ilevel)%ngrid
-     ! Loop over grids by vector sweeps
-     do igrid=1,ncache,nvector
-        ! Gather nvector grids
+
+     ngrid_now=0
+     ! Loop over grids,cpus by vector sweeps
+     do
+        if(ngrid_now>=ngrid_thr(ithr))exit
+        if(igrid>ncache)then
+           icpu=icpu+1
+           igrid=1
+           ncache=reception(icpu,ilevel)%ngrid
+           cycle
+        end if
+
         ngrid=MIN(nvector,ncache-igrid+1)
         do i=1,ngrid
            ind_grid(i)=reception(icpu,ilevel)%igrid(igrid+i-1)
         end do
+
+        ! Do something with ind_grid
         ! Loop over cells
         do ind=1,twotondim
            ! Gather cell indices
@@ -153,19 +175,19 @@ subroutine authorize_fine(ilevel)
                  end do
               end do
            else ! recursive bisection method
-               do i=1,ngrid
-                  ! Test if cell overlaps the cpu
-                  test=.true.
-                  xmin=xx(i,:)-0.5*dx_loc
-                  xmax=xx(i,:)+0.5*dx_loc
-                  do idim=1,ndim
-                     ! This needs to be a >=, not a >, to precisely match the
-                     ! ordering/=case for refinement flagging
-                     test=test .and. (bisec_cpubox_max(myid,idim).ge.xmin(idim) &
-                                          .and. bisec_cpubox_min(myid,idim).le.xmax(idim))
-                  end do
-                  if(test) flag2(ind_cell(i))=1
-               end do
+              do i=1,ngrid
+                 ! Test if cell overlaps the cpu
+                 test=.true.
+                 xmin=xx(i,:)-0.5*dx_loc
+                 xmax=xx(i,:)+0.5*dx_loc
+                 do idim=1,ndim
+                    ! This needs to be a >=, not a >, to precisely match the
+                    ! ordering/=case for refinement flagging
+                    test=test .and. (bisec_cpubox_max(myid,idim).ge.xmin(idim) &
+                                         .and. bisec_cpubox_min(myid,idim).le.xmax(idim))
+                 end do
+                 if(test) flag2(ind_cell(i))=1
+              end do
            endif
 
            ! For load balancing operations
@@ -202,10 +224,15 @@ subroutine authorize_fine(ilevel)
            end if
         end do
         ! End loop over cells
+        ! End ind_grid usage
+
+        ngrid_now=ngrid_now+ngrid
+        igrid=igrid+nvector
      end do
-     ! End loop over grids
+     ! End loop over grids,cpus
   end do
-  ! End loop over cpus
+  ! End loop over threads
+
 
   ! Apply dilatation operator over flag2 cells on virtual cells only
 
@@ -225,13 +252,32 @@ subroutine authorize_fine(ilevel)
   n_nbor(1:3)=(/1,2,3/)
   do ismooth=1,ndim
      ! Initialize flag1 to 0 in virtual cells
-     do icpu=1,ncpu
+     call cpu_parallel_reception(ilevel,icpu_thr,igrid_thr,ngrid_thr)
+!$omp parallel do private(ithr,icpu,igrid,ncache,ngrid_now,ngrid,ind_grid) &
+!$omp & private(ind,iskip,i,ind_cell)
+     do ithr=1,nthr
+        if(ngrid_thr(ithr)==0)cycle
+        icpu=icpu_thr(ithr)
+        igrid=igrid_thr(ithr)
         ncache=reception(icpu,ilevel)%ngrid
-        do igrid=1,ncache,nvector
+
+        ngrid_now=0
+        ! Loop over grids,cpus by vector sweeps
+        do
+           if(ngrid_now>=ngrid_thr(ithr))exit
+           if(igrid>ncache)then
+              icpu=icpu+1
+              igrid=1
+              ncache=reception(icpu,ilevel)%ngrid
+              cycle
+           end if
+
            ngrid=MIN(nvector,ncache-igrid+1)
            do i=1,ngrid
               ind_grid(i)=reception(icpu,ilevel)%igrid(igrid+i-1)
            end do
+
+           ! Do something with ind_grid
            do ind=1,twotondim
               iskip=ncoarse+(ind-1)*ngridmax
               do i=1,ngrid
@@ -241,32 +287,81 @@ subroutine authorize_fine(ilevel)
                  flag1(ind_cell(i))=0
               end do
            end do
+           ! End ind_grid usage
+
+           ngrid_now=ngrid_now+ngrid
+           igrid=igrid+nvector
         end do
+        ! End loop over grids,cpus
      end do
+     ! End loop over threads
 
      ! Count neighbors and set flag2 accordingly
-     do icpu=1,ncpu
+!$omp parallel do private(ithr,icpu,igrid,ncache,ngrid_now,ngrid,ind_grid) &
+!$omp & private(igridn,ind)
+     do ithr=1,nthr
+        if(ngrid_thr(ithr)==0)cycle
+        icpu=icpu_thr(ithr)
+        igrid=igrid_thr(ithr)
         ncache=reception(icpu,ilevel)%ngrid
-        do igrid=1,ncache,nvector
+
+        ngrid_now=0
+        ! Loop over grids,cpus by vector sweeps
+        do
+           if(ngrid_now>=ngrid_thr(ithr))exit
+           if(igrid>ncache)then
+              icpu=icpu+1
+              igrid=1
+              ncache=reception(icpu,ilevel)%ngrid
+              cycle
+           end if
+
            ngrid=MIN(nvector,ncache-igrid+1)
            do i=1,ngrid
               ind_grid(i)=reception(icpu,ilevel)%igrid(igrid+i-1)
            end do
+
+           ! Do something with ind_grid
            call getnborgrids(ind_grid,igridn,ngrid)
            do ind=1,twotondim
               call count_nbors2(igridn,ind,n_nbor(ismooth),ngrid)
            end do
+           ! End ind_grid usage
+
+           ngrid_now=ngrid_now+ngrid
+           igrid=igrid+nvector
         end do
+        ! End loop over grids,cpus
      end do
+     ! End loop over threads
 
      ! Set flag2=1 for cells with flag1=1
-     do icpu=1,ncpu
+     ! Count neighbors and set flag2 accordingly
+!$omp parallel do private(ithr,icpu,igrid,ncache,ngrid_now,ngrid,ind_grid) &
+!$omp & private(ind,iskip,i,ind_cell)
+     do ithr=1,nthr
+        if(ngrid_thr(ithr)==0)cycle
+        icpu=icpu_thr(ithr)
+        igrid=igrid_thr(ithr)
         ncache=reception(icpu,ilevel)%ngrid
-        do igrid=1,ncache,nvector
+
+        ngrid_now=0
+        ! Loop over grids,cpus by vector sweeps
+        do
+           if(ngrid_now>=ngrid_thr(ithr))exit
+           if(igrid>ncache)then
+              icpu=icpu+1
+              igrid=1
+              ncache=reception(icpu,ilevel)%ngrid
+              cycle
+           end if
+
            ngrid=MIN(nvector,ncache-igrid+1)
            do i=1,ngrid
               ind_grid(i)=reception(icpu,ilevel)%igrid(igrid+i-1)
            end do
+
+           ! Do something with ind_grid
            do ind=1,twotondim
               iskip=ncoarse+(ind-1)*ngridmax
               do i=1,ngrid
@@ -276,9 +371,14 @@ subroutine authorize_fine(ilevel)
                  if(flag1(ind_cell(i))==1)flag2(ind_cell(i))=1
               end do
            end do
-        end do
-     end do
+           ! End ind_grid usage
 
+           ngrid_now=ngrid_now+ngrid
+           igrid=igrid+nvector
+        end do
+        ! End loop over grids,cpus
+     end do
+     ! End loop over threads
   end do
   ! End loop over steps
   end do
@@ -337,10 +437,12 @@ subroutine make_virtual_coarse_int(xx)
 
   ! Communications
   fff=0; ffg=0
+!$omp parallel do private(icell)
   do icell=1,ncell
      if(cpu_map(ind_cell(icell))==myid)fff(icell)=xx(ind_cell(icell))
   end do
   call MPI_ALLREDUCE(fff,ffg,ncell,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD,info)
+!$omp parallel do private(icell)
   do icell=1,ncell
      xx(ind_cell(icell))=ffg(icell)
   end do
@@ -380,6 +482,7 @@ subroutine make_virtual_fine_dp(xx,ilevel)
 #ifndef WITHOUTMPI
   ! Receive all messages
   countrecv=0
+
   do icpu=1,ncpu
      ncache=reception(icpu,ilevel)%ngrid
      if(ncache>0) then
@@ -390,16 +493,17 @@ subroutine make_virtual_fine_dp(xx,ilevel)
   end do
 
   ! Gather emission array
-  do icpu=1,ncpu
-    if (emission(icpu,ilevel)%ngrid>0) then
-      do j=1,twotondim
-        step=(j-1)*emission(icpu,ilevel)%ngrid
-        iskip=ncoarse+(j-1)*ngridmax
-        do i=1,emission(icpu,ilevel)%ngrid
-          emission(icpu,ilevel)%u(i+step,1)=xx(emission(icpu,ilevel)%igrid(i)+iskip)
-        end do
-      end do
-    end if
+!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+  do j=1,twotondim
+     do icpu=1,ncpu
+        if (emission(icpu,ilevel)%ngrid>0) then
+           iskip=ncoarse+(j-1)*ngridmax
+           step=(j-1)*emission(icpu,ilevel)%ngrid
+           do i=1,emission(icpu,ilevel)%ngrid
+              emission(icpu,ilevel)%u(i+step,1)=xx(emission(icpu,ilevel)%igrid(i)+iskip)
+           end do
+        end if
+     end do
   end do
 
   ! Send all messages
@@ -417,16 +521,17 @@ subroutine make_virtual_fine_dp(xx,ilevel)
   call MPI_WAITALL(countrecv,reqrecv,statuses,info)
 
   ! Scatter reception array
-  do icpu=1,ncpu
-    if (reception(icpu,ilevel)%ngrid>0) then
-      do j=1,twotondim
-        step=(j-1)*reception(icpu,ilevel)%ngrid
-        iskip=ncoarse+(j-1)*ngridmax
-        do i=1,reception(icpu,ilevel)%ngrid
-          xx(reception(icpu,ilevel)%igrid(i)+iskip)=reception(icpu,ilevel)%u(i+step,1)
-        end do
-      end do
-    end if
+!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+  do j=1,twotondim
+     do icpu=1,ncpu
+        if (reception(icpu,ilevel)%ngrid>0) then
+           iskip=ncoarse+(j-1)*ngridmax
+           step=(j-1)*reception(icpu,ilevel)%ngrid
+           do i=1,reception(icpu,ilevel)%ngrid
+              xx(reception(icpu,ilevel)%igrid(i)+iskip)=reception(icpu,ilevel)%u(i+step,1)
+           end do
+        end if
+     end do
   end do
 
   ! Wait for full completion of sends
@@ -476,16 +581,17 @@ subroutine make_virtual_fine_int(xx,ilevel)
   end do
 
   ! Gather emission array
-  do icpu=1,ncpu
-    if (emission(icpu,ilevel)%ngrid>0) then
-      do j=1,twotondim
-        step=(j-1)*emission(icpu,ilevel)%ngrid
-        iskip=ncoarse+(j-1)*ngridmax
-        do i=1,emission(icpu,ilevel)%ngrid
-          emission(icpu,ilevel)%f(i+step,1)=xx(emission(icpu,ilevel)%igrid(i)+iskip)
-        end do
-      end do
-    end if
+!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+  do j=1,twotondim
+     do icpu=1,ncpu
+        if (emission(icpu,ilevel)%ngrid>0) then
+           iskip=ncoarse+(j-1)*ngridmax
+           step=(j-1)*emission(icpu,ilevel)%ngrid
+           do i=1,emission(icpu,ilevel)%ngrid
+              emission(icpu,ilevel)%f(i+step,1)=xx(emission(icpu,ilevel)%igrid(i)+iskip)
+           end do
+        end if
+     end do
   end do
 
   ! Send all messages
@@ -503,16 +609,17 @@ subroutine make_virtual_fine_int(xx,ilevel)
   call MPI_WAITALL(countrecv,reqrecv,statuses,info)
 
   ! Scatter reception array
-  do icpu=1,ncpu
-    if (reception(icpu,ilevel)%ngrid>0) then
-      do j=1,twotondim
-        step=(j-1)*reception(icpu,ilevel)%ngrid
-        iskip=ncoarse+(j-1)*ngridmax
-        do i=1,reception(icpu,ilevel)%ngrid
-          xx(reception(icpu,ilevel)%igrid(i)+iskip)=reception(icpu,ilevel)%f(i+step,1)
-        end do
-      end do
-    end if
+!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+  do j=1,twotondim
+     do icpu=1,ncpu
+        if (reception(icpu,ilevel)%ngrid>0) then
+           iskip=ncoarse+(j-1)*ngridmax
+           step=(j-1)*reception(icpu,ilevel)%ngrid
+           do i=1,reception(icpu,ilevel)%ngrid
+              xx(reception(icpu,ilevel)%igrid(i)+iskip)=reception(icpu,ilevel)%f(i+step,1)
+           end do
+        end if
+     end do
   end do
 
   ! Wait for full completion of sends
@@ -552,18 +659,19 @@ subroutine make_virtual_reverse_dp(xx,ilevel)
   if(ilevel.LE.switchlevel)then
 
  ! Gather emission array
-  do icpu=1,ncpu
-     if (reception(icpu,ilevel)%ngrid>0) then
-        do j=1,twotondim
-           step=(j-1)*reception(icpu,ilevel)%ngrid
+!$omp parallel do private(step,iskip,icpu,i,j,icell,ibuf) collapse(2) schedule(static,nchunk)
+  do j=1,twotondim
+     do icpu=1,ncpu
+        if (reception(icpu,ilevel)%ngrid>0) then
            iskip=ncoarse+(j-1)*ngridmax
+           step=(j-1)*reception(icpu,ilevel)%ngrid
            do i=1,reception(icpu,ilevel)%ngrid
               icell=reception(icpu,ilevel)%igrid(i)+iskip
               ibuf=i+step
               reception(icpu,ilevel)%u(ibuf,1)=xx(icell)
            end do
-        end do
-     end if
+        end if
+     end do
   end do
 
   ! Receive all messages
@@ -607,17 +715,19 @@ subroutine make_virtual_reverse_dp(xx,ilevel)
   end do
 
   ! Scatter reception array
-  do icpu=1,ncpu
-     if (emission(icpu,ilevel)%ngrid>0) then
-        do j=1,twotondim
-           step=(j-1)*emission(icpu,ilevel)%ngrid
+!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+  do j=1,twotondim
+     do icpu=1,ncpu
+        if (emission(icpu,ilevel)%ngrid>0) then
            iskip=ncoarse+(j-1)*ngridmax
+           step=(j-1)*emission(icpu,ilevel)%ngrid
            do i=1,emission(icpu,ilevel)%ngrid
+!$omp atomic update
               xx(emission(icpu,ilevel)%igrid(i)+iskip)= &
                    & xx(emission(icpu,ilevel)%igrid(i)+iskip) + emission(icpu,ilevel)%u(i+step,1)
            end do
-        end do
-     end if
+        end if
+     end do
   end do
 
   else
@@ -634,16 +744,17 @@ subroutine make_virtual_reverse_dp(xx,ilevel)
   end do
 
   ! Gather emission array
-  do icpu=1,ncpu
-     if (reception(icpu,ilevel)%ngrid>0) then
-        do j=1,twotondim
-           step=(j-1)*reception(icpu,ilevel)%ngrid
+!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+  do j=1,twotondim
+     do icpu=1,ncpu
+        if (reception(icpu,ilevel)%ngrid>0) then
            iskip=ncoarse+(j-1)*ngridmax
+           step=(j-1)*reception(icpu,ilevel)%ngrid
            do i=1,reception(icpu,ilevel)%ngrid
               reception(icpu,ilevel)%u(i+step,1)=xx(reception(icpu,ilevel)%igrid(i)+iskip)
            end do
-        end do
-     end if
+        end if
+     end do
   end do
 
   ! Send all messages
@@ -661,17 +772,19 @@ subroutine make_virtual_reverse_dp(xx,ilevel)
   call MPI_WAITALL(countrecv,reqrecv,statuses,info)
 
   ! Scatter reception array
-  do icpu=1,ncpu
-    if (emission(icpu,ilevel)%ngrid>0) then
-      do j=1,twotondim
-        step=(j-1)*emission(icpu,ilevel)%ngrid
-        iskip=ncoarse+(j-1)*ngridmax
-        do i=1,emission(icpu,ilevel)%ngrid
-           xx(emission(icpu,ilevel)%igrid(i)+iskip)= &
-                & xx(emission(icpu,ilevel)%igrid(i)+iskip) + emission(icpu,ilevel)%u(i+step,1)
-        end do
-      end do
-    end if
+!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+  do j=1,twotondim
+     do icpu=1,ncpu
+        if (emission(icpu,ilevel)%ngrid>0) then
+           iskip=ncoarse+(j-1)*ngridmax
+           step=(j-1)*emission(icpu,ilevel)%ngrid
+           do i=1,emission(icpu,ilevel)%ngrid
+!$omp atomic update
+              xx(emission(icpu,ilevel)%igrid(i)+iskip)= &
+                   & xx(emission(icpu,ilevel)%igrid(i)+iskip) + emission(icpu,ilevel)%u(i+step,1)
+           end do
+        end if
+     end do
   end do
 
   ! Wait for full completion of sends
@@ -715,18 +828,19 @@ subroutine make_virtual_reverse_int(xx,ilevel)
   if(ilevel.le.switchlevel) then
 
   ! Gather emission array
-  do icpu=1,ncpu
-     if (reception(icpu,ilevel)%ngrid>0) then
-        do j=1,twotondim
-           step=(j-1)*reception(icpu,ilevel)%ngrid
+!$omp parallel do private(step,iskip,icpu,i,j,icell,ibuf) collapse(2) schedule(static,nchunk)
+  do j=1,twotondim
+     do icpu=1,ncpu
+        if (reception(icpu,ilevel)%ngrid>0) then
            iskip=ncoarse+(j-1)*ngridmax
+           step=(j-1)*reception(icpu,ilevel)%ngrid
            do i=1,reception(icpu,ilevel)%ngrid
               icell=reception(icpu,ilevel)%igrid(i)+iskip
               ibuf=i+step
               reception(icpu,ilevel)%f(ibuf,1)=xx(icell)
            end do
-        end do
-     end if
+        end if
+     end do
   end do
 
   ! Receive all messages
@@ -770,17 +884,19 @@ subroutine make_virtual_reverse_int(xx,ilevel)
   end do
 
   ! Scatter reception array
-  do icpu=1,ncpu
-     if (emission(icpu,ilevel)%ngrid>0) then
-        do j=1,twotondim
-           step=(j-1)*emission(icpu,ilevel)%ngrid
+!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+  do j=1,twotondim
+     do icpu=1,ncpu
+        if (emission(icpu,ilevel)%ngrid>0) then
            iskip=ncoarse+(j-1)*ngridmax
+           step=(j-1)*emission(icpu,ilevel)%ngrid
            do i=1,emission(icpu,ilevel)%ngrid
+!$omp atomic update
               xx(emission(icpu,ilevel)%igrid(i)+iskip)= &
                    & xx(emission(icpu,ilevel)%igrid(i)+iskip) + emission(icpu,ilevel)%f(i+step,1)
            end do
-        end do
-     end if
+        end if
+     end do
   end do
 
   else
@@ -797,16 +913,17 @@ subroutine make_virtual_reverse_int(xx,ilevel)
   end do
 
   ! Gather emission array
-  do icpu=1,ncpu
-     if (reception(icpu,ilevel)%ngrid>0) then
-        do j=1,twotondim
-           step=(j-1)*reception(icpu,ilevel)%ngrid
+!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+  do j=1,twotondim
+     do icpu=1,ncpu
+        if (reception(icpu,ilevel)%ngrid>0) then
            iskip=ncoarse+(j-1)*ngridmax
+           step=(j-1)*reception(icpu,ilevel)%ngrid
            do i=1,reception(icpu,ilevel)%ngrid
               reception(icpu,ilevel)%f(i+step,1)=xx(reception(icpu,ilevel)%igrid(i)+iskip)
            end do
-        end do
-     end if
+        end if
+     end do
   end do
 
   ! Send all messages
@@ -824,17 +941,19 @@ subroutine make_virtual_reverse_int(xx,ilevel)
   call MPI_WAITALL(countrecv,reqrecv,statuses,info)
 
   ! Scatter reception array
-  do icpu=1,ncpu
-     if (emission(icpu,ilevel)%ngrid>0) then
-        do j=1,twotondim
-           step=(j-1)*emission(icpu,ilevel)%ngrid
+!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+  do j=1,twotondim
+     do icpu=1,ncpu
+        if (emission(icpu,ilevel)%ngrid>0) then
            iskip=ncoarse+(j-1)*ngridmax
+           step=(j-1)*emission(icpu,ilevel)%ngrid
            do i=1,emission(icpu,ilevel)%ngrid
+!$omp atomic update
               xx(emission(icpu,ilevel)%igrid(i)+iskip)= &
                    & xx(emission(icpu,ilevel)%igrid(i)+iskip) + emission(icpu,ilevel)%f(i+step,1)
            end do
-        end do
-     end if
+        end if
+     end do
   end do
 
   ! Wait for full completion of sends
@@ -874,6 +993,10 @@ subroutine build_comm(ilevel)
 #endif
   integer,dimension(1:nvector),save::ind_grid,ind_cell
 
+  ! OMP
+  integer :: ithr,ngrid_now
+  integer,dimension(1:nthr) :: icpu_thr,igrid_thr,ngrid_thr
+
   if(verbose)write(*,111)ilevel
   nxny=nx*ny
 
@@ -881,6 +1004,7 @@ subroutine build_comm(ilevel)
   ! Compute grids global adress using flag2 array at level ilevel-1
   !----------------------------------------------------------------
   if(ilevel==1)then
+!$omp parallel do private(k,j,i,ind) collapse(3)
      do k=kcoarse_min,kcoarse_max
      do j=jcoarse_min,jcoarse_max
      do i=icoarse_min,icoarse_max
@@ -897,6 +1021,7 @@ subroutine build_comm(ilevel)
   else
      ! Initialize flag2 to local adress for cpu map = myid cells
      ncache=active(ilevel-1)%ngrid
+!$omp parallel do private(igrid,ngrid,ind_grid,iskip,ind_cell) schedule(static)
      do igrid=1,ncache,nvector
         ngrid=MIN(nvector,ncache-igrid+1)
         do i=1,ngrid
@@ -916,13 +1041,33 @@ subroutine build_comm(ilevel)
            end do
         end do
      end do
-     do icpu=1,ncpu
+
+     call cpu_parallel_reception(ilevel-1,icpu_thr,igrid_thr,ngrid_thr)
+!$omp parallel do private(ithr,icpu,igrid,ncache,ngrid_now,ngrid,ind_grid) &
+!$omp & private(ind,iskip,i,ind_cell)
+     do ithr=1,nthr
+        if(ngrid_thr(ithr)==0)cycle
+        icpu=icpu_thr(ithr)
+        igrid=igrid_thr(ithr)
         ncache=reception(icpu,ilevel-1)%ngrid
-        do igrid=1,ncache,nvector
+
+        ngrid_now=0
+        ! Loop over grids,cpus by vector sweeps
+        do
+           if(ngrid_now>=ngrid_thr(ithr))exit
+           if(igrid>ncache)then
+              icpu=icpu+1
+              igrid=1
+              ncache=reception(icpu,ilevel-1)%ngrid
+              cycle
+           end if
+
            ngrid=MIN(nvector,ncache-igrid+1)
            do i=1,ngrid
               ind_grid(i)=reception(icpu,ilevel-1)%igrid(igrid+i-1)
            end do
+
+           ! Do something with ind_grid
            do ind=1,twotondim
               iskip=ncoarse+(ind-1)*ngridmax
               do i=1,ngrid
@@ -936,12 +1081,19 @@ subroutine build_comm(ilevel)
                  end if
               end do
            end do
+
+           ! End ind_grid usage
+
+           ngrid_now=ngrid_now+ngrid
+           igrid=igrid+nvector
         end do
+        ! End loop over grids,cpus
      end do
+     ! End loop over threads
+
      call make_virtual_reverse_int(flag2(1),ilevel-1)
      call make_virtual_fine_int   (flag2(1),ilevel-1)
   end if
-
   !--------------------------------------------------------
   ! Compute number and index of active grid at level ilevel
   !--------------------------------------------------------
@@ -998,6 +1150,7 @@ subroutine build_comm(ilevel)
   ! Compute number and index of virtual boundary grids
   !----------------------------------------------------
 #ifndef WITHOUTMPI
+!$omp parallel do private(icpu,ncache,igrid,jgrid,i) schedule(dynamic)
    do icpu=1,ncpu
       ncache=0
       if(icpu.ne.myid)ncache=numbl(icpu,ilevel)
@@ -1046,6 +1199,7 @@ subroutine build_comm(ilevel)
   call MPI_ALLTOALL(sendbuf,1,MPI_INTEGER,recvbuf,1,MPI_INTEGER,MPI_COMM_WORLD,info)
 
   ! Allocate grid index
+!$omp parallel do private(icpu,ncache) schedule(dynamic)
   do icpu=1,ncpu
      emission(icpu,ilevel)%ngrid=recvbuf(icpu)
      ncache=emission(icpu,ilevel)%ngrid
@@ -1081,12 +1235,14 @@ subroutine build_comm(ilevel)
   call MPI_WAITALL(countrecv,reqrecv,statuses,info)
 
   ! Deallocate temporary communication buffers
+!$omp parallel do private(icpu,ncache)
   do icpu=1,ncpu
      ncache=reception(icpu,ilevel)%ngrid
      if(ncache>0)deallocate(reception(icpu,ilevel)%f)
   end do
 
   ! Allocate temporary communication buffers
+!$omp parallel do private(icpu,ncache) schedule(dynamic)
   do icpu=1,ncpu
      ncache=emission(icpu,ilevel)%ngrid
      if(ncache>0)then

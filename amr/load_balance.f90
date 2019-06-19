@@ -283,17 +283,17 @@ subroutine cmp_new_cpu_map
   ! This routine computes the new cpu map using
   ! the choosen ordering to balance load across cpus.
   !---------------------------------------------------
-  integer::igrid,ncell,ncell_loc,ncache,ngrid
+  integer::igrid,ncell,ncell_loc,ncache,ngrid,ncell_omp
   integer::ilevel,i,ind,idim
   integer::nx_loc
   integer::icpu,isub,idom
   integer::nxny,ix,iy,iz,iskip
   integer::ind_long
-  integer,dimension(1:nvector),save::ind_grid,ind_cell
+  integer,dimension(1:nvector)::ind_grid,ind_cell
 
   real(dp)::dx,scale
   real(dp),dimension(1:twotondim,1:3)::xc
-  real(dp),dimension(1:nvector,1:ndim),save::xx
+  real(dp),dimension(1:nvector,1:ndim)::xx
   real(kind=8)::incost_tot,local_cost,cell_cost
   real(kind=8),dimension(0:ndomain)::incost_new,incost_old
   integer(kind=8),dimension(1:overload)::npart_sub
@@ -301,11 +301,11 @@ subroutine cmp_new_cpu_map
   integer,dimension(1:overload)::ncell_sub
   real(kind=8),dimension(1:ndomain)::cost_loc,cost_old,cost_new
   real(qdp),dimension(0:ndomain)::bound_key_loc
-  integer,dimension(1:nvector),save::dom
-  real(qdp),dimension(1:nvector),save::order_min,order_max
-  integer,dimension(1:MAXLEVEL),save::niter_cost
+  integer,dimension(1:nvector)::dom
+  real(qdp),dimension(1:nvector)::order_min,order_max
+  integer,dimension(1:MAXLEVEL)::niter_cost
 
-  real(dp),dimension(1:1,1:ndim),save :: xx_tmp
+  real(dp),dimension(1:1,1:ndim) :: xx_tmp
   integer,dimension(1:1),save :: c_tmp
 #ifdef QUADHILBERT
   real(kind=8),dimension(0:ndomain)::bigdbl,bigtmp
@@ -318,10 +318,12 @@ subroutine cmp_new_cpu_map
 
   ! Compute time step related cost
   if(cost_weighting)then
-     niter_cost(levelmin)=1
+     niter_cost(levelmin)=load_weights(levelmin)
      if (nlevelmax - levelmin - 1 > 31) write(*,*) 'Warning load_balance: niter_cost may need to become a kind=8 integer'
      do ilevel=levelmin+1,nlevelmax
         niter_cost(ilevel)=nsubcycle(ilevel-1)*niter_cost(ilevel-1)
+        ! Additional weights to cost array
+        niter_cost(ilevel)=niter_cost(ilevel)*load_weights(ilevel)/load_weights(ilevel-1)
      end do
   else
      niter_cost(levelmin:nlevelmax)=1
@@ -342,6 +344,7 @@ subroutine cmp_new_cpu_map
   ncell_sub=0
   ncell_loc=1
   dx=1.0*scale
+!$omp parallel do private(ix,iy,iz,ind,xx,order_min,order_max,dom,isub,ncell_omp) collapse(3)
   do iz=0,nz-1
   do iy=0,ny-1
   do ix=0,nx-1
@@ -356,11 +359,15 @@ subroutine cmp_new_cpu_map
 #endif
         call cmp_minmaxorder(xx,order_min,order_max,dx,ncell_loc)
         call cmp_dommap(xx,dom,ncell_loc)
+!$omp atomic capture
         ncell=ncell+1
+        ncell_omp=ncell
+!$omp end atomic
         isub=(dom(1)-1)/ncpu+1
+!$omp atomic update
         ncell_sub(isub)=ncell_sub(isub)+1
-        flag1(ncell)=0
-        hilbert_key(ncell)=order_max(1)
+        flag1(ncell_omp)=0
+        hilbert_key(ncell_omp)=order_max(1)
      end if
   end do
   end do
@@ -427,7 +434,7 @@ subroutine cmp_new_cpu_map
                     ncell_loc=ncell_loc+1
                     isub=(dom(ncell_loc)-1)/ncpu+1
                     ncell_sub(isub)=ncell_sub(isub)+1
-                    flag1(ncell)=8*10 ! Magic number
+                    flag1(ncell)=8*10 ! Magic number, relative cost between particle and cells
                     if(pic)then
                        ! Add more load for tracer particles
                        if (tracer .and. ilevel >= tracer_first_balance_levelmin) then
@@ -443,6 +450,7 @@ subroutine cmp_new_cpu_map
                        stop
                     endif
                     flag1(ncell)=flag1(ncell)*niter_cost(ilevel)
+
                     npart_sub(isub)=npart_sub(isub)+flag1(ncell)
                     hilbert_key(ncell)=order_max(ncell_loc)
                  end if
@@ -584,6 +592,7 @@ subroutine cmp_new_cpu_map
      end do
      ncache=active(ilevel)%ngrid
      ! Loop over grids by vector sweeps
+!$omp parallel do private(igrid,ngrid,ind_grid,iskip,ind_cell,xx,order_max,xx_tmp,c_tmp) schedule(static)
      do igrid=1,ncache,nvector
         ! Gather nvector grids
         ngrid=MIN(nvector,ncache-igrid+1)
@@ -648,7 +657,7 @@ subroutine cmp_cpumap(x,c,nn)
   integer ,dimension(1:nvector), intent(out)::c
 
   integer::i,idom
-  real(qdp),dimension(1:nvector),save::order
+  real(qdp),dimension(1:nvector)::order
 
   if(ordering /= 'bisection') then
      call cmp_ordering(x,order,nn)
@@ -684,7 +693,7 @@ subroutine cmp_dommap(x,c,nn)
   real(dp),dimension(1:nvector,1:ndim)::x
 
   integer::i,idom
-  real(qdp),dimension(1:nvector),save::order
+  real(qdp),dimension(1:nvector)::order
 
   call cmp_ordering(x,order,nn)
   do i=1,nn
@@ -718,7 +727,7 @@ subroutine cmp_ordering(x,order,nn)
   ! according to its position in space and for the chosen
   ! ordering. Position x are in user units.
   !-----------------------------------------------------
-  integer,dimension(1:nvector),save::ix,iy,iz
+  integer,dimension(1:nvector)::ix,iy,iz
   integer::i,ncode,bit_length,nx_loc
   integer::temp
   real(kind=8)::scale,bscale
@@ -828,7 +837,7 @@ subroutine cmp_minmaxorder(x,order_min,order_max,dx,nn)
   ! key contained in the input cell and for the chosen
   ! ordering.
   !-----------------------------------------------------
-  integer,dimension(1:nvector),save::ix,iy,iz
+  integer,dimension(1:nvector)::ix,iy,iz
   integer::i,ncode,bit_length,nx_loc
 
   real(dp)::dxx,dxmin
@@ -840,7 +849,9 @@ subroutine cmp_minmaxorder(x,order_min,order_max,dx,nn)
   real(kind=8)::zz,zc
 #endif
   real(kind=8)::scale,bscaleloc,bscale
-  real(qdp)::dkey,oneqdp=1.0
+  real(qdp)::dkey,oneqdp
+
+  oneqdp=1.0
 
   nx_loc=icoarse_max-icoarse_min+1
   scale=boxlen/dble(nx_loc)

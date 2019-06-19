@@ -52,6 +52,12 @@ module amr_parameters
   integer,parameter::nvector=NVECTOR
 #endif
 
+#ifndef OMP_NCHUNK
+  integer,parameter::nchunk=1  ! Size of OpenMP chunk size
+#else
+  integer,parameter::nchunk=OMP_NCHUNK
+#endif
+
   integer, parameter :: nstride = 65536
 
   ! Run control
@@ -114,6 +120,7 @@ module amr_parameters
   logical::output_now=.false. ! write output next step
   real(dp)::walltime_hrs=-1.  ! Wallclock time for submitted job
   real(dp)::minutes_dump=1.   ! Dump an output minutes before walltime ends
+  logical::wall_stop=.true.   ! Stop when non-scheduled dump is finished
 
   ! Lightcone parameters
   real(dp)::thetay_cone=12.5

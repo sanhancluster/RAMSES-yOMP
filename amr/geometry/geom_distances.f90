@@ -8,6 +8,7 @@ module geom_distances
   private
   public :: LineBoxDistanceSquared, LineSegmentBoxDistanceSquared, PointBoxDistanceSquared, CapsuleBoxDistanceSquared
   public :: PointLineDistanceSquared, PointLineSegDistanceSquared
+  public :: LineSegmentBoxDistanceSquared_omp
 
 contains
   subroutine CapsuleBoxDistanceSquared(box, capsule, d2)
@@ -42,6 +43,27 @@ contains
     end if
   end subroutine LineSegmentBoxDistanceSquared
 
+  subroutine LineSegmentBoxDistanceSquared_omp(box_origin, box_extents, box_u, box_v, box_w, seg_start, seg_end, d2)
+    real(dp), intent(out) :: d2
+
+    real(dp) :: t
+
+    real(dp), dimension(3) :: box_origin, box_extents, box_u, box_v, box_w
+    real(dp), dimension(3) :: seg_start, seg_end
+    real(dp), dimension(3) :: line_origin, line_direction
+
+    line_origin = seg_start
+    line_direction = seg_end - seg_start
+
+    call LineBoxDistanceSquared_omp(box_origin, box_extents, box_u, box_v, box_w, line_origin, line_direction, d2, t)
+
+    if (t < 0) then
+       call PointBoxDistanceSquared_omp(box_origin, box_extents, box_u, box_v, box_w, seg_start, d2)
+    else if (t > 1) then
+       call PointBoxDistanceSquared_omp(box_origin, box_extents, box_u, box_v, box_w, seg_end, d2)
+    end if
+  end subroutine LineSegmentBoxDistanceSquared_omp
+
   subroutine LineBoxDistanceSquared(box, line, d2, t)
     type(Box_t), intent(in) :: box
     type(Line_t), intent(in) :: line
@@ -53,6 +75,8 @@ contains
 
     type(Box_t) :: newBox
     type(Line_t) :: newLine
+
+
 
     ! Project segment onto box own frame
     tmp = (line%origin - box%origin)
@@ -451,6 +475,427 @@ contains
 
   end subroutine LineBoxDistanceSquared
 
+  subroutine LineBoxDistanceSquared_omp(box_origin, box_extents, box_u, box_v, box_w, line_origin, line_direction, d2, t)
+
+    real(dp), intent(out) :: d2, t
+
+    real(dp) :: Pprime(3), tmp(3), dprime(3)
+    integer :: n0, axis
+    logical :: ind(3)
+
+    real(dp), dimension(3) :: box_origin, box_extents, box_u, box_v, box_w
+    real(dp), dimension(3) :: line_origin, line_direction
+
+    real(dp), dimension(3) :: newBox_origin, newBox_extents, newBox_u, newBox_v, newBox_w
+    real(dp), dimension(3) :: newLine_origin, newLine_direction
+
+
+    ! Project segment onto box own frame
+    tmp = (line_origin - box_origin)
+    Pprime = (/ &
+         dot_product(tmp, box_u), &
+         dot_product(tmp, box_v), &
+         dot_product(tmp, box_w)  &
+         /)
+    dprime = (/ &
+         dot_product(line_direction, box_u), &
+         dot_product(line_direction, box_v), &
+         dot_product(line_direction, box_w)  &
+         /)
+
+    if (dprime(1) < 0) then
+       Pprime(1) = -Pprime(1)
+       dprime(1) = -dprime(1)
+    end if
+    if (dprime(2) < 0) then
+       Pprime(2) = -Pprime(2)
+       dprime(2) = -dprime(2)
+    end if
+    if (dprime(3) < 0) then
+       Pprime(3) = -Pprime(3)
+       dprime(3) = -dprime(3)
+    end if
+
+    ! Store new Box and line
+    newBox_origin = box_origin
+    newBox_extents = box_extents
+
+    newBox_u = (/1, 0, 0/)
+    newBox_v = (/0, 1, 0/)
+    newBox_w = (/0, 0, 1/)
+
+    newLine_origin = Pprime
+    newLine_direction = dprime
+
+    ! Count number of null component
+    ind = dprime > 0._dp
+    n0 = count(.not. ind)
+    if (n0 == 3) then
+       call PointBoxDistanceSquared_omp(newBox_origin, newBox_extents, newBox_u, newBox_v, newBox_w, newLine_origin, d2)
+       t = 0
+    else if (n0 == 2) then
+       ! Select non null axis
+       if (ind(1)) axis = 1
+       if (ind(2)) axis = 2
+       if (ind(3)) axis = 3
+       call CaseTwoZeroComponents_omp(newLine_origin, newLine_direction, newBox_origin, newBox_extents, newBox_u, newBox_v, newBox_w, axis, d2, t)
+    else if (n0 == 1) then
+       ! Select non null axis
+       if (.not. ind(1)) axis = 1
+       if (.not. ind(2)) axis = 2
+       if (.not. ind(3)) axis = 3
+       call CaseOneZeroComponents_omp(newLine_origin, newLine_direction, newBox_origin, newBox_extents, newBox_u, newBox_v, newBox_w, axis, d2, t)
+    else if (n0 == 0) then
+       call CaseNoZeroComponents_omp(newLine_origin, newLine_direction, newBox_origin, newBox_extents, newBox_u, newBox_v, newBox_w, d2, t)
+    end if
+
+  contains
+    subroutine CaseTwoZeroComponents_omp(line_origin, line_direction, box_origin, box_extents, box_u, box_v, box_w, X, d2, t)
+      integer, intent(in) :: X
+
+      real(dp), intent(out) :: d2, t
+
+      real(dp) :: delta
+      integer :: Y, Z
+
+      real(dp), dimension(3) :: box_origin, box_extents, box_u, box_v, box_w
+      real(dp), dimension(3) :: line_origin, line_direction
+
+
+      ! In the comments, we assume axis to be x-axis
+      ! Maps 2->3, 3->1 and 1->2
+      Y = next_axis(X)
+      Z = next_axis(Y)
+
+      d2 = 0
+
+      t = (box_extents(X) - line_origin(X)) / line_direction(X)
+      ! Distance in y direction
+      if (line_origin(Y) < -box_extents(Y)) then
+         delta = line_origin(Y) + box_extents(Y)
+         d2 = d2 + delta**2
+      else if (line_origin(Y) > box_extents(Y)) then
+         delta = line_origin(Y) - box_extents(Y)
+         d2 = d2 + delta**2
+      end if
+
+      ! Distance in z direction
+      if (line_origin(Z) < -box_extents(Z)) then
+         delta = line_origin(Z) + box_extents(Z)
+         d2 = d2 + delta**2
+      else if (line_origin(Z) > box_extents(Z)) then
+         delta = line_origin(Z) - box_extents(Z)
+         d2 = d2 + delta**2
+      end if
+
+    end subroutine CaseTwoZeroComponents_omp
+
+    subroutine CaseOneZeroComponents_omp(line_origin, line_direction, box_origin, box_extents, box_u, box_v, box_w, Z, d2, t)
+      integer, intent(in) :: Z
+
+      real(dp), intent(out) :: d2, t
+
+      real(dp) :: prod0, prod1, ptMinusExtents(3), tmp, delta, invLSquared, inv
+      integer :: X, Y
+
+      real(dp), dimension(3) :: box_origin, box_extents, box_u, box_v, box_w
+      real(dp), dimension(3) :: line_origin, line_direction
+
+      d2 = 0
+
+      ! In the comments, we assume axis to be the z axis
+      ! Get next axis in order
+      X = next_axis(Z)
+      Y = next_axis(Y)
+
+      ptMinusExtents = line_origin - box_extents
+
+      prod0 = line_direction(Y) * ptMinusExtents(X)
+      prod1 = line_direction(X) * ptMinusExtents(Y)
+
+      if (prod0 >= prod1) then
+         ! Line intersects x-axis of box
+         ! Closest point is along bottom edge of right face of box
+         tmp = line_origin(Y) + box_extents(Y)
+         delta = prod0 - line_direction(X) * tmp
+
+         if (delta >= 0) then
+            ! No intersection, so compute distance
+            invLSquared = 1._dp / (&
+                 line_direction(X) * line_direction(X) + &
+                 line_direction(Y) * line_direction(Y))
+            d2 = d2 + delta*delta * invLSquared
+            t = - (line_direction(X) * ptMinusExtents(X) + line_direction(Y) * tmp) * invLSquared
+         else
+            ! Line intersects box, distance is 0
+            ! d2 = d2 + 0
+            inv = 1 / line_direction(X)
+            t = -ptMinusExtents(X) * inv
+         end if
+      else
+         ! Line intersects y-axis of box
+         ! Closest point is along top edge of left face of box
+         tmp = line_origin(X) + box_extents(X)
+         delta = prod1 - line_direction(Y) * tmp
+
+         if (delta >= 0) then
+            ! No intersection, so compute distance
+            invLSquared = 1._dp / (&
+                 line_direction(X) * line_direction(X) + &
+                 line_direction(Y) * line_direction(Y))
+            d2 = d2 + delta*delta * invLSquared
+            t = - (line_direction(Y) * ptMinusExtents(Y) + line_direction(X) * tmp) * invLSquared
+         else
+            ! Line intersects box, distance is 0
+            inv = 1 / line_direction(Y)
+            t = -ptMinusExtents(Y) * inv
+         end if
+      end if
+
+      ! Now consider the z-direction
+      if (line_origin(Z) < -box_extents(Z)) then
+         delta = line_origin(Z) + box_extents(Z)
+         d2 = d2 + delta*delta
+      else if (line_origin(Z) > box_extents(Z)) then
+         delta = line_origin(Z) - box_extents(Z)
+         d2 = d2 + delta*delta
+      end if
+
+    end subroutine CaseOneZeroComponents_omp
+
+    subroutine CaseNoZeroComponents_omp(line_origin, line_direction, box_origin, box_extents, box_u, box_v, box_w, d2, t)
+      real(dp), intent(out) :: d2, t
+
+      real(dp) :: ptMinusExtents(3), dyEx, dxEy, dzEx, dxEz, dzEy, dyEz
+      integer :: X=1, Y=2, Z=3
+
+      real(dp), dimension(3) :: box_origin, box_extents, box_u, box_v, box_w
+      real(dp), dimension(3) :: line_origin, line_direction
+
+      ptMinusExtents = line_origin - box_extents
+      dyEx = line_direction(Y) * ptMinusExtents(X)
+      dxEy = line_direction(X) * ptMinusExtents(Y)
+
+      if (dyEx >= dxEy) then
+         dzEx = line_direction(Z) * ptMinusExtents(X)
+         dxEz = line_direction(X) * ptMinusExtents(Z)
+
+         if (dzEx>= dxEz) then
+            ! Line intersects x = box.extent.x plane
+            call Face_omp(line_origin, line_direction, box_origin, box_extents, box_u, box_v, box_w, ptMinusExtents, X, d2, t)
+         else
+            ! Line intersects z = box.extent.z plane
+            call Face_omp(line_origin, line_direction, box_origin, box_extents, box_u, box_v, box_w, ptMinusExtents, Z, d2, t)
+         end if
+      else
+         dzEy = line_direction(Z) * ptMinusExtents(Y)
+         dyEz = line_direction(Y) * ptMinusExtents(Z)
+
+         if (dzEy >= dyEz) then
+            ! Line intersects y = box.extent.y plane
+            call Face_omp(line_origin, line_direction, box_origin, box_extents, box_u, box_v, box_w, ptMinusExtents, Y, d2, t)
+         else
+            ! Line intersects z = box.extent.z plane
+            call Face_omp(line_origin, line_direction, box_origin, box_extents, box_u, box_v, box_w, ptMinusExtents, Z, d2, t)
+         end if
+      end if
+
+    end subroutine CaseNoZeroComponents_omp
+
+    subroutine Face_omp(line_origin, line_direction, box_origin, box_extents, box_u, box_v, box_w, ptMinusExtents, axis, d2, t)
+      real(dp), intent(in) :: ptMinusExtents(3)
+      integer, intent(in) :: axis
+
+      real(dp), intent(out) :: d2, t
+
+      real(dp) :: ptPlusExtents(3), lSqr, tmp, delta, inverse
+      integer :: X, Y, Z
+
+      real(dp), dimension(3) :: box_origin, box_extents, box_u, box_v, box_w
+      real(dp), dimension(3) :: line_origin, line_direction
+
+      X = axis
+      Y = next_axis(X)
+      Z = next_axis(Y)
+
+      ptPlusExtents = line_origin + box_extents
+
+      d2 = 0
+
+      if (line_direction(X) * ptPlusExtents(Y) >= line_direction(Y) * ptMinusExtents(X)) then
+         ! Region 0, 5 or 4
+         if (line_direction(X) * ptPlusExtents(Z) >= line_direction(Z) * ptMinusExtents(X)) then
+            ! Region 0 - line intersects face
+            ! Distance is 0
+            inverse = 1.0_dp / line_direction(X)
+            t = -ptMinusExtents(X) * inverse
+         else
+            ! Region 4 or 5
+            lSqr = line_direction(X)**2 + line_direction(Z)**2
+            tmp = lSqr * ptPlusExtents(Y) - line_direction(Y) * &
+                 (line_direction(X) * ptMinusExtents(X) + line_direction(Z) * ptPlusExtents(Z))
+
+            if (tmp <= 2 * lSqr * box_extents(Y)) then
+               ! Region 4
+               call region4code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
+                    tmp, lSqr, delta, t, d2)
+            else
+               ! Region 5
+               call region5code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
+                    lSqr, delta, t, d2)
+            end if
+         end if
+      else
+         if (line_direction(X) * ptPlusExtents(Z) >= line_direction(Z) * ptMinusExtents(X)) then
+            ! Region 1 or 2
+            lSqr = line_direction(X)**2 + line_direction(Y)**2
+            tmp = lSqr * ptPlusExtents(Z) - line_direction(Z) * &
+                 (line_direction(X) * ptMinusExtents(X) + line_direction(Y) * ptPlusExtents(Y))
+            if (tmp <= 2 * lSqr * box_extents(Z)) then
+               ! Region 2
+               call region2code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
+                    tmp, lSqr, delta, t, d2)
+            else
+               ! Region 1
+               call region1code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
+                    lSqr, delta, t, d2)
+            end if
+         else
+            lSqr = line_direction(X)**2 &
+                 + line_direction(Z)**2
+            tmp = lSqr * ptPlusExtents(Y) - line_direction(Y) * &
+                 (line_direction(X) * ptMinusExtents(X) + line_direction(Z) * ptPlusExtents(Z))
+
+            if (tmp >= 0) then
+               ! Region 4 or 5
+               if (tmp <= 2 * lSqr * box_extents(Y)) then
+                  ! Region 4. Same as before (TODO)
+                  call region4code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
+                    tmp, lSqr, delta, t, d2)
+               else
+                  ! Region 5. Same as before (TODO)
+                  call region5code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
+                    lSqr, delta, t, d2)
+               end if
+            end if
+
+            lSqr = line_direction(X)**2 + line_direction(Y)**2
+            tmp = lSqr * ptPlusExtents(Z) - line_direction(Z) * &
+                 (line_direction(X) * ptMinusExtents(X) + line_direction(Y) * ptPlusExtents(Y))
+
+            if (tmp >= 0) then
+               ! Region 1 or 2
+               if (tmp <= 2 * lSqr * box_extents(Z)) then
+                  ! Region 2. Same as before
+                  call region2code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
+                    tmp, lSqr, delta, t, d2)
+               else
+                  ! Region 1. Same as before
+                  call region1code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
+                       lSqr, delta, t, d2)
+               end if
+               return ! d2
+            end if
+
+            ! Region 3
+            lSqr = lSqr + line_direction(Y)**2
+            delta = line_direction(X) * ptMinusExtents(X) &
+                 + line_direction(Y) * ptPlusExtents(Y) &
+                 + line_direction(Z) * ptPlusExtents(Z)
+            t = - delta / lSqr
+            d2 = d2 + ptMinusExtents(X)**2 &
+                 + ptPlusExtents(Y)**2 &
+                 + ptPlusExtents(Z)**2 &
+                 + delta * t
+         end if
+      end if
+    end subroutine Face_omp
+
+    subroutine region1code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
+         lSqr, delta, t, d2)
+      real(dp), intent(in) :: ptMinusExtents(3), ptPlusExtents(3)
+      integer, intent(in) :: X, Y, Z
+
+      real(dp), intent(inout) :: lSqr, delta, t, d2
+
+      real(dp), dimension(3) :: line_origin, line_direction
+
+      lSqr = lSqr + line_direction(Z)**2
+      delta = line_direction(X) * ptMinusExtents(X) &
+           + line_direction(Y) * ptMinusExtents(Y) &
+           + line_direction(Z) * ptPlusExtents(Z)
+
+      t = -delta / lSqr
+      d2 = d2 + ptMinusExtents(X)**2 &
+           + ptPlusExtents(Y)**2 &
+           + ptMinusExtents(Z)**2 &
+           + delta * t
+
+    end subroutine region1code_omp
+
+    subroutine region2code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z, &
+         tmp, lSqr, delta, t, d2)
+      real(dp), intent(in) :: ptMinusExtents(3), ptPlusExtents(3)
+      integer, intent(in) :: X, Y, Z
+
+      real(dp), intent(inout) :: tmp, lSqr, delta, t, d2
+
+      real(dp), dimension(3) :: line_origin, line_direction
+
+      tmp = ptPlusExtents(Z) - tmp / lSqr
+      lSqr = lSqr + line_direction(Z)**2
+      delta = line_direction(X) * ptMinusExtents(X) &
+           + line_direction(Y) * ptPlusExtents(Y) &
+           + line_direction(Z) * tmp
+      t = -delta/ lSqr
+      d2 = d2 + ptMinusExtents(X)**2 &
+           + ptMinusExtents(Y)**2 &
+           + tmp**2 &
+           + delta * t
+    end subroutine region2code_omp
+
+    subroutine region4code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z, &
+         tmp, lSqr, delta, t, d2)
+      real(dp), intent(in) :: ptMinusExtents(3), ptPlusExtents(3)
+      integer, intent(in) :: X, Y, Z
+
+      real(dp), intent(inout) :: tmp, lSqr, delta, t, d2
+
+      real(dp), dimension(3) :: line_origin, line_direction
+
+      tmp = ptPlusExtents(Y) - tmp / lSqr
+      lSqr = lSqr + line_direction(Y)**2
+      delta = line_direction(X) * ptMinusExtents(X) &
+           + line_direction(Y) * tmp &
+           + line_direction(Z) * ptPlusExtents(Z)
+      t = -delta / lSqr
+      d2 = d2 + ptMinusExtents(X)**2 + tmp**2 + ptPlusExtents(Z)**2 + delta * t
+    end subroutine region4code_omp
+
+    subroutine region5code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z, &
+         lSqr, delta, t, d2)
+      real(dp), intent(in) :: ptMinusExtents(3), ptPlusExtents(3)
+      integer, intent(in) :: X, Y, Z
+
+      real(dp), intent(inout) :: lSqr, delta, t, d2
+
+      real(dp), dimension(3) :: line_origin, line_direction
+
+      lSqr = lSqr + line_direction(Y)**2
+      delta = line_direction(X) * ptMinusExtents(X) &
+           + line_direction(Y) * ptMinusExtents(Y) &
+           + line_direction(Z) * ptPlusExtents(Z)
+      t = - delta/ lSqr
+
+      d2 = d2 + ptMinusExtents(X)**2 &
+           + ptMinusExtents(Y) **2 &
+           + ptPlusExtents(Z)**2 &
+           + delta * t
+
+    end subroutine region5code_omp
+
+  end subroutine LineBoxDistanceSquared_omp
+
   subroutine PointBoxDistanceSquared(box, point, d2)
     type(Box_t), intent(in) :: box
     real(dp), intent(in) :: point(3)
@@ -481,6 +926,38 @@ contains
     end do
 
   end subroutine PointBoxDistanceSquared
+
+  subroutine PointBoxDistanceSquared_omp(box_origin, box_extents, box_u, box_v, box_w, point, d2)
+    real(dp), intent(in) :: point(3)
+    real(dp), intent(out) :: d2
+
+    real(dp) :: offset(3), pPrime(3), d
+    real(dp), dimension(3) :: box_origin, box_extents
+    real(dp), dimension(3) :: box_u, box_v, box_w
+
+    integer :: dim
+
+    d2 = 0
+    offset = point - box_origin
+    pPrime = (/&
+         dot_product(offset, box_u), &
+         dot_product(offset, box_v), &
+         dot_product(offset, box_w)  &
+         /)
+
+    do dim = 1, 3
+       if (pPrime(dim) < -box_extents(dim)) then
+          d = pPrime(dim) + box_extents(dim)
+          d2 = d2 + d**2
+       else if (pPrime(dim) > box_extents(dim)) then
+          d = pPrime(dim) - box_extents(dim)
+          d2 = d2 + d**2
+       else
+          ! nothing to do
+       end if
+    end do
+
+  end subroutine PointBoxDistanceSquared_omp
 
   subroutine PointLineDistanceSquared(line, point, t, d2)
     type(Line_t), intent(in) :: line

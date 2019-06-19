@@ -61,9 +61,10 @@ subroutine phi_fine_cg(ilevel,icount)
   ! Compute right-hand side norm
   !===============================
   rhs_norm=0.d0
-  do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
-     do i=1,active(ilevel)%ngrid
+!$omp parallel do private(ind,iskip,i,idx) reduction(+:rhs_norm) schedule(static,nvector)
+  do i=1,active(ilevel)%ngrid
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
         idx=active(ilevel)%igrid(i)+iskip
         rhs_norm=rhs_norm+fact2*(rho(idx)-rho_tot)*(rho(idx)-rho_tot)
      end do
@@ -95,92 +96,87 @@ subroutine phi_fine_cg(ilevel,icount)
      ! Compute residual norm
      !====================================
      r2=0.0d0
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
-        do i=1,active(ilevel)%ngrid
-           idx=active(ilevel)%igrid(i)+iskip
-           r2=r2+f(idx,1)*f(idx,1)
-        end do
-     end do
-     ! Compute global norm
+!$omp parallel do private(ind,iskip,i,idx) reduction(+:r2) schedule(static,nvector)
+	  do i=1,active(ilevel)%ngrid
+		  do ind=1,twotondim
+			  iskip=ncoarse+(ind-1)*ngridmax
+			  idx=active(ilevel)%igrid(i)+iskip
+			  r2=r2+f(idx,1)*f(idx,1)
+		  end do
+	  end do
+	  ! Compute global norm
 #ifndef WITHOUTMPI
-     call MPI_ALLREDUCE(r2,r2_all,1,MPI_DOUBLE_PRECISION,MPI_SUM,&
-          & MPI_COMM_WORLD,info)
-     r2=r2_all
+	  call MPI_ALLREDUCE(r2,r2_all,1,MPI_DOUBLE_PRECISION,MPI_SUM,&
+			 & MPI_COMM_WORLD,info)
+	  r2=r2_all
 #endif
 
-     !====================================
-     ! Compute beta factor
-     !====================================
-     if(iter==1)then
-        beta_cg=0.
-     else
-        beta_cg=r2/r2_old
-     end if
-     r2_old=r2
+	  !====================================
+	  ! Compute beta factor
+	  !====================================
+	  if(iter==1)then
+		  beta_cg=0.
+	  else
+		  beta_cg=r2/r2_old
+	  end if
+	  r2_old=r2
 
-     !====================================
-     ! Recurrence on p
-     !====================================
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
-        do i=1,active(ilevel)%ngrid
-           idx=active(ilevel)%igrid(i)+iskip
-           f(idx,2)=f(idx,1)+beta_cg*f(idx,2)
-        end do
-     end do
-     ! Update boundaries
-     call make_virtual_fine_dp(f(1,2),ilevel)
+	  !====================================
+	  ! Recurrence on p
+	  !====================================
+!$omp parallel do private(ind,iskip,i,idx) schedule(static,nvector)
+	  do i=1,active(ilevel)%ngrid
+		  do ind=1,twotondim
+			  iskip=ncoarse+(ind-1)*ngridmax
+			  idx=active(ilevel)%igrid(i)+iskip
+			  f(idx,2)=f(idx,1)+beta_cg*f(idx,2)
+		  end do
+	  end do
+		  ! Update boundaries
+	  call make_virtual_fine_dp(f(1,2),ilevel)
 
-     !==============================================
-     ! Compute z = Ap and store it into f(i,3)
-     !==============================================
-     call cmp_Ap_cg(ilevel)
+	  !==============================================
+	  ! Compute z = Ap and store it into f(i,3)
+	  !==============================================
+	  call cmp_Ap_cg(ilevel)
 
-     !====================================
-     ! Compute p.Ap scalar product
-     !====================================
-     pAp=0.0d0
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
-        do i=1,active(ilevel)%ngrid
-           idx=active(ilevel)%igrid(i)+iskip
-           pAp=pAp+f(idx,2)*f(idx,3)
-        end do
-     end do
-     ! Compute global sum
+	  !====================================
+	  ! Compute p.Ap scalar product
+	  !====================================
+	  pAp=0.0d0
+!$omp parallel do private(ind,iskip,i,idx) reduction(+:pAp) schedule(static,nvector)
+	  do i=1,active(ilevel)%ngrid
+		  do ind=1,twotondim
+			  iskip=ncoarse+(ind-1)*ngridmax
+			  idx=active(ilevel)%igrid(i)+iskip
+			  pAp=pAp+f(idx,2)*f(idx,3)
+		  end do
+	  end do
+		  ! Compute global sum
 #ifndef WITHOUTMPI
-     call MPI_ALLREDUCE(pAp,pAp_all,1,MPI_DOUBLE_PRECISION,MPI_SUM,&
-          & MPI_COMM_WORLD,info)
-     pAp=pAp_all
+	  call MPI_ALLREDUCE(pAp,pAp_all,1,MPI_DOUBLE_PRECISION,MPI_SUM,&
+			 & MPI_COMM_WORLD,info)
+	  pAp=pAp_all
 #endif
 
-     !====================================
-     ! Compute alpha factor
-     !====================================
-     alpha_cg = r2/pAp
+	  !====================================
+	  ! Compute alpha factor
+	  !====================================
+	  alpha_cg = r2/pAp
 
-     !====================================
-     ! Recurrence on x
-     !====================================
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
-        do i=1,active(ilevel)%ngrid
-           idx=active(ilevel)%igrid(i)+iskip
-           phi(idx)=phi(idx)+alpha_cg*f(idx,2)
-        end do
-     end do
+	  !====================================
+	  ! Recurrence on x and r
+	  !====================================
+!$omp parallel do private(ind,iskip,i,idx) schedule(static,nvector)
+	  do i=1,active(ilevel)%ngrid
+		  do ind=1,twotondim
+			  iskip=ncoarse+(ind-1)*ngridmax
+			  idx=active(ilevel)%igrid(i)+iskip
 
-     !====================================
-     ! Recurrence on r
-     !====================================
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
-        do i=1,active(ilevel)%ngrid
-           idx=active(ilevel)%igrid(i)+iskip
-           f(idx,1)=f(idx,1)-alpha_cg*f(idx,3)
-        end do
-     end do
+			  phi(idx)=phi(idx)+alpha_cg*f(idx,2)
+			  f(idx,1)=f(idx,1)-alpha_cg*f(idx,3)
+		  end do
+	  end do
 
      ! Compute error
      error=DSQRT(r2/dble(twotondim*numbtot(1,ilevel)))
@@ -222,13 +218,7 @@ subroutine cmp_residual_cg(ilevel,icount)
   integer::id1,id2,ig1,ig2,ih1,ih2
   real(dp)::dx2,fourpi,scale,oneoversix,fact
   integer,dimension(1:3,1:2,1:8)::iii,jjj
-
-  integer ,dimension(1:nvector),save::ind_grid,ind_cell
-  integer ,dimension(1:nvector,0:twondim),save::igridn
-  integer ,dimension(1:nvector,1:ndim),save::ind_left,ind_right
-  real(dp),dimension(1:nvector,1:ndim),save::phig,phid
-  real(dp),dimension(1:nvector,1:twotondim,1:ndim),save::phi_left,phi_right
-  real(dp),dimension(1:nvector),save::residu
+  integer ,dimension(1:nvector)::ind_grid
 
   ! Set constants
   dx2=(0.5D0**ilevel)**2
@@ -246,95 +236,119 @@ subroutine cmp_residual_cg(ilevel,icount)
   iii(3,1,1:8)=(/5,5,5,5,0,0,0,0/); jjj(3,1,1:8)=(/5,6,7,8,1,2,3,4/)
   iii(3,2,1:8)=(/0,0,0,0,6,6,6,6/); jjj(3,2,1:8)=(/5,6,7,8,1,2,3,4/)
 
-  ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
+      ! Gather nvector grids
+      ngrid=MIN(nvector,ncache-igrid+1)
+      ! Loop over myid grids by vector sweeps
+      do i=1,ngrid
+          ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
+      end do
+      call cmprescg1(ilevel,icount,ind_grid,ngrid,iii,jjj,oneoversix,fact)
+  enddo
+end subroutine cmp_residual_cg
+!###########################################################
+!###########################################################
+subroutine cmprescg1(ilevel,icount,ind_grid,ngrid,iii,jjj,oneoversix,fact)
+  use amr_commons
+  use pm_commons
+  use hydro_commons
+  use poisson_commons
+  implicit none
+  integer::ilevel,icount
+  !------------------------------------------------------------------
+  ! This routine computes the residual for the Conjugate Gradient
+  ! Poisson solver. The residual is stored in f(i,1).
+  !------------------------------------------------------------------
+  integer::i,idim,igrid,ngrid,ncache,ind,iskip,nx_loc
+  integer::id1,id2,ig1,ig2,ih1,ih2
+  real(dp)::dx2,fourpi,scale,oneoversix,fact
+  integer,dimension(1:3,1:2,1:8)::iii,jjj
 
-     ! Gather nvector grids
-     ngrid=MIN(nvector,ncache-igrid+1)
-     do i=1,ngrid
-        ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
-     end do
+  integer ,dimension(1:nvector)::ind_grid,ind_cell
+  integer ,dimension(1:nvector,0:twondim)::igridn
+  integer ,dimension(1:nvector,1:ndim)::ind_left,ind_right
+  real(dp),dimension(1:nvector,1:ndim)::phig,phid
+  real(dp),dimension(1:nvector,1:twotondim,1:ndim)::phi_left,phi_right
+  real(dp),dimension(1:nvector)::residu
 
-     ! Gather neighboring grids
-     do i=1,ngrid
-        igridn(i,0)=ind_grid(i)
-     end do
-     do idim=1,ndim
-        do i=1,ngrid
-           ind_left (i,idim)=nbor(ind_grid(i),2*idim-1)
-           ind_right(i,idim)=nbor(ind_grid(i),2*idim  )
-           igridn(i,2*idim-1)=son(ind_left (i,idim))
-           igridn(i,2*idim  )=son(ind_right(i,idim))
-        end do
-     end do
+  ! Gather neighboring grids
+  do i=1,ngrid
+	  igridn(i,0)=ind_grid(i)
+  end do
+  do idim=1,ndim
+	  do i=1,ngrid
+		  ind_left (i,idim)=nbor(ind_grid(i),2*idim-1)
+		  ind_right(i,idim)=nbor(ind_grid(i),2*idim  )
+		  igridn(i,2*idim-1)=son(ind_left (i,idim))
+		  igridn(i,2*idim  )=son(ind_right(i,idim))
+	  end do
+  end do
 
-     ! Interpolate potential from upper level
-     do idim=1,ndim
-        call interpol_phi(ind_left (1,idim),phi_left (1,1,idim),ngrid,ilevel,icount)
-        call interpol_phi(ind_right(1,idim),phi_right(1,1,idim),ngrid,ilevel,icount)
-     end do
+  ! Interpolate potential from upper level
+  do idim=1,ndim
+	  call interpol_phi(ind_left (1,idim),phi_left (1,1,idim),ngrid,ilevel,icount)
+	  call interpol_phi(ind_right(1,idim),phi_right(1,1,idim),ngrid,ilevel,icount)
+  end do
 
-     ! Loop over cells
-     do ind=1,twotondim
-        ! Gather neighboring potential
-        do idim=1,ndim
-           id1=jjj(idim,1,ind); ig1=iii(idim,1,ind)
-           ih1=ncoarse+(id1-1)*ngridmax
-           do i=1,ngrid
-              if(igridn(i,ig1)>0)then
-                 phig(i,idim)=phi(igridn(i,ig1)+ih1)
-              else
-                 phig(i,idim)=phi_left(i,id1,idim)
-              end if
-           end do
-           id2=jjj(idim,2,ind); ig2=iii(idim,2,ind)
-           ih2=ncoarse+(id2-1)*ngridmax
-           do i=1,ngrid
-              if(igridn(i,ig2)>0)then
-                 phid(i,idim)=phi(igridn(i,ig2)+ih2)
-              else
-                 phid(i,idim)=phi_right(i,id2,idim)
-              end if
-           end do
-        end do
+  ! Loop over cells
+  do ind=1,twotondim
+	  ! Gather neighboring potential
+	  do idim=1,ndim
+		  id1=jjj(idim,1,ind); ig1=iii(idim,1,ind)
+		  ih1=ncoarse+(id1-1)*ngridmax
+		  do i=1,ngrid
+			  if(igridn(i,ig1)>0)then
+				  phig(i,idim)=phi(igridn(i,ig1)+ih1)
+			  else
+				  phig(i,idim)=phi_left(i,id1,idim)
+			  end if
+		  end do
+		  id2=jjj(idim,2,ind); ig2=iii(idim,2,ind)
+		  ih2=ncoarse+(id2-1)*ngridmax
+		  do i=1,ngrid
+			  if(igridn(i,ig2)>0)then
+				  phid(i,idim)=phi(igridn(i,ig2)+ih2)
+			  else
+				  phid(i,idim)=phi_right(i,id2,idim)
+			  end if
+		  end do
+	  end do
 
-        ! Compute central cell index
-        iskip=ncoarse+(ind-1)*ngridmax
-        do i=1,ngrid
-           ind_cell(i)=iskip+ind_grid(i)
-        end do
+	  ! Compute central cell index
+	  iskip=ncoarse+(ind-1)*ngridmax
+	  do i=1,ngrid
+		  ind_cell(i)=iskip+ind_grid(i)
+	  end do
 
-        ! Compute residual using 6 neighbors potential
-        do i=1,ngrid
-           residu(i)=phi(ind_cell(i))
-        end do
-        do idim=1,ndim
-           do i=1,ngrid
-              residu(i)=residu(i)-oneoversix*(phig(i,idim)+phid(i,idim))
-           end do
-        end do
-        do i=1,ngrid
-           residu(i)=residu(i)+fact*(rho(ind_cell(i))-rho_tot)
-        end do
+	  ! Compute residual using 6 neighbors potential
+	  do i=1,ngrid
+		  residu(i)=phi(ind_cell(i))
+	  end do
+	  do idim=1,ndim
+		  do i=1,ngrid
+			  residu(i)=residu(i)-oneoversix*(phig(i,idim)+phid(i,idim))
+		  end do
+	  end do
+	  do i=1,ngrid
+		  residu(i)=residu(i)+fact*(rho(ind_cell(i))-rho_tot)
+	  end do
 
-        ! Store results in f(i,1)
-        do i=1,ngrid
-           f(ind_cell(i),1)=residu(i)
-        end do
+	  ! Store results in f(i,1)
+	  do i=1,ngrid
+		  f(ind_cell(i),1)=residu(i)
+	  end do
 
-        ! Store results in f(i,2)
-        do i=1,ngrid
-           f(ind_cell(i),2)=residu(i)
-        end do
-
-     end do
-     ! End loop over cells
+	  ! Store results in f(i,2)
+	  do i=1,ngrid
+		  f(ind_cell(i),2)=residu(i)
+	  end do
 
   end do
-  ! End loop over grids
+  ! End loop over cells
 
-end subroutine cmp_residual_cg
+end subroutine cmprescg1
 !###########################################################
 !###########################################################
 !###########################################################
@@ -354,11 +368,7 @@ subroutine cmp_Ap_cg(ilevel)
   integer::id1,id2,ig1,ig2,ih1,ih2
   real(dp)::oneoversix
   integer,dimension(1:3,1:2,1:8)::iii,jjj
-
-  integer,dimension(1:nvector),save::ind_grid,ind_cell
-  integer,dimension(1:nvector,0:twondim),save::igridn
-  real(dp),dimension(1:nvector,1:ndim),save::phig,phid
-  real(dp),dimension(1:nvector),save::residu
+  integer,dimension(1:nvector)::ind_grid
 
   ! Set constants
   oneoversix=1.0D0/dble(twondim)
@@ -372,77 +382,102 @@ subroutine cmp_Ap_cg(ilevel)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
-
-     ! Gather nvector grids
-     ngrid=MIN(nvector,ncache-igrid+1)
-     do i=1,ngrid
-        ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
-     end do
-
-     ! Gather neighboring grids
-     do i=1,ngrid
-        igridn(i,0)=ind_grid(i)
-     end do
-     do idim=1,ndim
-        do i=1,ngrid
-           igridn(i,2*idim-1)=son(nbor(ind_grid(i),2*idim-1))
-           igridn(i,2*idim  )=son(nbor(ind_grid(i),2*idim  ))
-        end do
-     end do
-
-     ! Loop over cells
-     do ind=1,twotondim
-
-        ! Gather neighboring potential
-        do idim=1,ndim
-           id1=jjj(idim,1,ind); ig1=iii(idim,1,ind)
-           ih1=ncoarse+(id1-1)*ngridmax
-           do i=1,ngrid
-              if(igridn(i,ig1)>0)then
-                 phig(i,idim)=f(igridn(i,ig1)+ih1,2)
-              else
-                 phig(i,idim)=0.
-              end if
-           end do
-           id2=jjj(idim,2,ind); ig2=iii(idim,2,ind)
-           ih2=ncoarse+(id2-1)*ngridmax
-           do i=1,ngrid
-              if(igridn(i,ig2)>0)then
-                 phid(i,idim)=f(igridn(i,ig2)+ih2,2)
-              else
-                 phid(i,idim)=0.
-              end if
-           end do
-        end do
-
-        ! Compute central cell index
-        iskip=ncoarse+(ind-1)*ngridmax
-        do i=1,ngrid
-           ind_cell(i)=iskip+ind_grid(i)
-        end do
-
-        ! Compute Ap using neighbors potential
-        do i=1,ngrid
-           residu(i)=-f(ind_cell(i),2)
-        end do
-        do idim=1,ndim
-           do i=1,ngrid
-              residu(i)=residu(i)+oneoversix*(phig(i,idim)+phid(i,idim))
-           end do
-        end do
-        ! Store results in f(i,3)
-        do i=1,ngrid
-           f(ind_cell(i),3)=residu(i)
-        end do
-
-     end do
-     ! End loop over cells
-
-  end do
-  ! End loop over grids
+      ! Gather nvector grids
+      ngrid=MIN(nvector,ncache-igrid+1)
+      do i=1,ngrid
+          ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
+      end do
+      call cmpapcg1(ilevel,iii,jjj,ind_grid,ngrid,oneoversix)
+  enddo
 
 end subroutine cmp_Ap_cg
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
+subroutine cmpapcg1(ilevel,iii,jjj,ind_grid,ngrid,oneoversix)
+  use amr_commons
+  use pm_commons
+  use hydro_commons
+  use poisson_commons
+  implicit none
+  integer::ilevel
+  !------------------------------------------------------------------
+  ! This routine computes Ap for the Conjugate Gradient
+  ! Poisson Solver and store the result into f(i,3).
+  !------------------------------------------------------------------
+  integer::i,idim,igrid,ngrid,ncache,ind,iskip
+  integer::id1,id2,ig1,ig2,ih1,ih2
+  real(dp)::oneoversix
+  integer,dimension(1:3,1:2,1:8)::iii,jjj
+
+  integer,dimension(1:nvector)::ind_grid,ind_cell
+  integer,dimension(1:nvector,0:twondim)::igridn
+  real(dp),dimension(1:nvector,1:ndim)::phig,phid
+  real(dp),dimension(1:nvector)::residu
+
+  ! Gather neighboring grids
+  do i=1,ngrid
+	  igridn(i,0)=ind_grid(i)
+  end do
+  do idim=1,ndim
+	  do i=1,ngrid
+		  igridn(i,2*idim-1)=son(nbor(ind_grid(i),2*idim-1))
+		  igridn(i,2*idim  )=son(nbor(ind_grid(i),2*idim  ))
+	  end do
+  end do
+
+  ! Loop over cells
+  do ind=1,twotondim
+
+	  ! Gather neighboring potential
+	  do idim=1,ndim
+		  id1=jjj(idim,1,ind); ig1=iii(idim,1,ind)
+		  ih1=ncoarse+(id1-1)*ngridmax
+		  do i=1,ngrid
+			  if(igridn(i,ig1)>0)then
+				  phig(i,idim)=f(igridn(i,ig1)+ih1,2)
+			  else
+				  phig(i,idim)=0.
+			  end if
+		  end do
+		  id2=jjj(idim,2,ind); ig2=iii(idim,2,ind)
+		  ih2=ncoarse+(id2-1)*ngridmax
+		  do i=1,ngrid
+			  if(igridn(i,ig2)>0)then
+				  phid(i,idim)=f(igridn(i,ig2)+ih2,2)
+			  else
+				  phid(i,idim)=0.
+			  end if
+		  end do
+	  end do
+
+	  ! Compute central cell index
+	  iskip=ncoarse+(ind-1)*ngridmax
+	  do i=1,ngrid
+		  ind_cell(i)=iskip+ind_grid(i)
+	  end do
+
+	  ! Compute Ap using neighbors potential
+	  do i=1,ngrid
+		  residu(i)=-f(ind_cell(i),2)
+	  end do
+	  do idim=1,ndim
+		  do i=1,ngrid
+			  residu(i)=residu(i)+oneoversix*(phig(i,idim)+phid(i,idim))
+		  end do
+	  end do
+	  ! Store results in f(i,3)
+	  do i=1,ngrid
+		  f(ind_cell(i),3)=residu(i)
+	  end do
+
+  end do
+  ! End loop over cells
+
+end subroutine cmpapcg1
 !###########################################################
 !###########################################################
 !###########################################################
@@ -457,66 +492,83 @@ subroutine make_initial_phi(ilevel,icount)
   !
   !
   integer::igrid,ncache,i,ngrid,ind,iskip,idim
-  integer ,dimension(1:nvector),save::ind_grid,ind_cell,ind_cell_father
-  real(dp),dimension(1:nvector,1:twotondim),save::phi_int
+  integer ,dimension(1:nvector)::ind_grid,ind_cell,ind_cell_father
+  real(dp),dimension(1:nvector,1:twotondim)::phi_int
 
-  ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
-     ! Gather nvector grids
-     ngrid=MIN(nvector,ncache-igrid+1)
-     do i=1,ngrid
-        ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
-     end do
-
-     if(ilevel==1)then
-        ! Loop over cells
-        do ind=1,twotondim
-           iskip=ncoarse+(ind-1)*ngridmax
-           do i=1,ngrid
-              ind_cell(i)=iskip+ind_grid(i)
-           end do
-           do i=1,ngrid
-              phi(ind_cell(i))=0.0d0
-           end do
-           do idim=1,ndim
-              do i=1,ngrid
-                 f(ind_cell(i),idim)=0.0
-              end do
-           end do
-        end do
-        ! End loop over cells
-     else
-        ! Compute father cell index
-        do i=1,ngrid
-           ind_cell_father(i)=father(ind_grid(i))
-        end do
-
-        ! Interpolate
-        call interpol_phi(ind_cell_father,phi_int,ngrid,ilevel,icount)
-
-        ! Loop over cells
-        do ind=1,twotondim
-           iskip=ncoarse+(ind-1)*ngridmax
-           do i=1,ngrid
-              ind_cell(i)=iskip+ind_grid(i)
-           end do
-           do i=1,ngrid
-              phi(ind_cell(i))=phi_int(i,ind)
-           end do
-           do idim=1,ndim
-              do i=1,ngrid
-                 f(ind_cell(i),idim)=0.0
-              end do
-           end do
-        end do
-        ! End loop over cells
-     end if
-
-  end do
-  ! End loop over grids
-
+      ! Gather nvector grids
+      ngrid=MIN(nvector,ncache-igrid+1)
+      ! Loop over myid grids by vector sweeps
+      do i=1,ngrid
+          ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
+      end do
+      call makeinitphi1(ilevel,icount,ind_grid,ngrid)
+  enddo
 end subroutine make_initial_phi
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
+subroutine makeinitphi1(ilevel,icount,ind_grid,ngrid)
+  use amr_commons
+  use pm_commons
+  use poisson_commons
+  implicit none
+  integer::ilevel,icount
+  !
+  !
+  !
+  integer::igrid,ncache,i,ngrid,ind,iskip,idim,ibound
+  integer ,dimension(1:nvector)::ind_grid,ind_cell,ind_cell_father
+  real(dp),dimension(1:nvector,1:twotondim)::phi_int
+
+  if(ilevel==1)then
+	  ! Loop over cells
+	  do ind=1,twotondim
+		  iskip=ncoarse+(ind-1)*ngridmax
+		  do i=1,ngrid
+			  ind_cell(i)=iskip+ind_grid(i)
+		  end do
+		  do i=1,ngrid
+			  phi(ind_cell(i))=0.0d0
+		  end do
+		  do idim=1,ndim
+			  do i=1,ngrid
+				  f(ind_cell(i),idim)=0.0
+			  end do
+		  end do
+	  end do
+	  ! End loop over cells
+  else
+	  ! Compute father cell index
+	  do i=1,ngrid
+		  ind_cell_father(i)=father(ind_grid(i))
+	  end do
+
+	  ! Interpolate
+	  call interpol_phi(ind_cell_father,phi_int,ngrid,ilevel,icount)
+
+	  ! Loop over cells
+	  do ind=1,twotondim
+		  iskip=ncoarse+(ind-1)*ngridmax
+		  do i=1,ngrid
+			  ind_cell(i)=iskip+ind_grid(i)
+		  end do
+		  do i=1,ngrid
+			  phi(ind_cell(i))=phi_int(i,ind)
+		  end do
+		  do idim=1,ndim
+			  do i=1,ngrid
+				  f(ind_cell(i),idim)=0.0
+			  end do
+		  end do
+	  end do
+	  ! End loop over cells
+  end if
+  ! End loop over grids
+end subroutine makeinitphi1
 !###########################################################
 !###########################################################
 !###########################################################
@@ -527,19 +579,15 @@ subroutine make_multipole_phi(ilevel)
   use poisson_commons
   implicit none
   integer::ilevel
-  !
-  !
-  !
   integer::idim
   integer::i,ncache,igrid,ngrid,ind
   integer::iskip,nx_loc,ix,iy,iz
-  integer,dimension(1:nvector),save::ind_grid,ind_cell
+  integer,dimension(1:nvector)::ind_grid,ind_cell
 
   real(dp)::dx,dx_loc,scale,fourpi,boxlen2,eps
   real(dp),dimension(1:3)::skip_loc
   real(dp),dimension(1:twotondim,1:3)::xc
-  real(dp),dimension(1:nvector),save::rr,pp
-  real(dp),dimension(1:nvector,1:ndim),save::xx
+
 
   ! Mesh size at level ilevel
   dx=0.5D0**ilevel
@@ -568,58 +616,81 @@ subroutine make_multipole_phi(ilevel)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
-     ! Gather nvector grids
-     ngrid=MIN(nvector,ncache-igrid+1)
-     do i=1,ngrid
-        ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
-     end do
+      ! Gather nvector grids
+      ngrid=MIN(nvector,ncache-igrid+1)
+      do i=1,ngrid
+          ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
+      end do
+      call makemultiphi1(ilevel,ind_grid,ngrid,scale,eps,xc,skip_loc)
+  enddo
+end subroutine make_multipole_phi
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
+subroutine makemultiphi1(ilevel,ind_grid,ngrid,scale,eps,xc,skip_loc)
+  use amr_commons
+  use pm_commons
+  use poisson_commons
+  implicit none
+  integer::ilevel
+  integer::ibound,boundary_dir,idim,inbor
+  integer::i,ncache,ivar,igrid,ngrid,ind
+  integer::iskip,iskip_ref,gdim,nx_loc,ix,iy,iz
+  integer,dimension(1:nvector)::ind_grid,ind_cell
 
-     ! Loop over cells
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
-        do i=1,ngrid
-           ind_cell(i)=iskip+ind_grid(i)
-        end do
+  real(dp)::dx,dx_loc,scale,fourpi,boxlen2,eps,r2
+  real(dp),dimension(1:3)::skip_loc
+  real(dp),dimension(1:twotondim,1:3)::xc
+  real(dp),dimension(1:nvector)::rr,pp
+  real(dp),dimension(1:nvector,1:ndim)::xx
+  real(dp),dimension(1:nvector,1:ndim)::ff
 
-        if(simple_boundary)then
-           ! Compute cell center in code units
-           do idim=1,ndim
-               do i=1,ngrid
-                  xx(i,idim)=xg(ind_grid(i),idim)+xc(ind,idim)
-               end do
-           end do
+  ! Loop over cells
+  do ind=1,twotondim
+	  iskip=ncoarse+(ind-1)*ngridmax
+	  do i=1,ngrid
+		  ind_cell(i)=iskip+ind_grid(i)
+	  end do
 
-           ! Rescale position from code units to user units
-           rr(1:ngrid)=0.0d0
-           do idim=1,ndim
-               do i=1,ngrid
-                  xx(i,idim)=(xx(i,idim)-skip_loc(idim))*scale
-                  rr(i)=rr(i)+(xx(i,idim)-multipole(idim+1)/multipole(1))**2
-               end do
-           end do
+	  if(simple_boundary)then
+		  ! Compute cell center in code units
+		  do idim=1,ndim
+				do i=1,ngrid
+					xx(i,idim)=xg(ind_grid(i),idim)+xc(ind,idim)
+				end do
+		  end do
 
-           do i=1,ngrid
-               rr(i)=max(eps,sqrt(rr(i)))       ! Cutoff
-           end do
+		  ! Rescale position from code units to user units
+		  rr(1:ngrid)=0.0d0
+		  do idim=1,ndim
+				do i=1,ngrid
+					xx(i,idim)=(xx(i,idim)-skip_loc(idim))*scale
+					rr(i)=rr(i)+(xx(i,idim)-multipole(idim+1)/multipole(1))**2
+				end do
+		  end do
 
-           if(ngrid>0) call phi_ana(rr,pp,ngrid)
+		  do i=1,ngrid
+				rr(i)=max(eps,sqrt(rr(i)))       ! Cutoff
+		  end do
 
-           ! Scatter variables
-           do i=1,ngrid
-               phi(ind_cell(i))=pp(i)/scale
-           end do
+		  if(ngrid>0) call phi_ana(rr,pp,ngrid)
 
-        else
-           do i=1,ngrid
-               phi(ind_cell(i))=0d0
-           end do
-        endif
+		  ! Scatter variables
+		  do i=1,ngrid
+				phi(ind_cell(i))=pp(i)/scale
+		  end do
 
-        ! End loop over cells
-     end do
+	  else
+		  do i=1,ngrid
+				phi(ind_cell(i))=0d0
+		  end do
+	  endif
 
+	  ! End loop over cells
   end do
   ! End loop over grids
 
-end subroutine make_multipole_phi
+end subroutine makemultiphi1

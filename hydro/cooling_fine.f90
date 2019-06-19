@@ -20,6 +20,7 @@ subroutine cooling_fine(ilevel)
   ! Operator splitting step for cooling source term
   ! by vector sweeps
   ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -65,9 +66,6 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
 #endif
   use mpi_mod
   implicit none
-#if defined(grackle) && !defined(WITHOUTMPI)
-  integer::info
-#endif
   integer::ilevel,ngrid
   integer,dimension(1:nvector)::ind_grid
   !-------------------------------------------------------------------
@@ -75,13 +73,13 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
   integer::i,ind,iskip,idim,nleaf,nx_loc
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
   real(kind=8)::dtcool,nISM,nCOM,damp_factor,cooling_switch,t_blast
-  real(dp)::polytropic_constant=1.
-  integer,dimension(1:nvector),save::ind_cell,ind_leaf
-  real(kind=8),dimension(1:nvector),save::nH,T2,delta_T2,ekk,err,emag
+  real(dp)::polytropic_constant
+  integer,dimension(1:nvector)::ind_cell,ind_leaf
+  real(kind=8),dimension(1:nvector)::nH,T2,delta_T2,ekk,err,emag
 #if defined(RT) || defined(grackle)
-  real(kind=8),dimension(1:nvector),save::T2_new
+  real(kind=8),dimension(1:nvector)::T2_new
 #endif
-  real(kind=8),dimension(1:nvector),save::T2min,Zsolar,boost
+  real(kind=8),dimension(1:nvector)::T2min,Zsolar,boost
   real(dp),dimension(1:3)::skip_loc
   real(kind=8)::dx,dx_loc,scale,vol_loc
   real(dp)::t0_dest,t0_acc,year,t_acc,t_des,d,T6,rhoD,rhoD0 ! Dust (YD)
@@ -94,14 +92,14 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
   real(dp)::k1,k2,k3,k4,rhoD0k1,rhoD0k2,rhoD0k3             ! Dust (YD)
 #ifdef RT
   integer::ii,ig,iNp,il
-  real(kind=8),dimension(1:nvector),save:: ekk_new
-  logical,dimension(1:nvector),save::cooling_on=.true.
+  real(kind=8),dimension(1:nvector):: ekk_new
+  logical,dimension(1:nvector)::cooling_on=.true.
   real(dp)::scale_Np,scale_Fp,work,Npc,Npnew, kIR, E_rad, TR
   real(dp),dimension(1:ndim)::Fpnew
-  real(dp),dimension(nIons, 1:nvector),save:: xion
-  real(dp),dimension(nGroups, 1:nvector),save:: Np, Np_boost=0d0, dNpdt=0d0
-  real(dp),dimension(ndim, nGroups, 1:nvector),save:: Fp, Fp_boost=0d0, dFpdt
-  real(dp),dimension(ndim, 1:nvector),save:: p_gas, u_gas
+  real(dp),dimension(nIons, 1:nvector):: xion
+  real(dp),dimension(nGroups, 1:nvector):: Np, Np_boost=0d0, dNpdt=0d0
+  real(dp),dimension(ndim, nGroups, 1:nvector):: Fp, Fp_boost=0d0, dFpdt
+  real(dp),dimension(ndim, 1:nvector):: p_gas, u_gas
   real(kind=8)::f_trap, NIRtot, EIR_trapped, unit_tau, tau, Np2Ep
   real(kind=8)::aexp_loc, f_dust, xHII
   real(dp),dimension(nDim, nDim):: tEdd ! Eddington tensor
@@ -110,6 +108,7 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
 #if NENER>0
   integer::irad
 #endif
+
 
   year=3600_dp*24_dp*365_dp
   ! Mesh spacing in that level
@@ -141,6 +140,8 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
   if(jeans_ncells>0)then
      polytropic_constant=2d0*(boxlen*jeans_ncells*0.5d0**dble(nlevelmax-nlevelsheld)*scale_l/aexp)**2/ &
           & (twopi)*6.67e-8*scale_d*(scale_t/scale_l)**2
+  else
+       polytropic_constant=1.
   endif
 
 #ifdef RT
@@ -247,8 +248,8 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
            f_dust = (1.-xHII)                     ! No dust in ionised gas
            work = scale_v/c_cgs * kIR * sum(uold(il,2:ndim+1)*flux) &
                 * Zsolar(i) * f_dust * dtnew(ilevel) !               Eq A6
-
-           uold(il,ndim+2) = uold(il,ndim+2) &    ! Add work to gas energy
+           ! Add work to gas energy
+           uold(il,ndim+2) = uold(il,ndim+2) &
                 + work * group_egy(iIR) &
                 * ev_to_erg / scale_d / scale_v**2 / scale_l**3
 
@@ -309,7 +310,7 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
      ! Compute radiation boost factor
      if(self_shielding)then
         do i=1,nleaf
-           boost(i)=MAX(exp(-nH(i)/0.01),1.0D-20)
+           boost(i)=MAX(uEXP(-nH(i)/0.01),1.0D-20)
         end do
 #ifdef ATON
      else if (aton) then
@@ -754,7 +755,8 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
            if(tau .gt. 0d0) f_trap = min(max(exp(-1d0/tau), 0d0), 1d0)
            ! Update streaming photons, trapped photons, and tot energy:
            rtuold(il,iNp) = max(smallnp,(1d0-f_trap) * NIRtot) ! Streaming
-           rtuold(il,iNp+1:iNp+ndim) = &            ! Limit streaming flux
+           ! Limit streaming flux
+           rtuold(il,iNp+1:iNp+ndim) = &
                                   rtuold(il,iNp+1:iNp+ndim) * (1d0-f_trap)
            EIR_trapped = max(0d0, NIRtot-rtuold(il,iNp)) * Np2Ep ! Trapped
            ! Update tot energy due to change in trapped radiation energy:

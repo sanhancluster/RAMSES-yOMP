@@ -50,7 +50,6 @@ module pm_commons
   real(dp), allocatable, dimension(:,:,:) :: mass_DFnew_all
   real(dp), allocatable, dimension(:,:,:) :: mass_lowspeednew_all, fact_fastnew_all
   real(dp), allocatable, dimension(:) :: most_massive_sink
-  integer , allocatable, dimension(:) :: sink_cell
   integer::ncloud_sink                       !Number of cloud particles
   !/Particles dynamical friction (HP)
   integer :: nindsink = 0

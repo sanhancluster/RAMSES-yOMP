@@ -120,18 +120,20 @@ subroutine init_flag(ilevel)
 
   ! Initialize flag1 to 0
   nflag=0
-  do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
-     do i=1,active(ilevel)%ngrid
+!$omp parallel do private(i,ind,iskip) schedule(static,nchunk)
+  do i=1,active(ilevel)%ngrid
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
         flag1(active(ilevel)%igrid(i)+iskip)=0
      end do
   end do
 
   ! If load balancing operations, flag only refined cells
   if(balance)then
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
-        do i=1,active(ilevel)%ngrid
+!$omp parallel do private(i,ind,iskip) reduction(+:nflag) schedule(static,nchunk)
+     do i=1,active(ilevel)%ngrid
+        do ind=1,twotondim
+           iskip=ncoarse+(ind-1)*ngridmax
            if(son(active(ilevel)%igrid(i)+iskip)>0)then
               flag1(active(ilevel)%igrid(i)+iskip)=1
               nflag=nflag+1
@@ -145,9 +147,10 @@ subroutine init_flag(ilevel)
         call test_flag(ilevel)
      else
         ! If ilevel < levelmin, set flag to 1 for all cells
-        do ind=1,twotondim
-           iskip=ncoarse+(ind-1)*ngridmax
-           do i=1,active(ilevel)%ngrid
+!$omp parallel do private(i,ind,iskip) reduction(+:nflag) schedule(static,nchunk)
+        do i=1,active(ilevel)%ngrid
+           do ind=1,twotondim
+              iskip=ncoarse+(ind-1)*ngridmax
               flag1(active(ilevel)%igrid(i)+iskip)=1
            end do
            nflag=nflag+active(ilevel)%ngrid
@@ -178,10 +181,11 @@ subroutine test_flag(ilevel)
   logical::ok
 
   ! Loop over cells
-  do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
+!$omp parallel do private(i,ind,iskip,ind_grid_son,ok,ind_son,iskip_son,ind_cell_son) reduction(+:nflag) schedule(static,nchunk)
+  do i=1,active(ilevel)%ngrid
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
      ! Test all refined cells
-     do i=1,active(ilevel)%ngrid
         ! Gather child grid number
         ind_grid_son=son(active(ilevel)%igrid(i)+iskip)
         ! Test child if it exists
@@ -220,12 +224,13 @@ subroutine ensure_ref_rules(ilevel)
   ! Used in case of adaptive time steps only.
   !-----------------------------------------------------------------
   integer::i,ind,iskip,igrid,ngrid,ncache
-  integer,dimension(1:nvector),save::ind_cell,ind_grid
-  integer,dimension(1:nvector,1:threetondim),save::nbors_father_cells
-  integer,dimension(1:nvector,1:twotondim),save::nbors_father_grids
-  logical,dimension(1:nvector),save::ok
+  integer,dimension(1:nvector)::ind_cell,ind_grid
+  integer,dimension(1:nvector,1:threetondim)::nbors_father_cells
+  integer,dimension(1:nvector,1:twotondim)::nbors_father_grids
+  logical,dimension(1:nvector)::ok
 
   ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid,i,ind_grid,ind_cell,ok,ind,nbors_father_cells,nbors_father_grids,iskip) schedule(static,nchunk)
   do igrid=1,ncache,nvector
      ! Gather nvector grids
      ngrid=MIN(nvector,ncache-igrid+1)
@@ -290,15 +295,15 @@ subroutine userflag_fine(ilevel)
   integer::i,ncache,nok,ix,iy,iz,iskip
   integer::igrid,ind,idim,ngrid
   integer::nx_loc
-  integer,dimension(1:nvector),save::ind_grid,ind_cell
+  integer,dimension(1:nvector)::ind_grid,ind_cell
 
-  logical,dimension(1:nvector),save::ok
+  logical,dimension(1:nvector)::ok
 
   real(dp)::dx,dx_loc,scale,dx_min
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
   real(dp),dimension(1:3)::skip_loc
   real(dp),dimension(1:twotondim,1:3)::xc
-  real(dp),dimension(1:nvector,1:ndim),save::xx
+  real(dp),dimension(1:nvector,1:ndim)::xx
 
   logical::prevent_refine
 
@@ -352,6 +357,7 @@ subroutine userflag_fine(ilevel)
 
   ! Loop over active grids
   ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid,i,ind_grid,ind,iskip,ind_cell,ok,nok,idim,xx) reduction(+:nflag) schedule(static,nchunk)
   do igrid=1,ncache,nvector
 
      ! Gather nvector grids
@@ -411,7 +417,6 @@ subroutine userflag_fine(ilevel)
         do i=1,ngrid
            if(ok(i))flag1(ind_cell(i))=1
         end do
-
         nflag=nflag+nok
      end do
      ! End loop over cells
@@ -579,8 +584,8 @@ subroutine smooth_fine(ilevel)
   integer::i,ncache,iskip,ngrid
   integer::igrid,ind
   integer,dimension(1:3)::n_nbor
-  integer,dimension(1:nvector),save::ind_grid,ind_cell
-  integer,dimension(1:nvector,0:twondim),save::igridn
+  integer,dimension(1:nvector)::ind_grid,ind_cell
+  integer,dimension(1:nvector,0:twondim)::igridn
 
   if(numbtot(1,ilevel)==0)return
 
@@ -590,6 +595,7 @@ subroutine smooth_fine(ilevel)
   ! Loop over steps
   do ismooth=1,ndim
      ! Initialize flag2 to 0
+!$omp parallel do private(igrid,ngrid,ind_grid,ind,iskip,ind_cell) schedule(static,nchunk)
      do igrid=1,ncache,nvector
         ngrid=MIN(nvector,ncache-igrid+1)
         do i=1,ngrid
@@ -606,6 +612,7 @@ subroutine smooth_fine(ilevel)
         end do
      end do
      ! Count neighbors and set flag2 accordingly
+!$omp parallel do private(igrid,ngrid,ind_grid,ind,igridn) schedule(static,nchunk)
      do igrid=1,ncache,nvector
         ngrid=MIN(nvector,ncache-igrid+1)
         do i=1,ngrid
@@ -617,6 +624,7 @@ subroutine smooth_fine(ilevel)
         end do
      end do
      ! Set flag1=1 for cells with flag2=1
+!$omp parallel do private(igrid,ngrid,ind_grid,ind,iskip,ind_cell) reduction(+:nflag) schedule(static,nchunk)
      do igrid=1,ncache,nvector
         ngrid=MIN(nvector,ncache-igrid+1)
         do i=1,ngrid
@@ -663,8 +671,8 @@ subroutine count_nbors(igridn,ind,n_nbor,nn)
   ! then cell is marked with flag2=1
   !----------------------------------------------------
   integer::i,in,iskip
-  integer,dimension(1:nvector),save::ind_cell,i_nbor
-  integer,dimension(1:nvector,1:twondim),save::indn
+  integer,dimension(1:nvector)::ind_cell,i_nbor
+  integer,dimension(1:nvector,1:twondim)::indn
   ! Compute cell number
   iskip=ncoarse+(ind-1)*ngridmax
   do i=1,nn
@@ -702,8 +710,8 @@ subroutine count_nbors2(igridn,ind,n_nbor,nn)
   ! then cell is marked with flag1=1
   !----------------------------------------------------
   integer::i,in,iskip
-  integer,dimension(1:nvector),save::ind_cell,i_nbor
-  integer,dimension(1:nvector,1:twondim),save::indn
+  integer,dimension(1:nvector)::ind_cell,i_nbor
+  integer,dimension(1:nvector,1:twondim)::indn
   ! Compute cell number
   iskip=ncoarse+(ind-1)*ngridmax
   do i=1,nn

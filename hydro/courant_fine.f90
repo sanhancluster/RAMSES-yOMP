@@ -3,6 +3,7 @@ subroutine courant_fine(ilevel)
   use hydro_commons
   use poisson_commons
   use mpi_mod
+  use omp_lib
   implicit none
 #ifndef WITHOUTMPI
   integer::info
@@ -15,13 +16,13 @@ subroutine courant_fine(ilevel)
   !----------------------------------------------------------------------
   integer::i,ivar,idim,ind,ncache,igrid,iskip
   integer::nleaf,ngrid,nx_loc
-  integer,dimension(1:nvector),save::ind_grid,ind_cell,ind_leaf
+  integer,dimension(1:nvector)::ind_grid,ind_cell,ind_leaf
 
   real(dp)::dt_lev,dx,vol,scale
   real(kind=8)::mass_loc,ekin_loc,eint_loc,dt_loc
   real(kind=8)::mass_all,ekin_all,eint_all,dt_all
-  real(dp),dimension(1:nvector,1:nvar),save::uu
-  real(dp),dimension(1:nvector,1:ndim),save::gg
+  real(dp),dimension(1:nvector,1:nvar)::uu
+  real(dp),dimension(1:nvector,1:ndim)::gg
 
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
@@ -29,7 +30,7 @@ subroutine courant_fine(ilevel)
   mass_all=0.0d0; mass_loc=0.0d0
   ekin_all=0.0d0; ekin_loc=0.0d0
   eint_all=0.0d0; eint_loc=0.0d0
-  dt_all=dtnew(ilevel); dt_loc=dt_all
+  dt_all=dtnew(ilevel);dt_loc=dt_all
 
   ! Mesh spacing at that level
   nx_loc=icoarse_max-icoarse_min+1
@@ -39,6 +40,8 @@ subroutine courant_fine(ilevel)
 
   ! Loop over active grids by vector sweeps
   ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid,ind_grid,ind,iskip,i,ind_cell,nleaf,ind_leaf,ivar,idim,uu,gg,dt_lev) &
+!$omp & reduction(+:mass_loc,ekin_loc,eint_loc) reduction(MIN:dt_loc) schedule(static,nchunk)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -108,7 +111,7 @@ subroutine courant_fine(ilevel)
         ! Compute CFL time-step
         if(nleaf>0)then
            call cmpdt(uu,gg,dx,dt_lev,nleaf)
-           dt_loc=min(dt_loc,dt_lev)
+           dt_loc=MIN(dt_loc,dt_lev)
         end if
 
      end do

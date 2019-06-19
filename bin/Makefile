@@ -19,12 +19,16 @@ RT=0
 DICE=0
 REFMASK=1
 # Set to 1 to use old MPI include statements instead of more recent `use mpi`.
-USE_OLD_MPI_INCLUDE = 0
+USE_OLD_MPI_INCLUDE = 1
 EXEC = ramses
+# Activate OpenMP
+OPENMP=1
+OMP_NCHUNK=1
 #############################################################################
 # Patches to include (without DICE)
 #PATCH = ../patch/AGNSFSNpatch/AGNspinRT:../patch/AGNSFSNpatch/sfsn
 #PATCH = ../patch/AGNSFSNpatch/sfsn
+#PATCH = ../patch/debug
 #############################################################################
 # Compute the right value for NVAR
 NVAR := $(shell echo $$(($(NDIM) + 2 + $(NVAR_EXTRA) + $(NIONS) + $(NENER) + $(REFMASK)+ $(METALS) )) )
@@ -61,6 +65,13 @@ ifeq ($(GRACKLE),1)
 DEFINES += -Dgrackle
 CEXEC += _grackle
 endif
+# --- Grackle ---------------------------------------------------------------
+ifeq ($(OPENMP),1)
+#DEFINES += -fopenmp #-qopenmp
+OMPFLAG += -fopenmp
+DEFINES += -DOMP_NCHUNK=$(OMP_NCHUNK)
+CEXEC += _omp
+endif
 #############################################################################
 # Regroup exec suffixes and patches
 EMPTY :=
@@ -95,19 +106,19 @@ PATCH := $(subst $(SPACE),:,$(PATCH))
 #FFLAGS = -cpp $(DEFINES) -DWITHOUTMPI
 
 # --- MPI, gfortran syntax ------------------------------
-F90 = mpif90 -frecord-marker=4 -O3 -ffree-line-length-none -g -fbacktrace
+F90 = mpif90 -frecord-marker=4 -O3 -ffree-line-length-none -g -fbacktrace $(OMPFLAG)
 FFLAGS = -x f95-cpp-input $(DEFINES)
 
 # --- MPI, gfortran DEBUG syntax ------------------------------
-#F90 = mpif90 -frecord-marker=4 -ffree-line-length-none -fbacktrace -g -O -fbounds-check -Wuninitialized -Wall
-#FFLAGS = -x f95-cpp-input -ffpe-trap=zero,underflow,overflow,invalid -finit-real=nan  $(DEFINES)
+#F90 = mpif90 -frecord-marker=4 -ffree-line-length-none -fbacktrace -g -O -fbounds-check -Wuninitialized -Wall $(OMPFLAG)
+#FFLAGS = -x f95-cpp-input -ffpe-trap=zero,overflow,underflow,invalid,denormal -finit-real=nan  $(DEFINES)
 
 # --- MPI, pgf90 syntax ------------------------------
 #F90 = mpif90 -O3
 #FFLAGS = -Mpreprocess $(DEFINES)
 
 # --- MPI, ifort syntax ------------------------------
-#F90 = mpif90
+#F90 = mpif90 -qopenmp
 #FFLAGS = -cpp -O3 -xAVX -fpp $(DEFINES) -DNOSYSTEM
 
 # --- MPI, ifort syntax, additional checks -----------
@@ -157,6 +168,9 @@ MODOBJ += poisson_commons.o hydro_parameters.o hydro_commons.o cooling_module.o 
 ifeq ($(RT),1)
 MODOBJ += rt_parameters.o rt_hydro_commons.o coolrates_module.o \
          rt_spectra.o rt_cooling_module.o rt_flux_module.o
+endif
+ifeq ($(OPENMP),1)
+MODOBJ += omp_utils.o
 endif
 ifeq ($(DICE),1)
 AMROBJ = dice_commons.o

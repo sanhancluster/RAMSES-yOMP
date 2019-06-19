@@ -2,6 +2,7 @@ subroutine move_fine(ilevel)
   use amr_commons
   use pm_commons
   use mpi_mod
+  use omp_lib
   implicit none
   integer::ilevel
   !----------------------------------------------------------------------
@@ -10,83 +11,98 @@ subroutine move_fine(ilevel)
   ! for CIC interpolation. Otherwise, use coarse grid (ilevel-1) force.
   !----------------------------------------------------------------------
   integer::igrid,jgrid,ipart,jpart,next_part,ig,ip,local_counter,npart1,isink
-  integer,dimension(1:nvector),save::ind_grid,ind_part,ind_grid_part
+  integer,dimension(1:nvector)::ind_grid,ind_part,ind_grid_part
 #ifndef WITHOUTMPI
   integer::info
 #endif
-  real(dp), dimension(1:ndim) :: xtmp, xsink_tmp
-  real(dp) :: dx, twodx, scale
+  real(dp) :: dx, twodx, scale, rand
   real(dp), dimension(1:ndim) :: skip_loc, xbound
   integer :: nx_loc
   type(part_t) :: part_type
 
-  if(ndim>0)skip_loc(1)=dble(icoarse_min)
-  if(ndim>1)skip_loc(2)=dble(jcoarse_min)
-  if(ndim>2)skip_loc(3)=dble(kcoarse_min)
-  xbound(1:3)=(/dble(nx),dble(ny),dble(nz)/)
-  nx_loc=(icoarse_max-icoarse_min+1)
-  scale=boxlen/dble(nx_loc)
+  !OMP
+  integer :: ithr
+  integer,dimension(1:nthr) :: head_thr,ngrid_thr
+  integer, dimension(1:IRandNumSize), save :: ompseed
+!$omp threadprivate(ompseed)
 
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
 
+!$omp parallel
+  ! Give slight offsets for each OMP threads
+  ompseed=MOD(tracer_seed+omp_get_thread_num(),4096)
+!$omp end parallel
+  call ranf(tracer_seed,rand)
+
   ! Set new sink variables to old ones
   if(sink)then
-     vsink_new=0d0
-     oksink_new=0d0
-     sink_stat(:,ilevel,:)=0d0
+!$omp parallel do private(isink)
+     do isink=1,nsinkmax
+        vsink_new(isink,:)=0d0
+        oksink_new(isink)=0d0
+        sink_stat(isink,ilevel,:)=0d0
+     end do
   endif
 
   ! Update particles position and velocity
-  ig=0
-  ip=0
-
-  ! Loop over particles that are not tracers
-  igrid=headl(myid,ilevel)
-  do jgrid=1,numbl(myid,ilevel)
-     npart1=numbp(igrid)  ! Number of particles in the grid
-     if(npart1>0)then
-        ig=ig+1
-        ind_grid(ig)=igrid
-        ipart=headp(igrid)
-        local_counter=0
-        ! Loop over particles
-        do jpart=1,npart1
-           ! Save next particle  <---- Very important !!!
-           next_part=nextp(ipart)
-           ! Classical particles
-           if(ig==0)then
-              ig=1
-              ind_grid(ig)=igrid
-           end if
-           ! Skip tracers (except "classic" tracers)
-           if (.not. (MC_tracer .and. is_tracer(typep(ipart)))) then
-              local_counter=local_counter+1
-              ip=ip+1
-              ind_part(ip)=ipart
-              ind_grid_part(ip)=ig
-              if(ip==nvector)then
-                 call move1(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
-                 local_counter=0
-                 ip=0
-                 ig=0
+#ifdef _OPENMP
+  call parallel_link_notracer(headl(myid,ilevel),numbl(myid,ilevel),head_thr,ngrid_thr)
+#else
+  head_thr(1)=headl(myid,ilevel)
+  ngrid_thr(1)=numbl(myid,ilevel)
+#endif
+!$omp parallel do private(ithr,igrid,jgrid,npart1,ipart,next_part,jpart,ip,ig,ind_grid,ind_part,ind_grid_part,local_counter)
+  do ithr=1,nthr
+     ig=0
+     ip=0
+     igrid=head_thr(ithr)
+     ! Loop over grids
+     do jgrid=1,ngrid_thr(ithr)
+        npart1=numbp(igrid)  ! Number of particles in the grid
+        if(npart1>0)then
+           ig=ig+1
+           ind_grid(ig)=igrid
+           ipart=headp(igrid)
+           local_counter=0
+           ! Loop over particles
+           do jpart=1,npart1
+              ! Save next particle  <---- Very important !!!
+              next_part=nextp(ipart)
+              ! Classical particles
+              if(ig==0)then
+                 ig=1
+                 ind_grid(ig)=igrid
               end if
+              ! Skip tracers (except "classic" tracers)
+              if (.not. (MC_tracer .and. is_tracer(typep(ipart)))) then
+                 local_counter=local_counter+1
+                 ip=ip+1
+                 ind_part(ip)=ipart
+                 ind_grid_part(ip)=ig
+                 if(ip==nvector)then
+                    call move1(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+                    local_counter=0
+                    ip=0
+                    ig=0
+                 end if
+              end if
+
+              ! End MC Tracer patch
+              ipart=next_part  ! Go to next particle
+           end do
+           ! End loop over particles
+
+           ! If there was no particle in the grid, remove the grid from the buffer
+           if(local_counter==0 .and. ig>0)then
+              ig=ig-1
            end if
-
-           ! End MC Tracer patch
-           ipart=next_part  ! Go to next particle
-        end do
-        ! End loop over particles
-
-        ! If there was no particle in the grid, remove the grid from the buffer
-        if(local_counter==0 .and. ig>0)then
-           ig=ig-1
         end if
-     end if
-     igrid=next(igrid)   ! Go to next grid
-  end do
+        igrid=next(igrid)   ! Go to next grid
+     end do ! End loop over grids
 
-  if(ip>0)call move1(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+     if(ip>0)call move1(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+   end do ! End loop over threads
 
   !--------------------------------------------------------------------------------
   ! Moving sinks
@@ -101,6 +117,7 @@ subroutine move_fine(ilevel)
         vsink_all=vsink_new
 #endif
      endif
+!$omp parallel do private(isink)
      do isink=1,nsink
         if(oksink_all(isink)==1d0.and.(.not.fix_smbh_position))then
            vsink(isink,1:ndim)=vsink_all(isink,1:ndim)
@@ -113,110 +130,124 @@ subroutine move_fine(ilevel)
   ! Moving tracers
   !--------------------------------------------------------------------------------
   if (MC_tracer) then  ! Loop over grids for MC tracers
+#ifdef _OPENMP
+     call parallel_link_tracer(headl(myid,ilevel),numbl(myid,ilevel),head_thr,ngrid_thr)
+#else
+     head_thr(1)=headl(myid,ilevel)
+     ngrid_thr(1)=numbl(myid,ilevel)
+#endif
      ig=0
      ip=0
      ind_grid=0
      ind_part=0
      ind_grid_part=0
+!$omp parallel do private(ithr,igrid,jgrid,npart1,ipart,next_part,jpart,ip,ig,ind_grid,ind_part,ind_grid_part,local_counter) &
+!$omp & private(part_type)
+     do ithr=1,nthr
+        ig=0
+        ip=0
+        igrid=head_thr(ithr)
+        do jgrid=1,ngrid_thr(ithr)
+           npart1=numbp(igrid)  ! Number of particles in the grid
+           if(npart1>0)then
+              ig=ig+1
 
-     igrid=headl(myid,ilevel)
-     do jgrid=1,numbl(myid,ilevel)
-        npart1=numbp(igrid)  ! Number of particles in the grid
-        if(npart1>0)then
-           ig=ig+1
-
-           ind_grid(ig)=igrid
-           ipart=headp(igrid)
-           local_counter=0
-           ! Loop over particles
-           do jpart=1,npart1
-              ! Save next particle  <---- Very important !!!
-              next_part=nextp(ipart)
-              if(ig==0)then
-                 ig=1
-                 ind_grid(ig)=igrid
-              end if
-
-              ! call debug_part(ipart, '@move_fine')
-              part_type = typep(ipart)
-              if (is_gas_tracer(part_type) .and. move_flag(ipart) == 0) then
-                 local_counter=local_counter+1
-                 ip=ip+1
-                 ind_part(ip)=ipart
-                 ind_grid_part(ip)=ig
-                 if(ip==nvector)then
-                    call move_gas_tracer(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
-                    local_counter=0
-                    ip=0
-                    ig=0
+              ind_grid(ig)=igrid
+              ipart=headp(igrid)
+              local_counter=0
+              ! Loop over particles
+              do jpart=1,npart1
+                 ! Save next particle  <---- Very important !!!
+                 next_part=nextp(ipart)
+                 if(ig==0)then
+                    ig=1
+                    ind_grid(ig)=igrid
                  end if
-              else if (is_star_tracer(part_type)) then
-                 xp(ipart, :) = xp(partp(ipart), :)
-                 vp(ipart, :) = vp(partp(ipart), :)
-              else if (is_cloud_tracer(part_type)) then
-                 call move_sink_tracer(ipart, ilevel)
+
+                 ! call debug_part(ipart, '@move_fine')
+                 part_type = typep(ipart)
+                 if (is_gas_tracer(part_type) .and. move_flag(ipart) == 0) then
+                    local_counter=local_counter+1
+                    ip=ip+1
+                    ind_part(ip)=ipart
+                    ind_grid_part(ip)=ig
+                    if(ip==nvector)then
+                       call move_gas_tracer(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,ompseed)
+                       local_counter=0
+                       ip=0
+                       ig=0
+                    end if
+                 else if (is_star_tracer(part_type)) then
+                    xp(ipart, :) = xp(partp(ipart), :)
+                    vp(ipart, :) = vp(partp(ipart), :)
+                 else if (is_cloud_tracer(part_type)) then
+                    call move_sink_tracer(ipart, ilevel)
+                 end if
+
+                 ipart=next_part  ! Go to next particle
+              end do
+              ! End loop over particles
+
+              ! If there was no particle in the grid, remove the grid from the buffer
+              if (local_counter == 0 .and. ig>0) then
+                 ig=ig-1
               end if
-
-              ipart=next_part  ! Go to next particle
-           end do
-           ! End loop over particles
-
-           ! If there was no particle in the grid, remove the grid from the buffer
-           if (local_counter == 0 .and. ig>0) then
-              ig=ig-1
            end if
-        end if
-        igrid=next(igrid)   ! Go to next grid
-     end do
-     ! End loop over grids
-     if(ip>0) call move_gas_tracer(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel) ! MC Tracer
+           igrid=next(igrid)   ! Go to next grid
+        end do
+        ! End loop over grids
+        if(ip>0) call move_gas_tracer(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,ompseed) ! MC Tracer
 
+     end do
   end if
 
 111 format('   Entering move_fine for level ',I2)
-
-contains
-
-  subroutine move_sink_tracer(ipart, ilevel)
-    ! Move the sinks
-    integer, intent(in) :: ipart, ilevel
-    real(dp) :: d2
-    integer :: idim
-
-    dx = 0.5**ilevel
-    twodx = 2*dx
-
-    xtmp(:) = xp(ipart, :)
-    xsink_tmp(:) = xsink(partp(ipart), :)
-
-    d2 = 0
-    do idim = 1, ndim
-       d2 = d2 + (xtmp(idim) - xsink_tmp(idim))**2
-    end do
-
-    ! Closeby, moving directly
-    if (d2 < dx**2) then
-       xp(ipart, :) = xsink_tmp(:)
-    else
-       do idim = 1, ndim
-          if (xtmp(idim)+dx < xsink_tmp(idim)) then
-             xtmp(idim) = xtmp(idim) + dx
-          else if (xtmp(idim)-dx > xsink_tmp(idim)) then
-             xtmp(idim) = xtmp(idim) - dx
-          else
-             xtmp(idim) = xsink_tmp(idim)
-          end if
-       end do
-       xp(ipart, :) = xtmp(:)
-    end if
-
-    vp(ipart, :) = vsink(partp(ipart), :)
-
-    ! TODO: there is an issue there when a sink gets close to the
-    ! boundaries, as the code does not take into account periodicity
-  end subroutine move_sink_tracer
-
 end subroutine move_fine
+!#########################################################################
+!#########################################################################
+!#########################################################################
+!#########################################################################
+subroutine move_sink_tracer(ipart, ilevel)
+  use amr_commons
+  use pm_commons
+  ! Move the sinks
+  integer, intent(in) :: ipart, ilevel
+  real(dp), dimension(1:ndim) :: xtmp, xsink_tmp
+  real(dp) :: d2
+  integer :: idim
+
+  dx = 0.5**ilevel
+  twodx = 2*dx
+
+  xtmp(:) = xp(ipart, :)
+  xsink_tmp(:) = xsink(partp(ipart), :)
+
+  d2 = 0
+  do idim = 1, ndim
+     d2 = d2 + (xtmp(idim) - xsink_tmp(idim))**2
+  end do
+
+  ! Closeby, moving directly
+  if (d2 < dx**2) then
+     xp(ipart, :) = xsink_tmp(:)
+  else
+     do idim = 1, ndim
+        if (xtmp(idim)+dx < xsink_tmp(idim)) then
+           xtmp(idim) = xtmp(idim) + dx
+        else if (xtmp(idim)-dx > xsink_tmp(idim)) then
+           xtmp(idim) = xtmp(idim) - dx
+        else
+           xtmp(idim) = xsink_tmp(idim)
+        end if
+     end do
+     xp(ipart, :) = xtmp(:)
+  end if
+
+  vp(ipart, :) = vsink(partp(ipart), :)
+
+  ! TODO: there is an issue there when a sink gets close to the
+  ! boundaries, as the code does not take into account periodicity
+end subroutine move_sink_tracer
 !#########################################################################
 !#########################################################################
 !#########################################################################
@@ -391,16 +422,16 @@ subroutine move1(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   integer::i,j,ind,idim,nx_loc,isink
   real(dp)::dx,dx_loc,scale,vol_loc
   ! Grid-based arrays
-  integer ,dimension(1:nvector),save::father_cell
-  real(dp),dimension(1:nvector,1:ndim),save::x0
-  integer ,dimension(1:nvector,1:threetondim),save::nbors_father_cells
-  integer ,dimension(1:nvector,1:twotondim),save::nbors_father_grids
+  integer ,dimension(1:nvector)::father_cell
+  real(dp),dimension(1:nvector,1:ndim)::x0
+  integer ,dimension(1:nvector,1:threetondim)::nbors_father_cells
+  integer ,dimension(1:nvector,1:twotondim)::nbors_father_grids
   ! Particle-based arrays
-  logical ,dimension(1:nvector),save::ok
-  real(dp),dimension(1:nvector,1:ndim),save::x,ff,new_xp,new_vp,dd,dg
-  integer ,dimension(1:nvector,1:ndim),save::ig,id,igg,igd,icg,icd
-  real(dp),dimension(1:nvector,1:twotondim),save::vol
-  integer ,dimension(1:nvector,1:twotondim),save::igrid,icell,indp,kg
+  logical ,dimension(1:nvector)::ok
+  real(dp),dimension(1:nvector,1:ndim)::x,ff,new_xp,new_vp,dd,dg
+  integer ,dimension(1:nvector,1:ndim)::ig,id,igg,igd,icg,icd
+  real(dp),dimension(1:nvector,1:twotondim)::vol
+  integer ,dimension(1:nvector,1:twotondim)::igrid,icell,indp,kg
   real(dp),dimension(1:3)::xbound,skip_loc
   integer ::nlevelmax_loc
   real(dp)::dx_min,vol_min,dx_temp,dx_min_loc
@@ -409,7 +440,7 @@ subroutine move1(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   real(dp)::xx
 
   ! Family
-  logical,dimension(1:nvector),save :: classical_tracer
+  logical,dimension(1:nvector) :: classical_tracer
 
   ! Conversion factor from user units to cgs units
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
@@ -449,7 +480,6 @@ subroutine move1(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
         x0(i,idim)=xg(ind_grid(i),idim)-3.0D0*dx
      end do
   end do
-
   ! Gather neighboring father cells (should be present anytime !)
   do i=1,ng
      father_cell(i)=father(ind_grid(i))
@@ -751,6 +781,7 @@ subroutine move1(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
               vsink_new(isink,1:ndim)=vp(ind_part(j),1:ndim)
               oksink_new(isink)=1.0
            endif
+!$omp atomic update
            sink_stat(isink,ilevel,ndim*2+1)=sink_stat(isink,ilevel,ndim*2+1)+1d0
            do idim=1,ndim
               xx=xp(ind_part(j),idim)+vp(ind_part(j),idim)*dtnew(ilevel)-xsink(isink,idim)
@@ -760,7 +791,9 @@ subroutine move1(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
               if(xx<-scale*xbound(idim)/2.0)then
                  xx=xx+scale*xbound(idim)
               endif
+!$omp atomic update
               sink_stat(isink,ilevel,idim     )=sink_stat(isink,ilevel,idim     )+xsink(isink,idim)+xx
+!$omp atomic update
               sink_stat(isink,ilevel,idim+ndim)=sink_stat(isink,ilevel,idim+ndim)+vp(ind_part(j),idim)
            enddo
        endif
@@ -790,7 +823,7 @@ end subroutine move1
 !#########################################################################
 !#########################################################################
 !#########################################################################
-subroutine move_gas_tracer(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
+subroutine move_gas_tracer(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,ompseed)
   use amr_commons
   use pm_commons
   use poisson_commons
@@ -807,26 +840,26 @@ subroutine move_gas_tracer(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   integer::i,j,idim,nx_loc
   real(dp)::dx,scale
   ! Grid-based arrays
-  real(dp),dimension(1:nvector,1:ndim),save::x0
+  real(dp),dimension(1:nvector,1:ndim)::x0
   ! Particle-based arrays
-  real(dp),dimension(1:nvector,1:ndim),save::new_xp,old_xp
-  real(dp),dimension(1:nvector,1:3),save::x
+  real(dp),dimension(1:nvector,1:ndim)::new_xp,old_xp
+  real(dp),dimension(1:nvector,1:3)::x
   real(dp),dimension(1:3)::skip_loc
 
   ! MC tracer
-  real(dp),dimension(1:nvector,1:twondim,1:twotondim),save::flux
-  real(dp),dimension(1:nvector,1:twondim),save::flux_part
-  real(dp),dimension(1:nvector),save::rand1, rand2, rand3
-  real(dp),dimension(1:nvector,1:ndim),save::proba_correction
+  real(dp),dimension(1:nvector,1:twondim,1:twotondim)::flux
+  real(dp),dimension(1:nvector,1:twondim)::flux_part
+  real(dp),dimension(1:nvector)::rand1, rand2, rand3
+  real(dp),dimension(1:nvector,1:ndim)::proba_correction
   real(dp),dimension(1:twotondim/2)::neighborflux
   integer,dimension(1:twotondim/2)::ncell
   real(dp)::proba1, proba2, proba3
   integer::ison,ipart,iskip,dir,ndir,itmp
-  integer,dimension(1:nvector, 0:twondim), save :: ind_ngrid
-  integer,dimension(1:nvector, 1:twotondim), save :: ind_cell
+  integer,dimension(1:nvector, 0:twondim) :: ind_ngrid
+  integer,dimension(1:nvector, 1:twotondim) :: ind_cell
 
-  integer,dimension(0:twondim), save :: tmp_ind_ngrid2
-  integer,dimension(0:twondim), save :: tmp_ind_ncell2
+  integer,dimension(0:twondim) :: tmp_ind_ngrid2
+  integer,dimension(0:twondim) :: tmp_ind_ncell2
   real(dp), dimension(1:ndim) :: tmp_old_xp, tmp_new_xp
 
   integer,dimension(1:nvector) :: ind_parent_part, ison_part, ind_ggrid_part
@@ -843,6 +876,9 @@ subroutine move_gas_tracer(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   logical :: ok
 
   integer :: ix, iy, iz
+
+  integer, dimension(1:IRandNumSize) :: ompseed
+
 
   ! Mesh spacing in that level
   dx = 0.5D0**ilevel
@@ -913,9 +949,9 @@ subroutine move_gas_tracer(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
 
   ! Generate random numbers for each particle
   do ipart = 1, np
-     call ranf(tracer_seed, rand1(ipart))
-     call ranf(tracer_seed, rand2(ipart))
-     call ranf(tracer_seed, rand3(ipart))
+     call ranf(ompseed, rand1(ipart))
+     call ranf(ompseed, rand2(ipart))
+     call ranf(ompseed, rand3(ipart))
   end do
 
   ! Movable particles have a flag == 0
@@ -952,7 +988,7 @@ subroutine move_gas_tracer(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
      do ipart = 1, np
         ! Particle in the center of the grid
         if (x(ipart, idim) == 0.0D0) then
-           call ranf(tracer_seed, rand)
+           call ranf(ompseed, rand)
 
            ! Project the particle either to the right or the left
            if (rand < 0.5) then
@@ -1166,12 +1202,14 @@ subroutine move_gas_tracer(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   !--------------------------------------------------------------------
   do idim = 1, ndim
      do ipart = 1, np
+!$omp atomic write
         xp(ind_part(ipart), idim) = new_xp(ipart, idim)
      end do
   end do
 
   ! Store the new parent (here a cell) of the particle
   do ipart = 1, np
+!$omp atomic write
      partp(ind_part(ipart)) = new_partp(ipart)
   end do
 

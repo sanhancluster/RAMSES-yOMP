@@ -35,6 +35,8 @@ module amr_commons
   ! MPI variables
   integer::ncpu,ndomain,myid,overload=1
 
+  integer::nthr=1  ! OpenMP number of threads
+
   ! Friedman model variables
   integer::n_frw
   real(dp),allocatable,dimension(:)::aexp_frw,hexp_frw,tau_frw,t_frw
@@ -48,9 +50,10 @@ module amr_commons
   integer ,dimension(1:MAXLEVEL)::n1,n2,n3
 
   ! Level related arrays
-  real(dp),dimension(1:MAXLEVEL)::dtold,dtnew ! Time step at each level
-  real(dp),dimension(1:MAXLEVEL)::rho_max     ! Maximum density at each level
-  integer ,dimension(1:MAXLEVEL)::nsubcycle=2 ! Subcycling at each level
+  real(dp),dimension(1:MAXLEVEL)::dtold,dtnew    ! Time step at each level
+  real(dp),dimension(1:MAXLEVEL)::rho_max        ! Maximum density at each level
+  integer ,dimension(1:MAXLEVEL)::nsubcycle=2    ! Subcycling at each level
+  integer ,dimension(1:MAXLEVEL)::load_weights=1 ! Additional weights to cost-based load balancing
 
   ! Pointers for each level linked list
   integer,allocatable,dimension(:,:)::headl
@@ -136,6 +139,37 @@ module amr_commons
   real(dp)::units_density=1.0  ! [g/cm^3]
   real(dp)::units_time=1.0     ! [seconds]
   real(dp)::units_length=1.0   ! [cm]
+
+contains
+  !---------------------------------------------------------------------------
+  ! These functions are denormal-safe exponentals, can be used with debugging
+  !---------------------------------------------------------------------------
+  !=======================================================================
+  real(dp) function uEXP(x)
+  !=======================================================================
+     implicit none
+     real(dp) :: x
+     real(dp),parameter :: smallv = -500d0
+     if(x<smallv) then
+        uEXP = 0
+     else
+        uEXP = EXP(x)
+     end if
+     return
+  end function uEXP
+  !=======================================================================
+  real(dp) function uEXP10(x)
+  !=======================================================================
+     implicit none
+     real(dp) :: x
+     real(dp),parameter :: smallv = -200d0, ten=10d0
+     if(x<smallv) then
+        uEXP10=0
+     else
+        uEXP10=ten**x
+     end if
+     return
+  end function uEXP10
 
 end module amr_commons
 

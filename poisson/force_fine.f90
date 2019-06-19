@@ -23,8 +23,10 @@ subroutine force_fine(ilevel,icount)
   real(dp),dimension(1:twotondim,1:3)::xc
   real(dp),dimension(1:3)::skip_loc
 
-  integer ,dimension(1:nvector),save::ind_grid,ind_cell
-  real(dp),dimension(1:nvector,1:ndim),save::xx,ff
+  integer::indcell,indgrid
+  integer ,dimension(1:nvector)::ind_grid,ind_cell
+  real(dp),dimension(1:nvector,1:ndim)::xx,ff
+  common /omp_force_fine/skip_loc,scale,dx_loc
 
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
@@ -58,46 +60,10 @@ subroutine force_fine(ilevel,icount)
 
      ! Loop over myid grids by vector sweeps
      ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid) schedule(static,nchunk)
      do igrid=1,ncache,nvector
         ngrid=MIN(nvector,ncache-igrid+1)
-        do i=1,ngrid
-           ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
-        end do
-
-        ! Loop over cells
-        do ind=1,twotondim
-
-           ! Gather cell indices
-           iskip=ncoarse+(ind-1)*ngridmax
-           do i=1,ngrid
-              ind_cell(i)=iskip+ind_grid(i)
-           end do
-           ! Gather cell centre positions
-           do idim=1,ndim
-              do i=1,ngrid
-                 xx(i,idim)=xg(ind_grid(i),idim)+xc(ind,idim)
-              end do
-           end do
-           ! Rescale position from code units to user units
-           do idim=1,ndim
-              do i=1,ngrid
-                 xx(i,idim)=(xx(i,idim)-skip_loc(idim))*scale
-              end do
-           end do
-
-           ! Call analytical gravity routine
-           call gravana(xx,ff,dx_loc,ngrid)
-
-           ! Scatter variables
-           do idim=1,ndim
-              do i=1,ngrid
-                 f(ind_cell(i),idim)=ff(i,idim)
-              end do
-           end do
-
-        end do
-        ! End loop over cells
-
+        call forcefine1(ilevel, igrid,ngrid)
      end do
      ! End loop over grids
 
@@ -116,13 +82,10 @@ subroutine force_fine(ilevel,icount)
 
      ! Loop over myid grids by vector sweeps
      ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid) schedule(static,nchunk)
      do igrid=1,ncache,nvector
         ngrid=MIN(nvector,ncache-igrid+1)
-        do i=1,ngrid
-           ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
-        end do
-        ! Compute gradient of potential
-        call gradient_phi(ind_grid,ngrid,ilevel,icount)
+        call forcefine2(ilevel, igrid,ngrid,icount)
      end do
      ! End loop over grids
 
@@ -145,29 +108,25 @@ subroutine force_fine(ilevel,icount)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
+!$omp parallel do private(igrid,ngrid,ind,iskip,idim,i,indcell) reduction(+:epot_loc), reduction(MAX:rho_loc) &
+!$omp& schedule(static,nchunk)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
-     do i=1,ngrid
-        ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
-     end do
      ! Loop over cells
      do ind=1,twotondim
-        ! Gather cell indices
         iskip=ncoarse+(ind-1)*ngridmax
-        do i=1,ngrid
-           ind_cell(i)=iskip+ind_grid(i)
-        end do
         ! Loop over dimensions
         do idim=1,ndim
            do i=1,ngrid
-              if(son(ind_cell(i))==0)then
-                 epot_loc=epot_loc+fact*f(ind_cell(i),idim)**2
+              indcell = iskip + active(ilevel)%igrid(igrid+i-1)
+              if(son(indcell)==0)then
+                 epot_loc=epot_loc+fact*f(indcell,idim)**2
               end if
            end do
         end do
         ! End loop over dimensions
         do i=1,ngrid
-           rho_loc=MAX(rho_loc,dble(abs(rho(ind_cell(i)))))
+           rho_loc=MAX(rho_loc,dble(abs(rho(indcell))))
         end do
      end do
      ! End loop over cells
@@ -186,6 +145,96 @@ subroutine force_fine(ilevel,icount)
 111 format('   Entering force_fine for level ',I2)
 
 end subroutine force_fine
+!#########################################################
+!#########################################################
+!#########################################################
+!#########################################################
+subroutine forcefine2(ilevel,igrid, ngrid,icount)
+  use amr_commons
+  use pm_commons
+  use poisson_commons
+  use mpi_mod
+  implicit none
+  integer::ilevel,icount
+  !----------------------------------------------------------
+  ! This routine computes the gravitational acceleration,
+  ! the maximum density rho_max, and the potential energy
+  !----------------------------------------------------------
+  integer::igrid,ngrid,ncache,i,ind,iskip,ix,iy,iz
+
+  integer ,dimension(1:nvector)::ind_grid
+  do i=1,ngrid
+     ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
+  end do
+  ! Compute gradient of potential
+  call gradient_phi(ind_grid,ngrid,ilevel,icount)
+end subroutine forcefine2
+!#########################################################
+!#########################################################
+!#########################################################
+!#########################################################
+subroutine forcefine1(ilevel,igrid, ngrid)
+  use amr_commons
+  use pm_commons
+  use poisson_commons
+  use mpi_mod
+  implicit none
+  integer::ilevel,icount
+  !----------------------------------------------------------
+  ! This routine computes the gravitational acceleration,
+  ! the maximum density rho_max, and the potential energy
+  !----------------------------------------------------------
+  integer::igrid,ngrid,ncache,i,ind,iskip,ix,iy,iz
+  integer::nx_loc,idim
+  real(dp)::dx,dx_loc,scale,fact,fourpi
+  real(kind=8)::rho_loc,rho_all,epot_loc,epot_all
+  real(dp),dimension(1:twotondim,1:3)::xc
+  real(dp),dimension(1:3)::skip_loc
+
+  integer ,dimension(1:nvector)::ind_grid,ind_cell,ind_cell_father
+  real(dp),dimension(1:nvector,1:ndim)::xx,ff
+
+  common /omp_force_fine/skip_loc, scale, dx_loc
+  do i=1,ngrid
+     ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
+  end do
+
+  ! Loop over cells
+  do ind=1,twotondim
+
+     ! Gather cell indices
+     iskip=ncoarse+(ind-1)*ngridmax
+     do i=1,ngrid
+        ind_cell(i)=iskip+ind_grid(i)
+     end do
+     ! Gather cell centre positions
+     do idim=1,ndim
+        do i=1,ngrid
+           xx(i,idim)=xg(ind_grid(i),idim)+xc(ind,idim)
+        end do
+     end do
+     ! Rescale position from code units to user units
+     do idim=1,ndim
+        do i=1,ngrid
+           xx(i,idim)=(xx(i,idim)-skip_loc(idim))*scale
+        end do
+     end do
+
+     ! Call analytical gravity routine
+     call gravana(xx,ff,dx_loc,ngrid)
+
+     ! Scatter variables
+     do idim=1,ndim
+        do i=1,ngrid
+           f(ind_cell(i),idim)=ff(i,idim)
+        end do
+     end do
+
+  end do
+        ! End loop over cells
+
+
+end subroutine forcefine1
 !#########################################################
 !#########################################################
 !#########################################################
@@ -210,11 +259,11 @@ subroutine gradient_phi(ind_grid,ngrid,ilevel,icount)
   real(dp)::dx,a,b,scale,dx_loc
   integer,dimension(1:3,1:4,1:8)::ggg,hhh
 
-  integer ,dimension(1:nvector),save::ind_cell
-  integer ,dimension(1:nvector,1:ndim),save::ind_left,ind_right
-  integer ,dimension(1:nvector,0:twondim),save::igridn
-  real(dp),dimension(1:nvector),save::phi1,phi2,phi3,phi4
-  real(dp),dimension(1:nvector,1:twotondim,1:ndim),save::phi_left,phi_right
+  integer ,dimension(1:nvector)::ind_cell
+  integer ,dimension(1:nvector,1:ndim)::ind_left,ind_right
+  integer ,dimension(1:nvector,0:twondim)::igridn
+  real(dp),dimension(1:nvector)::phi1,phi2,phi3,phi4
+  real(dp),dimension(1:nvector,1:twotondim,1:ndim)::phi_left,phi_right
 
   ! Mesh size at level ilevel
   dx=0.5D0**ilevel
@@ -278,7 +327,7 @@ subroutine gradient_phi(ind_grid,ngrid,ilevel,icount)
         id2=hhh(idim,2,ind); ig2=ggg(idim,2,ind); ih2=ncoarse+(id2-1)*ngridmax
         id3=hhh(idim,3,ind); ig3=ggg(idim,3,ind); ih3=ncoarse+(id3-1)*ngridmax
         id4=hhh(idim,4,ind); ig4=ggg(idim,4,ind); ih4=ncoarse+(id4-1)*ngridmax
-
+        
         ! Gather potential
         do i=1,ngrid
            if(igridn(i,ig1)>0)then

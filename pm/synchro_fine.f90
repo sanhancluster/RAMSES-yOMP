@@ -15,7 +15,10 @@ subroutine synchro_fine(ilevel)
   !--------------------------------------------------------------------
   integer::igrid,jgrid,ipart,jpart
   integer::ig,ip,npart1,isink,local_counter
-  integer,dimension(1:nvector),save::ind_grid,ind_part,ind_grid_part
+  integer,dimension(1:nvector)::ind_grid,ind_part,ind_grid_part
+
+  integer :: ithr
+  integer,dimension(1:nthr) :: head_thr,ngrid_thr
 
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
@@ -25,52 +28,61 @@ subroutine synchro_fine(ilevel)
   endif
 
   ! Synchronize velocity using CIC
-  ig=0
-  ip=0
-  ! Loop over grids
-  igrid=headl(myid,ilevel)
-  do jgrid=1,numbl(myid,ilevel)
-     npart1=numbp(igrid)  ! Number of particles in the grid
-     if(npart1>0)then
-        ig=ig+1
-        ind_grid(ig)=igrid
-        ipart=headp(igrid)
-        local_counter = 0
-        ! Loop over particles
-        do jpart=1,npart1
-           if(ig==0)then
-              ig=1
-              ind_grid(ig)=igrid
-           end if
-           ! MC TRACER PATCH
-           if (is_not_tracer(typep(ipart))) then
-              local_counter=local_counter+1
-              ip=ip+1
-              ind_part(ip)=ipart
-              ind_grid_part(ip)=ig
-              if(ip==nvector)then
-                 call sync(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
-                 local_counter=0
-                 ip=0
-                 ig=0
+#ifdef _OPENMP
+  call parallel_link_notracer(headl(myid,ilevel),numbl(myid,ilevel),head_thr,ngrid_thr)
+#else
+  head_thr(1)=headl(myid,ilevel)
+  ngrid_thr(1)=numbl(myid,ilevel)
+#endif
+!$omp parallel do private(ithr,igrid,jgrid,npart1,ipart,jpart,ip,ig,ind_grid,ind_part,ind_grid_part,local_counter)
+  do ithr=1,nthr
+     ip=0
+     ig=0
+     ! Loop over grids
+     igrid = head_thr(ithr)
+     do jgrid = 1, ngrid_thr(ithr)
+        npart1=numbp(igrid)  ! Number of particles in the grid
+        if(npart1>0)then
+           ig=ig+1
+           ind_grid(ig)=igrid
+           ipart=headp(igrid)
+           local_counter = 0
+           ! Loop over particles
+           do jpart=1,npart1
+              if(ig==0)then
+                 ig=1
+                 ind_grid(ig)=igrid
               end if
-           else
-              ! Update level for tracer particles
-              levelp(ipart) = ilevel
-           end if
-           ipart=nextp(ipart)  ! Go to next particle
-        end do
-        ! End loop over particles
+              ! MC TRACER PATCH
+              if (is_not_tracer(typep(ipart))) then
+                 local_counter=local_counter+1
+                 ip=ip+1
+                 ind_part(ip)=ipart
+                 ind_grid_part(ip)=ig
+                 if(ip==nvector)then
+                    call sync(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+                    local_counter=0
+                    ip=0
+                    ig=0
+                 end if
+              else
+                 ! Update level for tracer particles
+                 levelp(ipart) = ilevel
+              end if
+              ipart=nextp(ipart)  ! Go to next particle
+           end do
+           ! End loop over particles
 
-        ! If there was no particle in the grid, remove the grid from the buffer
-        if (local_counter == 0 .and. ig > 0) then
-           ig=ig-1
+           ! If there was no particle in the grid, remove the grid from the buffer
+           if (local_counter == 0 .and. ig > 0) then
+              ig=ig-1
+           end if
         end if
-     end if
-     igrid=next(igrid)   ! Go to next grid
-  end do
-  ! End loop over grids
-  if(ip>0)call sync(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+        igrid=next(igrid)   ! Go to next grid
+     end do
+     ! End loop over grids
+     if(ip>0)call sync(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+  end do ! End loop over threads
 
   if(sink)then
      if(nsink>0)then
@@ -242,17 +254,17 @@ subroutine sync(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   integer::i,j,ind,idim,nx_loc,isink
   real(dp)::dx,scale
   ! Grid-based arrays
-  real(dp),dimension(1:nvector,1:ndim),save::x0
-  integer ,dimension(1:nvector),save::ind_cell
-  integer ,dimension(1:nvector,1:threetondim),save::nbors_father_cells
-  integer ,dimension(1:nvector,1:twotondim),save::nbors_father_grids
+  real(dp),dimension(1:nvector,1:ndim)::x0
+  integer ,dimension(1:nvector)::ind_cell
+  integer ,dimension(1:nvector,1:threetondim)::nbors_father_cells
+  integer ,dimension(1:nvector,1:twotondim)::nbors_father_grids
   ! Particle-based arrays
-  logical ,dimension(1:nvector),save::ok
-  real(dp),dimension(1:nvector),save::dteff
-  real(dp),dimension(1:nvector,1:ndim),save::x,ff,new_vp,dd,dg
-  integer ,dimension(1:nvector,1:ndim),save::ig,id,igg,igd,icg,icd
-  real(dp),dimension(1:nvector,1:twotondim),save::vol
-  integer ,dimension(1:nvector,1:twotondim),save::igrid,icell,indp,kg
+  logical ,dimension(1:nvector)::ok
+  real(dp),dimension(1:nvector)::dteff
+  real(dp),dimension(1:nvector,1:ndim)::x,ff,new_vp,dd,dg
+  integer ,dimension(1:nvector,1:ndim)::ig,id,igg,igd,icg,icd
+  real(dp),dimension(1:nvector,1:twotondim)::vol
+  integer ,dimension(1:nvector,1:twotondim)::igrid,icell,indp,kg
   real(dp),dimension(1:3)::skip_loc
   integer ::nlevelmax_loc
   real(dp)::dx_min,vol_min,dx_temp,dx_min_loc

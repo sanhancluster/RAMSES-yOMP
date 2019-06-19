@@ -17,17 +17,21 @@ subroutine remove_list(ind_part,list1,ok,np)
      if(ok(j))then
         if(prevp(ind_part(j)) .ne. 0) then
            if( nextp(ind_part(j)) .ne. 0 )then
+           ! Particles on the both sides exist: connect both side
               nextp(prevp(ind_part(j)))=nextp(ind_part(j))
               prevp(nextp(ind_part(j)))=prevp(ind_part(j))
            else
+           ! Next particle not exsist: shorten tail
               nextp(prevp(ind_part(j)))=0
               tailp(list1(j))=prevp(ind_part(j))
            end if
         else
+           ! Previous particle not exsist: shorten head
            if(nextp(ind_part(j)) .ne. 0)then
               prevp(nextp(ind_part(j)))=0
               headp(list1(j))=nextp(ind_part(j))
            else
+           ! Both particle not exist: just remove head and tail
               headp(list1(j))=0
               tailp(list1(j))=0
            end if
@@ -51,6 +55,7 @@ subroutine remove_free(ind_part,np)
   ! Get np particle from free memory linked list
   !-----------------------------------------------
   integer::j,ipart
+!$omp critical(omp_particle_link)
   do j=1,np
      ipart=headp_free
      ind_part(j)=ipart
@@ -64,4 +69,5 @@ subroutine remove_free(ind_part,np)
      headp_free=nextp(headp_free)
   end do
   npart=npartmax-numbp_free
+!$omp end critical(omp_particle_link)
 end subroutine remove_free

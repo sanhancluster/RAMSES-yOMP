@@ -120,7 +120,7 @@ recursive subroutine amr_step(ilevel,icount)
   !-----------------
   ! Particle leakage
   !-----------------
-                               call timer('particles','start')
+                               call timer('particles - make','start')
   if(pic)call make_tree_fine(ilevel)
 
   !------------------------
@@ -155,7 +155,10 @@ recursive subroutine amr_step(ilevel,icount)
         if(lightcone .and. ndim==3) call output_cone()
 
         if (output_now_all.EQV..true.) then
-          output_now=.false.
+           output_now=.false.
+           if (wall_stop) then
+              call clean_stop
+           endif
         endif
 
      endif
@@ -186,13 +189,14 @@ recursive subroutine amr_step(ilevel,icount)
         call kinetic_feedback
      endif
 
-                               call timer('sinks','start')
      if(sink) then
         if (sink_AGN .and. (.not. finestep_AGN)) &
+                               call timer('sinks - feedback','start')
              call AGN_feedback
         !-----------------------------------------------------
         ! Create sink particles and associated cloud particles
         !-----------------------------------------------------
+                               call timer('sinks - create','start')
         call create_sink
      end if
   endif
@@ -200,7 +204,7 @@ recursive subroutine amr_step(ilevel,icount)
   ! Poisson source term
   !--------------------
   if(poisson)then
-                               call timer('poisson','start')
+                               call timer('poisson - save phi','start')
      !save old potential for time-extrapolation at level boundaries
      call save_phi_old(ilevel)
                                call timer('rho','start')
@@ -212,9 +216,9 @@ recursive subroutine amr_step(ilevel,icount)
   !-------------------------------------------
   if(pic)then
      ! Remove particles to finer levels
-                               call timer('particles','start')
+                               call timer('particles - kill','start')
      call kill_tree_fine(ilevel)
-
+                               call timer('particles - virtual tree','start')
      ! Update boundary conditions for remaining particles
      call virtual_tree_fine(ilevel)
   end if
@@ -223,7 +227,7 @@ recursive subroutine amr_step(ilevel,icount)
   ! Gravity update
   !---------------
   if(poisson)then
-                               call timer('poisson','start')
+                               call timer('poisson - synchro hydro','start')
 
      ! Remove gravity source term with half time step and old force
      if(hydro)then
@@ -231,8 +235,10 @@ recursive subroutine amr_step(ilevel,icount)
      endif
 
      ! Compute gravitational potential
+                               call timer('poisson - mg','start')
      if(ilevel>levelmin)then
         if(ilevel .ge. cg_levelmin) then
+                               call timer('poisson - cg','start')
            call phi_fine_cg(ilevel,icount)
         else
            call multigrid_fine(ilevel,icount)
@@ -241,8 +247,10 @@ recursive subroutine amr_step(ilevel,icount)
         call multigrid_fine(levelmin,icount)
      end if
      !when there is no old potential...
+                               call timer('poisson - save phi','start')
      if (nstep==0)call save_phi_old(ilevel)
 
+                               call timer('poisson - force fine','start')
      ! Compute gravitational acceleration
      call force_fine(ilevel,icount)
 
@@ -254,7 +262,7 @@ recursive subroutine amr_step(ilevel,icount)
 
      ! Synchronize remaining particles for gravity
      if(pic)then
-                               call timer('particles','start')
+                               call timer('particles - synchro','start')
         if(static_dm.or.static_stars)then
            call synchro_fine_static(ilevel)
         else
@@ -263,17 +271,18 @@ recursive subroutine amr_step(ilevel,icount)
      end if
 
      if(hydro)then
-                               call timer('poisson','start')
+                               call timer('poisson - synchro hydro','start')
 
         ! Add gravity source term with half time step and new force
         call synchro_hydro_fine(ilevel,+0.5*dtnew(ilevel))
 
 
         ! Density threshold and/or Bondi accretion onto sink particle
-                               call timer('sinks','start')
         if(sink)then
            if(bondi .or. maximum_accretion) then
+                               call timer('sinks - drag','start')
               if (drag_part) call get_drag_part(ilevel)  ! HP
+                               call timer('sinks - grow','start')
               call grow_bondi(ilevel)
            else
               call grow_jeans(ilevel)
@@ -404,7 +413,7 @@ recursive subroutine amr_step(ilevel,icount)
 
      ! Add gravity source term with half time step and old force
      ! in order to complete the time step
-                               call timer('poisson','start')
+                               call timer('poisson - synchro hydro','start')
      if(poisson)call synchro_hydro_fine(ilevel,+0.5*dtnew(ilevel))
 
      ! Restriction operator
@@ -448,6 +457,7 @@ recursive subroutine amr_step(ilevel,icount)
   ! Move particles
   !---------------
   ! Move other particles
+                               call timer('particles - move fine','start')
   if(pic)then
      if(static_dm.or.static_stars)then
         call move_fine_static(ilevel) ! Only remaining particles
@@ -465,11 +475,11 @@ recursive subroutine amr_step(ilevel,icount)
   !----------------------------------
   ! Star formation in leaf cells only
   !----------------------------------
-                               call timer('feedback','start')
+                               call timer('star formation','start')
   if(hydro.and.star.and.(.not.static_gas))call star_formation(ilevel)
 
   ! Compute Bondi-Hoyle accretion parameters
-                               call timer('sinks','start')
+                               call timer('sinks - accretion','start')
   if(sink.and.bondi)call bondi_hoyle(ilevel)
 
   !---------------------------------------
@@ -511,7 +521,7 @@ recursive subroutine amr_step(ilevel,icount)
   !----------------------------
   ! Merge finer level particles
   !----------------------------
-                               call timer('particles','start')
+                               call timer('particles - merge','start')
   if(pic)call merge_tree_fine(ilevel)
 
   !---------------

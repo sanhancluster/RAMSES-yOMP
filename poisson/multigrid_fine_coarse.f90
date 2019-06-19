@@ -174,11 +174,13 @@ subroutine cmp_residual_mg_coarse(ilevel)
    ngrid=active_mg(myid,ilevel)%ngrid
 
    ! Loop over cells myid
+!$omp parallel default(firstprivate) shared(active_mg,son,cpu_map,nbor,lookup_mg)
    do ind=1,twotondim
       iskip_mg  = (ind-1)*ngrid
       iskip_amr = ncoarse+(ind-1)*ngridmax
 
       ! Loop over active grids myid
+!$omp do
       do igrid_mg=1,ngrid
          igrid_amr = active_mg(myid,ilevel)%igrid(igrid_mg)
          icell_mg = igrid_mg + iskip_mg
@@ -212,8 +214,8 @@ subroutine cmp_residual_mg_coarse(ilevel)
                active_mg(myid,ilevel)%u(icell_mg,3)=0.0
                cycle
             end if
-            do idim=1,ndim
-               do inbor=1,2
+            do inbor=1,2
+               do idim=1,ndim
                   ! Get neighbor grid
                   igshift = iii(idim,inbor,ind)
                   if(igshift==0) then
@@ -256,7 +258,9 @@ subroutine cmp_residual_mg_coarse(ilevel)
          active_mg(myid,ilevel)%u(icell_mg,3) = &
           -oneoverdx2*( nb_sum - dtwondim*phi_c )+active_mg(myid,ilevel)%u(icell_mg,2)
       end do
+!$omp end do nowait
    end do
+!$omp end parallel
 
 end subroutine cmp_residual_mg_coarse
 
@@ -370,6 +374,7 @@ subroutine gauss_seidel_mg_coarse(ilevel,safe,redstep)
    ngrid=active_mg(myid,ilevel)%ngrid
 
    ! Loop over cells, with red/black ordering
+!$omp parallel default(firstprivate) shared(active_mg,son,cpu_map,nbor,lookup_mg)
    do ind0=1,twotondim/2      ! Only half of the cells for a red or black sweep
       if(redstep) then
          ind = ired  (ndim,ind0)
@@ -380,6 +385,7 @@ subroutine gauss_seidel_mg_coarse(ilevel,safe,redstep)
       iskip_mg  = (ind-1)*ngrid
 
       ! Loop over active grids
+!$omp do
       do igrid_mg=1,ngrid
          igrid_amr = active_mg(myid,ilevel)%igrid(igrid_mg)
          icell_mg  = iskip_mg  + igrid_mg
@@ -464,7 +470,9 @@ subroutine gauss_seidel_mg_coarse(ilevel,safe,redstep)
                      / (dtwondim - weight)
          end if
       end do
+!$omp end do nowait
    end do
+!$omp end parallel
 end subroutine gauss_seidel_mg_coarse
 
 ! ------------------------------------------------------------------------
@@ -564,10 +572,12 @@ subroutine restrict_residual_coarse_reverse(ifinelevel)
    icoarselevel=ifinelevel-1
 
    ! Loop over fine cells of the myid active comm
+!$omp parallel default(firstprivate) shared(active_mg,father,cpu_map,lookup_mg)
    do ind_f_cell=1,twotondim
       iskip_f_mg =(ind_f_cell-1)*active_mg(myid,ifinelevel)%ngrid
 
       ! Loop over fine grids of myid
+!$omp do
       do igrid_f_mg=1,active_mg(myid,ifinelevel)%ngrid
          icell_f_mg=iskip_f_mg+igrid_f_mg
          ! Is fine cell masked?
@@ -593,7 +603,9 @@ subroutine restrict_residual_coarse_reverse(ifinelevel)
          active_mg(cpu_amr,icoarselevel)%u(icell_c_mg,2)=&
             active_mg(cpu_amr,icoarselevel)%u(icell_c_mg,2)+res
       end do
+!$omp end do
    end do
+!$omp end parallel
 
 end subroutine restrict_residual_coarse_reverse
 
@@ -615,10 +627,10 @@ subroutine interpolate_and_correct_coarse(ifinelevel)
    real(dp), dimension(1:8)     :: bbb
    integer,  dimension(1:8,1:8) :: ccc
 
-   integer,  dimension(1:nvector), save                :: igrid_f_amr, icell_amr, cpu_amr
-   integer,  dimension(1:nvector,1:threetondim), save  :: nbors_father_cells
-   integer,  dimension(1:nvector,1:twotondim), save    :: nbors_father_grids
-   real(dp), dimension(1:nvector), save                :: corr
+   integer,  dimension(1:nvector)                :: igrid_f_amr, icell_amr, cpu_amr
+   integer,  dimension(1:nvector,1:threetondim)  :: nbors_father_cells
+   integer,  dimension(1:nvector,1:twotondim)    :: nbors_father_grids
+   real(dp), dimension(1:nvector)                :: corr
 
    ! Local constants
    a = 1.0D0/4.0D0**ndim
@@ -640,6 +652,7 @@ subroutine interpolate_and_correct_coarse(ifinelevel)
 
    ! Loop over fine grids by vector sweeps
    ngrid_f=active_mg(myid,ifinelevel)%ngrid
+!$omp parallel do default(firstprivate) shared(active_mg,father,cpu_map,lookup_mg) schedule(static,nchunk)
    do istart=1,ngrid_f,nvector
 
       ! Gather nvector grids
