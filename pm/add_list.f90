@@ -14,7 +14,6 @@ subroutine add_list(ind_part,ind_grid,ok,np)
   ! Add particles to their new linked lists
   !
   integer::j
-!$omp critical(omp_particle_link)
   do j=1,np
      if(ok(j))then
         if (numbp(ind_grid(j)) > 0) then
@@ -34,7 +33,6 @@ subroutine add_list(ind_part,ind_grid,ok,np)
         end if
      end if
   end do
-!$omp end critical(omp_particle_link)
 end subroutine add_list
 
 !################################################################
@@ -184,9 +182,9 @@ subroutine add_free_cond(ind_part,ok,np)
   endif
 #endif
 
+!$omp critical(omp_particle_link)
   do j=1,np
      if(ok(j))then
-!$omp critical(omp_particle_link)
         if(numbp_free>0)then
            ! Add particle at the tail of its linked list
            nextp(tailp_free)=ind_part(j)
@@ -202,8 +200,8 @@ subroutine add_free_cond(ind_part,ok,np)
            nextp(ind_part(j))=0
            numbp_free=1
         end if
- !$omp end critical(omp_particle_link)
     endif
   end do
   npart=npartmax-numbp_free
+!$omp end critical(omp_particle_link)
 end subroutine add_free_cond

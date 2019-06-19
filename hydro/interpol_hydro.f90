@@ -20,7 +20,7 @@ subroutine upload_fine(ilevel)
 
   ! Loop over active grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid

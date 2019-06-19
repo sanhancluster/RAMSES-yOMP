@@ -28,19 +28,18 @@ subroutine star_formation(ilevel)
   ! MC Tracer patch
   integer :: ip, ipart
   real(dp) :: delta_m_over_m
-  logical, dimension(1:nvector) :: tok=.false.
   integer,save :: nattach
   integer, dimension(1:nvector),save :: itracer, istar_tracer
   real(dp), dimension(1:nvector, 1:3),save :: xstar
   real(dp), dimension(1:nvector),save :: proba
-!$omp threadprivate(itracer, proba, xstar, istar_tracer, nattach)
+!$omp threadprivate(itracer,proba,xstar,istar_tracer,nattach)
   logical :: move_tracer
 
   real(dp)::t0,d0
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
   real(dp),dimension(1:twotondim,1:3)::xc
   ! other variables
-  integer ::ncache,nnew,ivar,ngrid,icpu,index_star,ndebris_tot,ilun=10
+  integer ::ncache,nnew,ivar,ngrid,icpu,index_star,index_star_omp,ndebris_tot,ilun=10
   integer ::igrid,ix,iy,iz,ind,i,n,iskip,nx_loc,idim
   integer ::ntot,ntot_all
   logical ::ok_free
@@ -62,7 +61,7 @@ subroutine star_formation(ilevel)
   integer ,dimension(1:nvector)::ind_grid_new,ind_cell_new
   integer ,dimension(1:nvector)::ind_debris
   integer ,dimension(1:nvector,0:twondim)::ind_nbor
-  logical ,dimension(1:nvector)::ok,ok_new=.true.
+  logical ,dimension(1:nvector)::ok,ok_new
   integer ,dimension(1:ncpu)::ntot_star_cpu,ntot_star_all
   character(LEN=80)::filename,filedir,fileloc,filedirini
   character(LEN=5)::nchar,ncharcpu
@@ -230,7 +229,7 @@ subroutine star_formation(ilevel)
   ! Convert hydro variables to primitive variables
   !------------------------------------------------
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -323,18 +322,18 @@ subroutine star_formation(ilevel)
   end if
 
   ! MC Tracer patch
-  tok = .false.
 !$omp parallel
   nattach = 0
 !$omp end parallel
   ! End MC Tracer patch
 
+  ok_new=.true.
 
   ! Loop over grids
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,i,ind_grid,ind,iskip,ind_cell,ok,nnew,ind_grid_new,ind_cell_new,ind_part,ok_new) &
-!$omp & private(index_star,n,d,u,v,w,x,y,z,tg,zg,Randnum,v_kick,v_kick_mag,mdebris)&
-!$omp & private(delta_m_over_m,ipart,ip,move_tracer,tok) schedule(static,nchunk)
+!$omp parallel do private(igrid,ngrid,i,ind_grid,ind,iskip,ind_cell,ok,nnew,ind_grid_new,ind_cell_new,ind_part) &
+!$omp & private(n,d,u,v,w,x,y,z,tg,zg,Randnum,v_kick,v_kick_mag,mdebris)&
+!$omp & private(delta_m_over_m,ipart,ip,move_tracer) schedule(static,nchunk)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -375,8 +374,10 @@ subroutine star_formation(ilevel)
 
         ! Calculate new star particle and modify gas density
         do i=1,nnew
+!$omp atomic capture
            index_star=index_star+1
-
+           index_star_omp=index_star
+!$omp end atomic
            ! Get gas variables
            n=flag2(ind_cell_new(i))
            d=uold(ind_cell_new(i),1)
@@ -403,7 +404,7 @@ subroutine star_formation(ilevel)
               mp0(ind_part(i)) = mp(ind_part(i)) ! Initial Mass
            endif
            levelp(ind_part(i)) = ilevel   ! Level
-           idp(ind_part(i)) = index_star  ! Star identity
+           idp(ind_part(i)) = index_star_omp  ! Star identity
            if(write_stellar_densities) then
               st_n_tp(ind_part(i))=d       ! Cell density                   !SD
               st_n_SN(ind_part(i))=0d0                                      !SD
@@ -526,7 +527,6 @@ subroutine star_formation(ilevel)
                  move_tracer = (is_gas_tracer(typep(ipart)) .and. partp(ipart) == ind_cell_new(i))
                  if (move_tracer) then
                     nattach = nattach + 1
-                    tok(nattach)          = move_tracer
                     itracer(nattach)      = ipart
                     istar_tracer(nattach) = ind_part(i)
                     proba(nattach)        = delta_m_over_m
@@ -541,7 +541,6 @@ subroutine star_formation(ilevel)
                  if (nattach == nvector) then
                     call tracer2star(itracer, proba, xstar, istar_tracer, nattach, ompseed)
                     nattach = 0
-                    tok = .false.
                     itracer = 0
                     istar_tracer = 0
                     proba = 0
@@ -661,12 +660,12 @@ subroutine starform2(ind_grid,ngrid,ilevel,ntot,ompseed)
   real(dp)::mstar,dstar,tstar,nISM,phi_t,phi_x,theta,sigs,scrit,b_turb,zeta
   real(dp)::T2,nH,T_poly,cs2,cs2_poly,trel,t_dyn,t_ff,tdec
   real(dp)::ul,ur,fl,fr,trgv,alpha0
-  real(dp)::sigma2,sigma2_comp,sigma2_sole,lapld,flong,ftot,pcomp=0.3
+  real(dp)::sigma2,sigma2_comp,sigma2_sole,lapld,flong,ftot,pcomp
   real(dp)::divv,divv2,curlv,curlva,curlvb,curlvc,curlv2
   real(dp)::birth_epoch,factG
   real(kind=8)::PoissMean
   real(dp),dimension(1:3)::skip_loc
-  real(dp),parameter::pi=0.5*twopi
+  real(dp)::pi
   real(dp)::dx_loc,scale,vol_loc,d1,d2,d3,d4,d5,d6
   real(dp),dimension(1:nvector)::sfr_ff
   integer ,dimension(1:nvector)::ind_grid,ind_cell,ind_cell2,nstar
@@ -686,6 +685,9 @@ subroutine starform2(ind_grid,ngrid,ilevel,ntot,ompseed)
 
   common /omp_star_formation/ xc,skip_loc,scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,d0,mstar,dstar,nISM,trel, &
         & birth_epoch,factG,dx_loc,scale,vol_loc
+
+  pcomp=0.3
+  pi=0.5*twopi
 
   ! Star formation criterion ---> logical array ok(i)
   do ind=1,twotondim
@@ -1119,11 +1121,13 @@ subroutine tracer2star(ind_tracer, proba, xstar, istar, nattach, ompseed)
   real(dp), dimension(1:nvector), intent(in) :: proba
   real(dp), dimension(1:nvector, 1:3), intent(in) :: xstar
 
-  logical, dimension(1:nvector) :: attach = .false.
+  logical, dimension(1:nvector) :: attach
   integer :: i, idim, n
   real(dp) :: r
 
   integer,dimension(1:IRandNumSize) :: ompseed
+
+  attach = .false.
 
   n = 0
   do i = 1, nattach

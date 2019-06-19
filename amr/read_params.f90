@@ -59,8 +59,8 @@ subroutine read_params
        & ,ic_mag_scale_R,ic_mag_scale_H,ic_mag_scale_B,cosmo_add_gas_index,ic_skip_type &
        & ,ic_mask_ivar,ic_mask_min,ic_mask_max,ic_mask_ptype,analytic_gas_profile
 #endif
-  namelist/tracer_params/ MC_tracer, tracer, tracer_feed, tracer_feed_fmt, tracer_mass, &
-       tracer_first_balance_part_per_cell, tracer_first_balance_levelmin
+  namelist/tracer_params/ MC_tracer,tracer,tracer_feed,tracer_feed_fmt,tracer_mass, &
+       tracer_first_balance_part_per_cell,tracer_first_balance_levelmin,tracer_per_cell,tracer_level
   ! MPI initialization
 #ifndef WITHOUTMPI
   call MPI_INIT(ierr)

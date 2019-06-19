@@ -72,6 +72,7 @@ subroutine rho_fine(ilevel,icount)
           call cic_from_multipole(i)
 #endif
           ! Update boundaries
+! TODO: Bottleneck
           call make_virtual_reverse_dp(rho(1),i)
           call make_virtual_fine_dp   (rho(1),i)
        end do
@@ -82,7 +83,7 @@ subroutine rho_fine(ilevel,icount)
   !--------------------------
   ! Initialize fields to zero
   !--------------------------
-!$omp parallel do private(ind,iskip,i) schedule(dynamic,nvector)
+!$omp parallel do private(ind,iskip,i) schedule(static,nvector)
   do i=1,active(ilevel)%ngrid
     do ind=1,twotondim
        iskip=ncoarse+(ind-1)*ngridmax
@@ -94,7 +95,7 @@ subroutine rho_fine(ilevel,icount)
   end do
 
   if(cic_levelmax>0.and.ilevel>cic_levelmax)then
-!$omp parallel do private(ind,iskip,i) schedule(dynamic,nvector)
+!$omp parallel do private(ind,iskip,i) schedule(static,nvector)
      do i=1,active(ilevel)%ngrid
         do ind=1,twotondim
            iskip=ncoarse+(ind-1)*ngridmax
@@ -111,7 +112,7 @@ subroutine rho_fine(ilevel,icount)
   if(hydro .and. m_refine(ilevel)>-1.0d0)then
      d_scale=max(mass_sph/dx_loc**ndim,smallr)
      if(ivar_refine>0)then
-!$omp parallel do private(ind,iskip,i,scalar) schedule(dynamic,nvector)
+!$omp parallel do private(ind,iskip,i,scalar) schedule(static,nvector)
         do i=1,active(ilevel)%ngrid
            do ind=1,twotondim
               iskip=ncoarse+(ind-1)*ngridmax
@@ -124,7 +125,7 @@ subroutine rho_fine(ilevel,icount)
            end do
         end do
      else
-!$omp parallel do private(ind,iskip,i) schedule(dynamic,nvector)
+!$omp parallel do private(ind,iskip,i) schedule(static,nvector)
         do i=1,active(ilevel)%ngrid
            do ind=1,twotondim
               iskip=ncoarse+(ind-1)*ngridmax
@@ -138,9 +139,9 @@ subroutine rho_fine(ilevel,icount)
   !-------------------------------------------------------
   ! Initialize rho and phi to zero in virtual boundaries
   !-------------------------------------------------------
-!$omp parallel do private(icpu,ind,iskip,i)
-  do icpu=1,ncpu
-     do ind=1,twotondim
+!$omp parallel do private(icpu,ind,iskip,i) collapse(2)
+  do ind=1,twotondim
+     do icpu=1,ncpu
         iskip=ncoarse+(ind-1)*ngridmax
         do i=1,reception(icpu,ilevel)%ngrid
            rho(reception(icpu,ilevel)%igrid(i)+iskip)=0.0D0
@@ -209,7 +210,7 @@ subroutine rho_fine(ilevel,icount)
   ! Compute quasi Lagrangian refinement map
   !-----------------------------------------
   if(m_refine(ilevel)>-1.0d0)then
-!$omp parallel do private(ind,iskip,i) schedule(dynamic,nvector)
+!$omp parallel do private(ind,iskip,i) schedule(static,nvector)
      do i=1,active(ilevel)%ngrid
         do ind=1,twotondim
            iskip=ncoarse+(ind-1)*ngridmax
@@ -986,7 +987,7 @@ subroutine multipole_fine(ilevel)
   end do
 
   ! Initialize fields to zero
-!$omp parallel do private(ind,iskip,i,idim)
+!$omp parallel do private(ind,iskip,i,idim) schedule(static,nvector)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
@@ -999,7 +1000,7 @@ subroutine multipole_fine(ilevel)
 
   ! Compute mass multipoles in each cell
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -1272,15 +1273,16 @@ subroutine cic_from_multipole(ilevel)
   if(verbose)write(*,111)ilevel
 
   ! Initialize density field to zero
-  do icpu=1,ncpu
-     do ind=1,twotondim
+!$omp parallel do private(icpu,ind,iskip,i) collapse(2)
+  do ind=1,twotondim
+     do icpu=1,ncpu
         iskip=ncoarse+(ind-1)*ngridmax
         do i=1,reception(icpu,ilevel)%ngrid
            rho(reception(icpu,ilevel)%igrid(i)+iskip)=0.0D0
         end do
      end do
   end do
-!$omp parallel do private(ind,iskip,i)
+!$omp parallel do private(ind,iskip,i) schedule(static,nvector)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
@@ -1300,7 +1302,7 @@ subroutine cic_from_multipole(ilevel)
   if(hydro)then
      ! Perform a restriction over split cells (ilevel+1)
      ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
      do igrid=1,ncache,nvector
         ! Gather nvector grids
         ngrid=MIN(nvector,ncache-igrid+1)

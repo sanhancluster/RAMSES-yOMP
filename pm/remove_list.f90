@@ -13,7 +13,6 @@ subroutine remove_list(ind_part,list1,ok,np)
   ! Remove particles from their original linked lists
   !----------------------------------------------------
   integer::j
-!$omp critical(omp_particle_link)
   do j=1,np
      if(ok(j))then
         if(prevp(ind_part(j)) .ne. 0) then
@@ -40,7 +39,6 @@ subroutine remove_list(ind_part,list1,ok,np)
         numbp(list1(j))=numbp(list1(j))-1
      end if
   end do
-!$omp end critical(omp_particle_link)
 end subroutine remove_list
 
 !################################################################

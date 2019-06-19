@@ -72,7 +72,7 @@ subroutine multigrid_coarse(ilevel,icount)
   scale=boxlen/dble(nx_loc)
   fourpi=4.D0*ACOS(-1.0D0)*scale
   if(cosmo)fourpi=1.5D0*omega_m*aexp*scale
-!$omp parallel do private(i,ind,iskip) schedule(dynamic,nchunk)
+!$omp parallel do private(i,ind,iskip) schedule(static,nvector)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
@@ -82,7 +82,7 @@ subroutine multigrid_coarse(ilevel,icount)
   ! Update boundaries for phi
   call make_virtual_fine_dp(phi(1),ilevel)
   ! Update physical boundaries for phi
-!$omp parallel do private(i,ibound,ind,iskip) schedule(dynamic,nchunk)
+!$omp parallel do private(i,ibound,ind,iskip) schedule(static,nvector)
   do i=1,boundary(ibound,ilevel)%ngrid
      do ibound=1,nboundary
         do ind=1,twotondim
@@ -93,7 +93,7 @@ subroutine multigrid_coarse(ilevel,icount)
   end do
 
   ! Substract rho_tot to rho
-!$omp parallel do private(i,ind,iskip) schedule(dynamic,nchunk)
+!$omp parallel do private(i,ind,iskip) schedule(static,nvector)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
@@ -116,7 +116,7 @@ subroutine multigrid_coarse(ilevel,icount)
 #endif
 #endif
   floor=prec*sqrt(fact*dble(twotondim*numbtot(1,ilevel)))*rho_tot
-!$omp parallel do private(i,ind,iskip) reduction(+:rhs_norm) schedule(dynamic,nchunk)
+!$omp parallel do private(i,ind,iskip) reduction(+:rhs_norm) schedule(static,nvector)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
@@ -150,7 +150,7 @@ subroutine multigrid_coarse(ilevel,icount)
   !----------------------------------------
   error=0.0d0; error_all=0.0d0
   fact=(oneoversix*dx2)**2/dble(twotondim*numbtot(1,ilevel))
-!$omp parallel do private(i,ind,iskip) reduction(+:error) schedule(dynamic,nchunk)
+!$omp parallel do private(i,ind,iskip) reduction(+:error) schedule(static,nvector)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
@@ -207,7 +207,7 @@ subroutine multigrid_coarse(ilevel,icount)
   !----------------------------------------
   error=0.0d0; error_all=0.0d0
   fact=(oneoversix*dx2)**2/dble(twotondim*numbtot(1,ilevel))
-!$omp parallel do private(i,ind,iskip) reduction(+:error) schedule(dynamic,nchunk)
+!$omp parallel do private(i,ind,iskip) reduction(+:error) schedule(static,nvector)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
@@ -237,7 +237,7 @@ subroutine multigrid_coarse(ilevel,icount)
   scale=boxlen/dble(nx_loc)
   fourpi=4.D0*ACOS(-1.0D0)*scale
   if(cosmo)fourpi=1.5D0*omega_m*aexp*scale
-!$omp parallel do private(ind,iskip,i) schedule(dynamic,nchunk)
+!$omp parallel do private(ind,iskip,i) schedule(static,nvector)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
@@ -247,7 +247,7 @@ subroutine multigrid_coarse(ilevel,icount)
   ! Update boundaries for phi
   call make_virtual_fine_dp(phi(1),ilevel)
   ! Update physical boundaries for phi
-!$omp parallel do private(ibound,ind,iskip,i) schedule(dynamic,nchunk)
+!$omp parallel do private(ibound,ind,iskip,i) schedule(static,nvector)
   do i=1,boundary(ibound,ilevel)%ngrid
      do ibound=1,nboundary
         do ind=1,twotondim
@@ -257,7 +257,7 @@ subroutine multigrid_coarse(ilevel,icount)
      end do
   end do
   ! Add rho_tot to rho
-!$omp parallel do private(ind,iskip,i) schedule(dynamic,nchunk)
+!$omp parallel do private(ind,iskip,i) schedule(static,nvector)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
@@ -300,7 +300,7 @@ recursive subroutine multigrid_iterator(ilevel)
   ! Compute first guess as the diagonal solution
   !---------------------------------------------
   fact=oneoversix*dx2
-!$omp parallel do private(i,ind,iskip) schedule(dynamic,nchunk)
+!$omp parallel do private(i,ind,iskip) schedule(static,nvector)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
@@ -390,7 +390,7 @@ subroutine gauss_seidel(ilevel,redstep)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
      ! Gather nvector grids
      ngrid=MIN(nvector,ncache-igrid+1)
@@ -528,7 +528,7 @@ subroutine cmp_residual_mg(ilevel)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
 
      ! Gather nvector grids
@@ -653,23 +653,23 @@ subroutine restriction_fine(ilevel,multigrid)
   vol_loc=dx_loc**ndim
 
   ! Initialize density field to zero
-!$omp parallel do private(icpu,ind,iskip,i) schedule(dynamic,nchunk)
-  do icpu=1,ncpu
-     do ind=1,twotondim
+!$omp parallel do private(icpu,ind,iskip,i) collapse(2) schedule(static,nchunk)
+  do ind=1,twotondim
+     do icpu=1,ncpu
         iskip=ncoarse+(ind-1)*ngridmax
         do i=1,reception(icpu,ilevel)%ngrid
            rho(reception(icpu,ilevel)%igrid(i)+iskip)=0.0D0
         end do
      end do
   end do
-!$omp parallel do private(ind,iskip,i) schedule(dynamic,nchunk)
+!$omp parallel do private(ind,iskip,i) schedule(static,nvector)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
         rho(active(ilevel)%igrid(i)+iskip)=0.0D0
      end do
   end do
-!$omp parallel do private(ibound,ind,iskip,i) schedule(dynamic,nchunk)
+!$omp parallel do private(ibound,ind,iskip,i) schedule(static,nvector)
   do i=1,boundary(ibound,ilevel)%ngrid
      do ibound=1,nboundary
         do ind=1,twotondim
@@ -682,6 +682,7 @@ subroutine restriction_fine(ilevel,multigrid)
   ! Perform a restriction over split cells (ilevel+1)
   if(ilevel<nlevelmax)then
      ncache=active(ilevel+1)%ngrid
+!$omp parallel do private(igrid,ngrid,i,ind_grid) schedule(static,nchunk)
      do igrid=1,ncache,nvector
         ! Gather nvector grids
         ngrid=MIN(nvector,ncache-igrid+1)
@@ -762,7 +763,7 @@ subroutine restrict(ind_grid,ngrid,ilevel,multigrid)
         end do
         ! Gather rho in temporary array
         do i=1,ngrid
-           new_rho(i)=rho(ind_cell_father(i))
+           new_rho(i)=0d0
         end do
         ! Perform CIC projection
         if(multigrid)then
@@ -776,7 +777,8 @@ subroutine restrict(ind_grid,ngrid,ilevel,multigrid)
         end if
         ! Update array rho
         do i=1,ngrid
-           rho(ind_cell_father(i))=new_rho(i)
+!$omp atomic update
+           rho(ind_cell_father(i))=rho(ind_cell_father(i))+new_rho(i)
         end do
 
      end do
@@ -826,7 +828,7 @@ subroutine prolong(ilevel)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,i,ind,iskip, ind_average, ind_father, coeff) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid,i,ind,iskip, ind_average, ind_father, coeff) schedule(static,nchunk)
   do igrid=1,ncache,nvector
 
      ! Gather nvector grids

@@ -218,7 +218,7 @@ recursive subroutine amr_step(ilevel,icount)
      ! Remove particles to finer levels
                                call timer('particles - kill','start')
      call kill_tree_fine(ilevel)
-
+                               call timer('particles - virtual tree','start')
      ! Update boundary conditions for remaining particles
      call virtual_tree_fine(ilevel)
   end if

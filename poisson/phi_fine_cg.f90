@@ -61,7 +61,7 @@ subroutine phi_fine_cg(ilevel,icount)
   ! Compute right-hand side norm
   !===============================
   rhs_norm=0.d0
-!$omp parallel do private(ind,iskip,i,idx) reduction(+:rhs_norm) schedule(dynamic,nvector)
+!$omp parallel do private(ind,iskip,i,idx) reduction(+:rhs_norm) schedule(static,nvector)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
@@ -96,7 +96,7 @@ subroutine phi_fine_cg(ilevel,icount)
      ! Compute residual norm
      !====================================
      r2=0.0d0
-!$omp parallel do private(ind,iskip,i,idx) reduction(+:r2) schedule(dynamic,nvector)
+!$omp parallel do private(ind,iskip,i,idx) reduction(+:r2) schedule(static,nvector)
 	  do i=1,active(ilevel)%ngrid
 		  do ind=1,twotondim
 			  iskip=ncoarse+(ind-1)*ngridmax
@@ -124,7 +124,7 @@ subroutine phi_fine_cg(ilevel,icount)
 	  !====================================
 	  ! Recurrence on p
 	  !====================================
-!$omp parallel do private(ind,iskip,i,idx) schedule(dynamic,nvector)
+!$omp parallel do private(ind,iskip,i,idx) schedule(static,nvector)
 	  do i=1,active(ilevel)%ngrid
 		  do ind=1,twotondim
 			  iskip=ncoarse+(ind-1)*ngridmax
@@ -144,7 +144,7 @@ subroutine phi_fine_cg(ilevel,icount)
 	  ! Compute p.Ap scalar product
 	  !====================================
 	  pAp=0.0d0
-!$omp parallel do private(ind,iskip,i,idx) reduction(+:pAp) schedule(dynamic,nvector)
+!$omp parallel do private(ind,iskip,i,idx) reduction(+:pAp) schedule(static,nvector)
 	  do i=1,active(ilevel)%ngrid
 		  do ind=1,twotondim
 			  iskip=ncoarse+(ind-1)*ngridmax
@@ -165,25 +165,15 @@ subroutine phi_fine_cg(ilevel,icount)
 	  alpha_cg = r2/pAp
 
 	  !====================================
-	  ! Recurrence on x
+	  ! Recurrence on x and r
 	  !====================================
-!$omp parallel do private(ind,iskip,i,idx) schedule(dynamic,nvector)
+!$omp parallel do private(ind,iskip,i,idx) schedule(static,nvector)
 	  do i=1,active(ilevel)%ngrid
 		  do ind=1,twotondim
 			  iskip=ncoarse+(ind-1)*ngridmax
 			  idx=active(ilevel)%igrid(i)+iskip
-			  phi(idx)=phi(idx)+alpha_cg*f(idx,2)
-		  end do
-	  end do
 
-	  !====================================
-	  ! Recurrence on r
-	  !====================================
-!$omp parallel do private(ind,iskip,i,idx) schedule(dynamic,nvector)
-	  do i=1,active(ilevel)%ngrid
-		  do ind=1,twotondim
-			  iskip=ncoarse+(ind-1)*ngridmax
-			  idx=active(ilevel)%igrid(i)+iskip
+			  phi(idx)=phi(idx)+alpha_cg*f(idx,2)
 			  f(idx,1)=f(idx,1)-alpha_cg*f(idx,3)
 		  end do
 	  end do
@@ -228,6 +218,7 @@ subroutine cmp_residual_cg(ilevel,icount)
   integer::id1,id2,ig1,ig2,ih1,ih2
   real(dp)::dx2,fourpi,scale,oneoversix,fact
   integer,dimension(1:3,1:2,1:8)::iii,jjj
+  integer ,dimension(1:nvector)::ind_grid
 
   ! Set constants
   dx2=(0.5D0**ilevel)**2
@@ -245,19 +236,21 @@ subroutine cmp_residual_cg(ilevel,icount)
   iii(3,1,1:8)=(/5,5,5,5,0,0,0,0/); jjj(3,1,1:8)=(/5,6,7,8,1,2,3,4/)
   iii(3,2,1:8)=(/0,0,0,0,6,6,6,6/); jjj(3,2,1:8)=(/5,6,7,8,1,2,3,4/)
 
-  ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
-
-     ! Gather nvector grids
-     ngrid=MIN(nvector,ncache-igrid+1)
-	 call cmprescg1(ilevel,icount, igrid,ngrid,iii,jjj,oneoversix,fact)
+      ! Gather nvector grids
+      ngrid=MIN(nvector,ncache-igrid+1)
+      ! Loop over myid grids by vector sweeps
+      do i=1,ngrid
+          ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
+      end do
+      call cmprescg1(ilevel,icount,ind_grid,ngrid,iii,jjj,oneoversix,fact)
   enddo
 end subroutine cmp_residual_cg
 !###########################################################
 !###########################################################
-subroutine cmprescg1(ilevel,icount, igrid,ngrid,iii,jjj,oneoversix,fact)
+subroutine cmprescg1(ilevel,icount,ind_grid,ngrid,iii,jjj,oneoversix,fact)
   use amr_commons
   use pm_commons
   use hydro_commons
@@ -279,12 +272,6 @@ subroutine cmprescg1(ilevel,icount, igrid,ngrid,iii,jjj,oneoversix,fact)
   real(dp),dimension(1:nvector,1:ndim)::phig,phid
   real(dp),dimension(1:nvector,1:twotondim,1:ndim)::phi_left,phi_right
   real(dp),dimension(1:nvector)::residu
-
-
-  ! Loop over myid grids by vector sweeps
-  do i=1,ngrid
-	  ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
-  end do
 
   ! Gather neighboring grids
   do i=1,ngrid
@@ -381,6 +368,7 @@ subroutine cmp_Ap_cg(ilevel)
   integer::id1,id2,ig1,ig2,ih1,ih2
   real(dp)::oneoversix
   integer,dimension(1:3,1:2,1:8)::iii,jjj
+  integer,dimension(1:nvector)::ind_grid
 
   ! Set constants
   oneoversix=1.0D0/dble(twondim)
@@ -394,12 +382,14 @@ subroutine cmp_Ap_cg(ilevel)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
-
-     ! Gather nvector grids
-     ngrid=MIN(nvector,ncache-igrid+1)
-	 call cmpapcg1(ilevel, iii,jjj,igrid,ngrid,oneoversix)
+      ! Gather nvector grids
+      ngrid=MIN(nvector,ncache-igrid+1)
+      do i=1,ngrid
+          ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
+      end do
+      call cmpapcg1(ilevel,iii,jjj,ind_grid,ngrid,oneoversix)
   enddo
 
 end subroutine cmp_Ap_cg
@@ -407,7 +397,7 @@ end subroutine cmp_Ap_cg
 !###########################################################
 !###########################################################
 !###########################################################
-subroutine cmpapcg1(ilevel,iii,jjj,igrid,ngrid,oneoversix)
+subroutine cmpapcg1(ilevel,iii,jjj,ind_grid,ngrid,oneoversix)
   use amr_commons
   use pm_commons
   use hydro_commons
@@ -427,10 +417,6 @@ subroutine cmpapcg1(ilevel,iii,jjj,igrid,ngrid,oneoversix)
   integer,dimension(1:nvector,0:twondim)::igridn
   real(dp),dimension(1:nvector,1:ndim)::phig,phid
   real(dp),dimension(1:nvector)::residu
-
-  do i=1,ngrid
-	  ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
-  end do
 
   ! Gather neighboring grids
   do i=1,ngrid
@@ -509,20 +495,23 @@ subroutine make_initial_phi(ilevel,icount)
   integer ,dimension(1:nvector)::ind_grid,ind_cell,ind_cell_father
   real(dp),dimension(1:nvector,1:twotondim)::phi_int
 
-  ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
-     ! Gather nvector grids
-     ngrid=MIN(nvector,ncache-igrid+1)
-	 call makeinitphi1(ilevel,icount, igrid,ngrid)
+      ! Gather nvector grids
+      ngrid=MIN(nvector,ncache-igrid+1)
+      ! Loop over myid grids by vector sweeps
+      do i=1,ngrid
+          ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
+      end do
+      call makeinitphi1(ilevel,icount,ind_grid,ngrid)
   enddo
 end subroutine make_initial_phi
 !###########################################################
 !###########################################################
 !###########################################################
 !###########################################################
-subroutine makeinitphi1(ilevel,icount,igrid,ngrid)
+subroutine makeinitphi1(ilevel,icount,ind_grid,ngrid)
   use amr_commons
   use pm_commons
   use poisson_commons
@@ -534,11 +523,6 @@ subroutine makeinitphi1(ilevel,icount,igrid,ngrid)
   integer::igrid,ncache,i,ngrid,ind,iskip,idim,ibound
   integer ,dimension(1:nvector)::ind_grid,ind_cell,ind_cell_father
   real(dp),dimension(1:nvector,1:twotondim)::phi_int
-
-  ! Loop over myid grids by vector sweeps
-  do i=1,ngrid
-	  ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
-  end do
 
   if(ilevel==1)then
 	  ! Loop over cells
@@ -595,9 +579,6 @@ subroutine make_multipole_phi(ilevel)
   use poisson_commons
   implicit none
   integer::ilevel
-  !
-  !
-  !
   integer::idim
   integer::i,ncache,igrid,ngrid,ind
   integer::iskip,nx_loc,ix,iy,iz
@@ -606,8 +587,7 @@ subroutine make_multipole_phi(ilevel)
   real(dp)::dx,dx_loc,scale,fourpi,boxlen2,eps
   real(dp),dimension(1:3)::skip_loc
   real(dp),dimension(1:twotondim,1:3)::xc
-  real(dp),dimension(1:nvector)::rr,pp
-  real(dp),dimension(1:nvector,1:ndim)::xx
+
 
   ! Mesh size at level ilevel
   dx=0.5D0**ilevel
@@ -636,26 +616,26 @@ subroutine make_multipole_phi(ilevel)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
-     ! Gather nvector grids
-     ngrid=MIN(nvector,ncache-igrid+1)
-	 call makemultiphi1(ilevel, igrid,ngrid, scale, eps,xc,skip_loc)
+      ! Gather nvector grids
+      ngrid=MIN(nvector,ncache-igrid+1)
+      do i=1,ngrid
+          ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
+      end do
+      call makemultiphi1(ilevel,ind_grid,ngrid,scale,eps,xc,skip_loc)
   enddo
 end subroutine make_multipole_phi
 !###########################################################
 !###########################################################
 !###########################################################
 !###########################################################
-subroutine makemultiphi1(ilevel, igrid,ngrid, scale, eps,xc,skip_loc)
+subroutine makemultiphi1(ilevel,ind_grid,ngrid,scale,eps,xc,skip_loc)
   use amr_commons
   use pm_commons
   use poisson_commons
   implicit none
   integer::ilevel
-  !
-  !
-  !
   integer::ibound,boundary_dir,idim,inbor
   integer::i,ncache,ivar,igrid,ngrid,ind
   integer::iskip,iskip_ref,gdim,nx_loc,ix,iy,iz
@@ -667,11 +647,6 @@ subroutine makemultiphi1(ilevel, igrid,ngrid, scale, eps,xc,skip_loc)
   real(dp),dimension(1:nvector)::rr,pp
   real(dp),dimension(1:nvector,1:ndim)::xx
   real(dp),dimension(1:nvector,1:ndim)::ff
-
-
-  do i=1,ngrid
-	  ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
-  end do
 
   ! Loop over cells
   do ind=1,twotondim

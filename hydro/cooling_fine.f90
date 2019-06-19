@@ -20,7 +20,7 @@ subroutine cooling_fine(ilevel)
   ! Operator splitting step for cooling source term
   ! by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -73,7 +73,7 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
   integer::i,ind,iskip,idim,nleaf,nx_loc
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
   real(kind=8)::dtcool,nISM,nCOM,damp_factor,cooling_switch,t_blast
-  real(dp)::polytropic_constant=1.
+  real(dp)::polytropic_constant
   integer,dimension(1:nvector)::ind_cell,ind_leaf
   real(kind=8),dimension(1:nvector)::nH,T2,delta_T2,ekk,err,emag
 #if defined(RT) || defined(grackle)
@@ -109,6 +109,7 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
   integer::irad
 #endif
 
+
   year=3600_dp*24_dp*365_dp
   ! Mesh spacing in that level
   dx=0.5D0**ilevel
@@ -139,6 +140,8 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
   if(jeans_ncells>0)then
      polytropic_constant=2d0*(boxlen*jeans_ncells*0.5d0**dble(nlevelmax-nlevelsheld)*scale_l/aexp)**2/ &
           & (twopi)*6.67e-8*scale_d*(scale_t/scale_l)**2
+  else
+       polytropic_constant=1.
   endif
 
 #ifdef RT

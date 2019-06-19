@@ -386,12 +386,11 @@ subroutine cpu_parallel_link_activestar(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid
      return
   end if
 
+!$omp parallel do private(kgrid)
   do kgrid=1,ngrid_tot
 	 npart_grid(kgrid)=0 ! base weight 1
   end do
 
-
-  npart_grid=0
   npart_tot=0
   kgrid=1
   npart_now=0
@@ -492,7 +491,6 @@ subroutine cpu_parallel_link_star(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,n
   integer, dimension(:), allocatable :: npart_grid
 
   integer :: icpu,ngrid_tot,igrid,jgrid,kgrid,ipart,jpart,next_part,npart1,npart_tot,npart_now,ngrid_now,weight_eql,ithr
-  real :: tyoung
 
   ngrid_tot=0
   do icpu=1,ncpu
@@ -506,12 +504,11 @@ subroutine cpu_parallel_link_star(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,n
      return
   end if
 
+!$omp parallel do private(kgrid)
   do kgrid=1,ngrid_tot
 	 npart_grid(kgrid)=0 ! base weight 1
   end do
 
-
-  npart_grid=0
   npart_tot=0
   kgrid=1
   npart_now=0
@@ -612,7 +609,6 @@ subroutine cpu_parallel_link_cloud(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,
   integer, dimension(:), allocatable :: npart_grid
 
   integer :: icpu,ngrid_tot,igrid,jgrid,kgrid,ipart,jpart,next_part,npart1,npart_tot,npart_now,ngrid_now,weight_eql,ithr
-  real :: tyoung
 
   ngrid_tot=0
   do icpu=1,ncpu
@@ -626,12 +622,11 @@ subroutine cpu_parallel_link_cloud(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,
      return
   end if
 
+!$omp parallel do private(kgrid)
   do kgrid=1,ngrid_tot
 	 npart_grid(kgrid)=0 ! base weight 1
   end do
 
-
-  npart_grid=0
   npart_tot=0
   kgrid=1
   npart_now=0
@@ -732,7 +727,6 @@ subroutine cpu_parallel_link_cloud_tracer(ilevel,head_thr,ngrid_thr,icpu_thr,jgr
   integer, dimension(:), allocatable :: npart_grid
 
   integer :: icpu,ngrid_tot,igrid,jgrid,kgrid,ipart,jpart,next_part,npart1,npart_tot,npart_now,ngrid_now,weight_eql,ithr
-  real :: tyoung
 
   ngrid_tot=0
   do icpu=1,ncpu
@@ -746,12 +740,11 @@ subroutine cpu_parallel_link_cloud_tracer(ilevel,head_thr,ngrid_thr,icpu_thr,jgr
      return
   end if
 
+!$omp parallel do private(kgrid)
   do kgrid=1,ngrid_tot
 	 npart_grid(kgrid)=0 ! base weight 1
   end do
 
-
-  npart_grid=0
   npart_tot=0
   kgrid=1
   npart_now=0
@@ -852,7 +845,6 @@ subroutine cpu_parallel_link_stardm(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr
   integer, dimension(:), allocatable :: npart_grid
 
   integer :: icpu,ngrid_tot,igrid,jgrid,kgrid,ipart,jpart,next_part,npart1,npart_tot,npart_now,ngrid_now,weight_eql,ithr
-  real :: tyoung
 
   ngrid_tot=0
   do icpu=1,ncpu
@@ -866,12 +858,11 @@ subroutine cpu_parallel_link_stardm(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr
      return
   end if
 
+!$omp parallel do private(kgrid)
   do kgrid=1,ngrid_tot
 	 npart_grid(kgrid)=0 ! base weight 1
   end do
 
-
-  npart_grid=0
   npart_tot=0
   kgrid=1
   npart_now=0
@@ -972,7 +963,6 @@ subroutine cpu_parallel_link_notracer(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_t
   integer, dimension(:), allocatable :: npart_grid
 
   integer :: icpu,ngrid_tot,igrid,jgrid,kgrid,ipart,jpart,next_part,npart1,npart_tot,npart_now,ngrid_now,weight_eql,ithr
-  real :: tyoung
 
   ngrid_tot=0
   do icpu=1,ncpu
@@ -986,12 +976,11 @@ subroutine cpu_parallel_link_notracer(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_t
      return
   end if
 
+!$omp parallel do private(kgrid)
   do kgrid=1,ngrid_tot
 	 npart_grid(kgrid)=0 ! base weight 1
   end do
 
-
-  npart_grid=0
   npart_tot=0
   kgrid=1
   npart_now=0
@@ -1089,41 +1078,28 @@ subroutine cpu_parallel_link_all(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,np
   !----------------------------------------------------------------------
   integer :: ilevel
   integer, dimension(1:nthr) :: head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr
-  integer, dimension(:), allocatable :: npart_grid
 
   integer :: icpu,ngrid_tot,igrid,jgrid,kgrid,ipart,jpart,next_part,npart1,npart_tot,npart_now,ngrid_now,weight_eql,ithr
-  real :: tyoung
 
   ngrid_tot=0
   do icpu=1,ncpu
   	 ngrid_tot=ngrid_tot+numbl(icpu,ilevel)
   end do
 
-  allocate(npart_grid(ngrid_tot))
-
   if(ngrid_tot==0) then
 	 ngrid_thr=0
      return
   end if
 
-  do kgrid=1,ngrid_tot
-	 npart_grid(kgrid)=0 ! base weight 1
-  end do
-
-
-  npart_grid=0
   npart_tot=0
-  kgrid=1
   ! Count the total number of particles
   do icpu=1,ncpu
 	 igrid=headl(icpu,ilevel)
 	 do jgrid=1,numbl(icpu,ilevel)
 		npart1=numbp(igrid)
 
-		npart_grid(kgrid)=npart_grid(kgrid)+npart1
 		npart_tot=npart_tot+npart1
 
-		kgrid=kgrid+1
 		igrid=next(igrid)
 	 end do
   end do
@@ -1134,7 +1110,6 @@ subroutine cpu_parallel_link_all(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,np
   head_thr(1)=0
 
   jgrid_thr(1)=1
-  kgrid=1
   npart_now=0
   ngrid_now=0
 
@@ -1155,8 +1130,7 @@ subroutine cpu_parallel_link_all(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,np
 		   return
 		end if
 		ngrid_now=ngrid_now+1
-		npart_now=npart_now+npart_grid(kgrid)
-		kgrid=kgrid+1
+		npart_now=npart_now+numbp(igrid)
 		igrid=next(igrid)
 		! Save state and move to next thread
 		if(npart_now+ngrid_now>=weight_eql) then
@@ -1200,6 +1174,7 @@ subroutine cpu_parallel_reception(ilevel,icpu_thr,igrid_thr,ngrid_thr)
 
 
   ngrid_tot=0
+!$omp parallel do private(icpu) reduction(+:ngrid_tot)
   do icpu=1,ncpu
 	 ngrid_tot=ngrid_tot+reception(icpu,ilevel)%ngrid
   end do
@@ -1245,6 +1220,96 @@ subroutine cpu_parallel_reception(ilevel,icpu_thr,igrid_thr,ngrid_thr)
   ngrid_thr(ithr-1)=ngrid_tot
 
 end subroutine cpu_parallel_reception
+!#########################################################################
+!#########################################################################
+!#########################################################################
+!#########################################################################
+subroutine cpu_parallel_reception_part(ilevel,icpu_thr,igrid_thr,ngrid_thr,ipcom_thr)
+  use amr_commons
+  use pm_commons
+  implicit none
+  !----------------------------------------------------------------------
+  ! This routine is designed to run on multiple cpu loops,
+  ! so it stores current status of the loop (icpu, igrid)
+  !----------------------------------------------------------------------
+  integer :: ilevel
+  integer, dimension(1:nthr) :: icpu_thr,igrid_thr,ngrid_thr,ipcom_thr
+
+  integer :: icpu,ithr,ngrid_tot,npart_tot,igrid,kgrid,npart_now,ngrid_now,weight_eql,ncache,ngridm,ipcom,npart1
+
+  ngrid_tot=0
+!$omp parallel do private(icpu) reduction(+:ngrid_tot)
+  do icpu=1,ncpu
+	 ngrid_tot=ngrid_tot+reception(icpu,ilevel)%ngrid
+  end do
+
+  if(ngrid_tot==0) then
+	 icpu_thr=1
+	 igrid_thr=1
+	 ngrid_thr=0
+     return
+  end if
+
+  npart_tot=0
+  kgrid=1
+  ! Count the total number of particles
+  do icpu=1,ncpu
+     do igrid=1,reception(icpu,ilevel)%ngrid
+		npart_tot=npart_tot+numbp(reception(icpu,ilevel)%igrid(igrid))
+		kgrid=kgrid+1
+     end do
+  end do
+
+  if(npart_tot==0) then
+	 icpu_thr=1
+	 igrid_thr=1
+	 ngrid_thr=0
+     return
+  end if
+
+  weight_eql=(ngrid_tot+npart_tot)/nthr
+
+  npart_now=0; ngrid_now=0
+
+  icpu_thr(1)=1; igrid_thr(1)=1; ngrid_thr=0; ipcom_thr(1)=0
+
+  ithr=2
+  cpu_loop: do icpu=1,ncpu
+	 ipcom=0
+     do igrid=1,reception(icpu,ilevel)%ngrid
+        ! Gather nvector grids
+		if(npart_now+ngrid_now>=weight_eql) then
+		   icpu_thr(ithr)=icpu
+		   igrid_thr(ithr)=igrid
+		   ipcom_thr(ithr)=ipcom
+
+		   ngrid_thr(ithr-1)=ngrid_now
+
+		   npart_tot=npart_tot-ngrid_now
+		   npart_now=0
+
+		   ngrid_tot=ngrid_tot-ngrid_now
+		   ngrid_now=0
+
+		   weight_eql=(npart_tot+ngrid_tot)/(nthr-ithr+1)
+
+		   ithr=ithr+1
+		end if
+		if(ithr>nthr) then
+		   exit cpu_loop
+		end if
+
+        ngrid_now=ngrid_now+1
+
+		npart1=numbp(reception(icpu,ilevel)%igrid(igrid))
+		npart_now=npart_now+npart1
+		ipcom=ipcom+npart1
+
+     end do
+  end do cpu_loop
+  ngrid_thr(ithr-1)=ngrid_tot
+
+end subroutine cpu_parallel_reception_part
 !#########################################################################
 !#########################################################################
 !#########################################################################

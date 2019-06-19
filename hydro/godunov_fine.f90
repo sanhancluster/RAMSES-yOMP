@@ -23,7 +23,7 @@ subroutine godunov_fine(ilevel)
 
   ! Loop over active grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,i,ind_grid) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid,i,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -58,7 +58,7 @@ subroutine set_unew(ilevel)
   if(verbose)write(*,111)ilevel
 
   ! Set unew to uold for myid cells
-!$omp parallel do private(ind,iskip,ivar,i,d,u,v,w,e) schedule(dynamic,nvector) collapse(2)
+!$omp parallel do private(ind,iskip,ivar,i,d,u,v,w,e) schedule(static,nvector)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
@@ -88,10 +88,10 @@ subroutine set_unew(ilevel)
   end do
 
   ! Set unew to 0 for virtual boundary cells
-!$omp parallel do private(ind,iskip,ivar,i,d,u,v,w,e,icpu) schedule(dynamic)
+!$omp parallel do private(ind,iskip,ivar,i,d,u,v,w,e,icpu) collapse(2) schedule(dynamic,nchunk)
   do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
      do icpu=1,ncpu
+        iskip=ncoarse+(ind-1)*ngridmax
         do ivar=1,nvar
            do i=1,reception(icpu,ilevel)%ngrid
               unew(reception(icpu,ilevel)%igrid(i)+iskip,ivar)=0.0
@@ -154,7 +154,7 @@ subroutine set_uold(ilevel)
   endif
 
   ! Set uold to unew for myid cells
-!$omp parallel do private(ind,iskip,ivar,i,ind_cell,d,u,v,w,e_kin,e_cons,e_prim,div,e_trunc) schedule(dynamic,nvector)
+!$omp parallel do private(ind,iskip,ivar,i,ind_cell,d,u,v,w,e_kin,e_cons,e_prim,div,e_trunc) schedule(static,nvector)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
@@ -215,7 +215,7 @@ subroutine add_gravity_source_terms(ilevel)
   if(verbose)write(*,111)ilevel
 
   ! Add gravity source term at time t with half time step
-!$omp parallel do private(ind,iskip,i,ind_cell,d,u,v,w,e_kin,d_old,e_prim,fact) schedule(dynamic,nvector)
+!$omp parallel do private(ind,iskip,i,ind_cell,d,u,v,w,e_kin,d_old,e_prim,fact) schedule(static,nvector)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
@@ -279,7 +279,7 @@ subroutine add_pdv_source_terms(ilevel)
   iii(3,2,1:8)=(/0,0,0,0,6,6,6,6/); jjj(3,2,1:8)=(/5,6,7,8,1,2,3,4/)
 
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(dynamic)
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
      ngrid = MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -443,8 +443,8 @@ subroutine godfine1(ind_grid,ncache,ilevel)
   real(dp),dimension(1:nvector,1:twotondim,1:nvar)::u2
 
   real(dp),dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2,1:nvar)::uloc
-  real(dp),dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2,1:ndim)::gloc=0.0d0
-  real(dp),dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2)::ploc=0.0d0
+  real(dp),dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2,1:ndim)::gloc
+  real(dp),dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2)::ploc
   real(dp),dimension(1:nvector,if1:if2,jf1:jf2,kf1:kf2,1:nvar,1:ndim)::flux
   real(dp),dimension(1:nvector,if1:if2,jf1:jf2,kf1:kf2,1:2,1:ndim)::tmp
   logical ,dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2)::ok
@@ -464,6 +464,8 @@ subroutine godfine1(ind_grid,ncache,ilevel)
   nx_loc=icoarse_max-icoarse_min+1
   scale=boxlen/dble(nx_loc)
   dx=0.5D0**ilevel*scale
+
+  ploc=0.0d0; gloc=0.0d0;
 
   ! Integer constants
   i1min=0; i1max=0; i2min=0; i2max=0; i3min=1; i3max=1
@@ -589,10 +591,12 @@ subroutine godfine1(ind_grid,ncache,ilevel)
   end do
   end do
   end do
+
   ! End loop over neighboring grids
   !-----------------------------------------------
   ! Compute flux using second-order Godunov method
   !-----------------------------------------------
+
   call unsplit(uloc,gloc,ploc,flux,tmp,dx,dx,dx,dtnew(ilevel),ncache)
   !--------------------------------------
   ! Store the fluxes for later use
@@ -822,5 +826,4 @@ subroutine godfine1(ind_grid,ncache,ilevel)
 
   end do
   ! End loop over dimensions
-
 end subroutine godfine1

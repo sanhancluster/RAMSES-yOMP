@@ -795,12 +795,14 @@ subroutine tracer2sink(ind_tracer, proba, xsink_loc, isink, nattach, dx_loc, omp
   real(dp), dimension(1:nvector, 1:3), intent(in) :: xsink_loc
   real(dp), intent(in) :: dx_loc
 
-  logical, dimension(1:nvector) :: attach = .false.
+  logical, dimension(1:nvector) :: attach
   integer :: i
 
   integer,dimension(1:IRandNumSize) :: ompseed
 
   real(dp) :: r
+
+  attach = .false.
 
   do i = 1, nattach
      call ranf(ompseed, r)

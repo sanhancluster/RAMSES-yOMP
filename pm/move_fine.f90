@@ -771,7 +771,6 @@ subroutine move1(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
      end do
   end do
 
-!$omp critical
   ! Update sink particle velocity using closest cloud particle
   if(sink)then
      do j=1,np
@@ -782,6 +781,7 @@ subroutine move1(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
               vsink_new(isink,1:ndim)=vp(ind_part(j),1:ndim)
               oksink_new(isink)=1.0
            endif
+!$omp atomic update
            sink_stat(isink,ilevel,ndim*2+1)=sink_stat(isink,ilevel,ndim*2+1)+1d0
            do idim=1,ndim
               xx=xp(ind_part(j),idim)+vp(ind_part(j),idim)*dtnew(ilevel)-xsink(isink,idim)
@@ -791,13 +791,14 @@ subroutine move1(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
               if(xx<-scale*xbound(idim)/2.0)then
                  xx=xx+scale*xbound(idim)
               endif
+!$omp atomic update
               sink_stat(isink,ilevel,idim     )=sink_stat(isink,ilevel,idim     )+xsink(isink,idim)+xx
+!$omp atomic update
               sink_stat(isink,ilevel,idim+ndim)=sink_stat(isink,ilevel,idim+ndim)+vp(ind_part(j),idim)
            enddo
        endif
      end do
   end if
-!$omp end critical
 
   ! Update position
   do idim=1,ndim

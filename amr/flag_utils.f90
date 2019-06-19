@@ -120,7 +120,7 @@ subroutine init_flag(ilevel)
 
   ! Initialize flag1 to 0
   nflag=0
-!$omp parallel do private(i,ind,iskip) schedule(dynamic,nchunk)
+!$omp parallel do private(i,ind,iskip) schedule(static,nchunk)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
@@ -130,15 +130,13 @@ subroutine init_flag(ilevel)
 
   ! If load balancing operations, flag only refined cells
   if(balance)then
-!$omp parallel do private(i,ind,iskip) schedule(dynamic,nchunk)
+!$omp parallel do private(i,ind,iskip) reduction(+:nflag) schedule(static,nchunk)
      do i=1,active(ilevel)%ngrid
         do ind=1,twotondim
            iskip=ncoarse+(ind-1)*ngridmax
            if(son(active(ilevel)%igrid(i)+iskip)>0)then
               flag1(active(ilevel)%igrid(i)+iskip)=1
-!$omp critical
               nflag=nflag+1
-!$omp end critical
            end if
         end do
      end do
@@ -149,15 +147,13 @@ subroutine init_flag(ilevel)
         call test_flag(ilevel)
      else
         ! If ilevel < levelmin, set flag to 1 for all cells
-!$omp parallel do private(i,ind,iskip) schedule(dynamic,nchunk)
+!$omp parallel do private(i,ind,iskip) reduction(+:nflag) schedule(static,nchunk)
         do i=1,active(ilevel)%ngrid
            do ind=1,twotondim
               iskip=ncoarse+(ind-1)*ngridmax
               flag1(active(ilevel)%igrid(i)+iskip)=1
            end do
-!$omp critical
            nflag=nflag+active(ilevel)%ngrid
-!$omp end critical
         end do
      end if
   end if
@@ -185,7 +181,7 @@ subroutine test_flag(ilevel)
   logical::ok
 
   ! Loop over cells
-!$omp parallel do private(i,ind,iskip,ind_grid_son,ok,ind_son,iskip_son,ind_cell_son) schedule(dynamic,nchunk)
+!$omp parallel do private(i,ind,iskip,ind_grid_son,ok,ind_son,iskip_son,ind_cell_son) reduction(+:nflag) schedule(static,nchunk)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
@@ -206,9 +202,7 @@ subroutine test_flag(ilevel)
         ! If ok, then flag1 cells.
         if(ok)then
            flag1(active(ilevel)%igrid(i)+iskip)=1
-!$omp critical
            nflag=nflag+1
-!$omp end critical
         end if
      end do
   end do
@@ -236,7 +230,7 @@ subroutine ensure_ref_rules(ilevel)
   logical,dimension(1:nvector)::ok
 
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,i,ind_grid,ind_cell,ok,ind,nbors_father_cells,nbors_father_grids,iskip) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid,i,ind_grid,ind_cell,ok,ind,nbors_father_cells,nbors_father_grids,iskip) schedule(static,nchunk)
   do igrid=1,ncache,nvector
      ! Gather nvector grids
      ngrid=MIN(nvector,ncache-igrid+1)
@@ -363,7 +357,7 @@ subroutine userflag_fine(ilevel)
 
   ! Loop over active grids
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,i,ind_grid,ind,iskip,ind_cell,ok,nok,idim,xx) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid,i,ind_grid,ind,iskip,ind_cell,ok,nok,idim,xx) reduction(+:nflag) schedule(static,nchunk)
   do igrid=1,ncache,nvector
 
      ! Gather nvector grids
@@ -423,9 +417,7 @@ subroutine userflag_fine(ilevel)
         do i=1,ngrid
            if(ok(i))flag1(ind_cell(i))=1
         end do
-!$omp critical
         nflag=nflag+nok
-!$omp end critical
      end do
      ! End loop over cells
 
@@ -603,7 +595,7 @@ subroutine smooth_fine(ilevel)
   ! Loop over steps
   do ismooth=1,ndim
      ! Initialize flag2 to 0
-!$omp parallel do private(igrid,ngrid,ind_grid,ind,iskip,ind_cell) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid,ind_grid,ind,iskip,ind_cell) schedule(static,nchunk)
      do igrid=1,ncache,nvector
         ngrid=MIN(nvector,ncache-igrid+1)
         do i=1,ngrid
@@ -620,7 +612,7 @@ subroutine smooth_fine(ilevel)
         end do
      end do
      ! Count neighbors and set flag2 accordingly
-!$omp parallel do private(igrid,ngrid,ind_grid,ind,igridn) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid,ind_grid,ind,igridn) schedule(static,nchunk)
      do igrid=1,ncache,nvector
         ngrid=MIN(nvector,ncache-igrid+1)
         do i=1,ngrid
@@ -632,7 +624,7 @@ subroutine smooth_fine(ilevel)
         end do
      end do
      ! Set flag1=1 for cells with flag2=1
-!$omp parallel do private(igrid,ngrid,ind_grid,ind,iskip,ind_cell) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid,ind_grid,ind,iskip,ind_cell) reduction(+:nflag) schedule(static,nchunk)
      do igrid=1,ncache,nvector
         ngrid=MIN(nvector,ncache-igrid+1)
         do i=1,ngrid
@@ -649,9 +641,7 @@ subroutine smooth_fine(ilevel)
            do i=1,ngrid
               if(flag2(ind_cell(i))==1)then
                  flag1(ind_cell(i))=1
-!$omp critical
                  nflag=nflag+1
-!$omp end critical
               end if
            end do
         end do

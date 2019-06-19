@@ -60,7 +60,7 @@ subroutine force_fine(ilevel,icount)
 
      ! Loop over myid grids by vector sweeps
      ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid) schedule(static,nchunk)
      do igrid=1,ncache,nvector
         ngrid=MIN(nvector,ncache-igrid+1)
         call forcefine1(ilevel, igrid,ngrid)
@@ -82,10 +82,10 @@ subroutine force_fine(ilevel,icount)
 
      ! Loop over myid grids by vector sweeps
      ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid) schedule(static,nchunk)
      do igrid=1,ncache,nvector
         ngrid=MIN(nvector,ncache-igrid+1)
-        call sub2_force_fine(ilevel, igrid,ngrid,icount)
+        call forcefine2(ilevel, igrid,ngrid,icount)
      end do
      ! End loop over grids
 
@@ -109,7 +109,7 @@ subroutine force_fine(ilevel,icount)
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
 !$omp parallel do private(igrid,ngrid,ind,iskip,idim,i,indcell) reduction(+:epot_loc), reduction(MAX:rho_loc) &
-!$omp& schedule(dynamic,nchunk)
+!$omp& schedule(static,nchunk)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      ! Loop over cells
@@ -149,7 +149,7 @@ end subroutine force_fine
 !#########################################################
 !#########################################################
 !#########################################################
-subroutine sub2_force_fine(ilevel,igrid, ngrid,icount)
+subroutine forcefine2(ilevel,igrid, ngrid,icount)
   use amr_commons
   use pm_commons
   use poisson_commons
@@ -168,7 +168,7 @@ subroutine sub2_force_fine(ilevel,igrid, ngrid,icount)
   end do
   ! Compute gradient of potential
   call gradient_phi(ind_grid,ngrid,ilevel,icount)
-end subroutine sub2_force_fine
+end subroutine forcefine2
 !#########################################################
 !#########################################################
 !#########################################################

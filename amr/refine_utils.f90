@@ -333,6 +333,7 @@ subroutine refine_fine(ilevel)
   use amr_commons
   use tracer_utils
   use mpi_mod
+  use omp_lib
   implicit none
 #ifndef WITHOUTMPI
   integer::info
@@ -362,6 +363,9 @@ subroutine refine_fine(ilevel)
   ! OMP
   integer :: ithr,ngrid_now
   integer,dimension(1:nthr) :: icpu_thr,igrid_thr,ngrid_thr
+  integer,dimension(1:IRandNumSize),save :: ompseed
+  real(dp) :: rand
+!$omp threadprivate(ompseed)
 
   if(ilevel==nlevelmax)return
   if(numbtot(1,ilevel)==0)return
@@ -378,6 +382,12 @@ subroutine refine_fine(ilevel)
   ! if it is not already refined, create a son grid.
   !---------------------------------------------------
 
+!$omp parallel
+  ! Give slight offsets for each OMP threads
+  ompseed=MOD(tracer_seed+omp_get_thread_num(),4096)
+!$omp end parallel
+  call ranf(tracer_seed,rand)
+
   !------------------------------------
   ! Refine cells marked for refinement
   !------------------------------------
@@ -388,7 +398,7 @@ subroutine refine_fine(ilevel)
   boundary_region=.false.
   ncache=active(ilevel)%ngrid
 !$omp parallel do private(igrid,ngrid,ind_grid) &
-!$omp & private(ind,iskip,i,ind_cell,ok,ncreate_tmp,icell,ind_grid_tmp,ind_cell_tmp) reduction(+:ncreate) schedule(dynamic,nchunk)
+!$omp & private(ind,iskip,i,ind_cell,ok,ncreate_tmp,icell,ind_grid_tmp,ind_cell_tmp) reduction(+:ncreate) schedule(static,nchunk)
   do igrid=1,ncache,nvector  ! Loop over grids
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -439,7 +449,7 @@ subroutine refine_fine(ilevel)
            call make_grid_fine(ind_grid_tmp,ind_cell_tmp,ind, &
                 & ilevel+1,ncreate_tmp,ibound,boundary_region)
            call post_make_grid_fine_hook(ind_grid_tmp, ind_cell_tmp, ind, &
-                & ilevel+1, ncreate_tmp, ibound, boundary_region)
+                & ilevel+1, ncreate_tmp, ibound, boundary_region, ompseed)
         end if
      end do
   end do
@@ -519,7 +529,7 @@ subroutine refine_fine(ilevel)
               call make_grid_fine(ind_grid_tmp,ind_cell_tmp,ind, &
                    & ilevel+1,ncreate_tmp,ibound,boundary_region)
               call post_make_grid_fine_hook(ind_grid_tmp, ind_cell_tmp, ind, &
-                   & ilevel+1, ncreate_tmp, ibound, boundary_region)
+                   & ilevel+1, ncreate_tmp, ibound, boundary_region, ompseed)
            end if
         end do
         ! End ind_grid usage
@@ -586,7 +596,7 @@ subroutine refine_fine(ilevel)
               call make_grid_fine(ind_grid_tmp,ind_cell_tmp,ind, &
                    & ilevel+1,ncreate_tmp,ibound,boundary_region)
               call post_make_grid_fine_hook(ind_grid_tmp, ind_cell_tmp, ind, &
-                   & ilevel+1, ncreate_tmp, ibound, boundary_region)
+                   & ilevel+1, ncreate_tmp, ibound, boundary_region, tracer_seed)
            end if
         end do
      end do
@@ -605,7 +615,7 @@ subroutine refine_fine(ilevel)
   boundary_region=.false.
   ncache=active(ilevel)%ngrid
 !$omp parallel do private(igrid,ngrid,ind_grid) &
-!$omp & private(ind,iskip,i,ind_cell,ok,nkill_tmp,icell,ind_cell_tmp) reduction(+:nkill)
+!$omp & private(ind,iskip,i,ind_cell,ok,nkill_tmp,icell,ind_cell_tmp) reduction(+:nkill) schedule(static,nchunk)
   do igrid=1,ncache,nvector  ! Loop over grids
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -972,8 +982,8 @@ subroutine make_grid_fine(ind_grid,ind_cell,ind,ilevel,nn,ibound,boundary_region
   end if
 
   ! Connect news grids to level ilevel linked list
-!$omp critical
   if(boundary_region)then
+!$omp critical
      do i=1,nn
         igrid=ind_grid_son(i)
         if(numbb(ibound,ilevel)>0)then
@@ -990,7 +1000,9 @@ subroutine make_grid_fine(ind_grid,ind_cell,ind,ilevel,nn,ibound,boundary_region
            numbb(ibound,ilevel)=1
         end if
      end do
+!$omp end critical
   else
+!$omp critical
      do i=1,nn
         igrid=ind_grid_son(i)
         icpu=cpu_map(ind_cell(i))
@@ -1008,8 +1020,8 @@ subroutine make_grid_fine(ind_grid,ind_cell,ind,ilevel,nn,ibound,boundary_region
            numbl(icpu,ilevel)=1
         end if
      end do
-  end if
 !$omp end critical
+  end if
 
   ! Interpolate parent variables to get new children ones
   if(.not.init .and. .not.balance)then

@@ -214,12 +214,16 @@ subroutine get3cubepos(ind_grid,ind,nbors_father_cells,nbors_father_grids,ng)
   integer::jj,jjmin,jjmax
   integer::kk,kkmin,kkmax
   integer::icell,igrid,inbor
-  integer,dimension(1:8)::iii=(/1,2,1,2,1,2,1,2/)
-  integer,dimension(1:8)::jjj=(/3,3,4,4,3,3,4,4/)
-  integer,dimension(1:8)::kkk=(/5,5,5,5,6,6,6,6/)
+  integer,dimension(1:8)::iii
+  integer,dimension(1:8)::jjj
+  integer,dimension(1:8)::kkk
   integer,dimension(1:27,1:8,1:3)::lll,mmm
   integer,dimension(1:nvector)::ind_grid1,ind_grid2,ind_grid3
   integer,dimension(1:nvector,1:twotondim)::nbors_grids
+
+  iii=(/1,2,1,2,1,2,1,2/)
+  jjj=(/3,3,4,4,3,3,4,4/)
+  kkk=(/5,5,5,5,6,6,6,6/)
 
   call getindices3cube(lll,mmm)
 

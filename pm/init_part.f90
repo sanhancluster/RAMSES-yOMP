@@ -1868,6 +1868,19 @@ contains
 
     npart_loc_real = 0
 
+    ! Calcuate the mass of tracer particles
+    if(tracer_mass<0)then
+       if(tracer_per_cell<0 .and. tracer_level<0)then
+          write(*,*) 'no tracer mass or tracer_per_cell and tracer_level specified.'
+          stop
+       end if
+       tracer_mass = omega_b * 0.5_dp**(tracer_level*ndim) / tracer_per_cell
+       if(myid==1)write(*, *) 'Using a tracer mass of ', tracer_mass
+       if(tracer_first_balance_part_per_cell==0)then
+          tracer_first_balance_part_per_cell=tracer_per_cell
+       end if
+    end if
+
     ! Loop over levels
     do ilevel = levelmin, nlevelmax
        dx = 0.5_dp**(ilevel)

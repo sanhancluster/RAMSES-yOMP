@@ -119,7 +119,7 @@ contains
   end subroutine pre_make_grid_fine_hook
 
   subroutine post_make_grid_fine_hook(ind_grid, ind_cell, ind, &
-       ilevel, nn, ibound, boundary_region)
+       ilevel, nn, ibound, boundary_region, ompseed)
     use amr_commons
     use hydro_commons
     use pm_commons
@@ -139,6 +139,8 @@ contains
     logical :: ok
 
     real(dp), dimension(1:ndim) :: tmp_xp
+
+    integer, dimension(1:IRandNumSize) :: ompseed
 
     call initialize_skip_loc
 
@@ -177,7 +179,7 @@ contains
                 if (ok) then
 
                    ! Pick a random direction
-                   call ranf(tracer_seed, rand)
+                   call ranf(ompseed, rand)
 
                    do ison = 1, twotondim
                       if (rand < mass(ison) / mass(0)) then

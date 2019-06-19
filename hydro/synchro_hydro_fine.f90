@@ -20,7 +20,7 @@ subroutine synchro_hydro_fine(ilevel,dteff)
 
   ! Loop over active grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,i,ind,iskip,ind_grid, ind_cell) schedule(dynamic,nchunk)
+!$omp parallel do private(igrid,ngrid,i,ind,iskip,ind_grid, ind_cell) schedule(static,nchunk)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -58,8 +58,11 @@ subroutine synchydrofine1(ind_cell,ncell,dteff)
   !-------------------------------------------------------------------
   ! Gravity update for hydro variables
   !-------------------------------------------------------------------
-  integer::i,idim,neul=ndim+2,nndim=ndim
+  integer::i,idim,neul,nndim
   real(dp),dimension(1:nvector)::pp
+
+  neul=ndim+2
+  nndim=ndim
 
   ! Compute internal + magnetic + radiative energy
   do i=1,ncell

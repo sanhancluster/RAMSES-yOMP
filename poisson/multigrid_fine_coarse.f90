@@ -652,7 +652,7 @@ subroutine interpolate_and_correct_coarse(ifinelevel)
 
    ! Loop over fine grids by vector sweeps
    ngrid_f=active_mg(myid,ifinelevel)%ngrid
-!$omp parallel do default(firstprivate) shared(active_mg,father,cpu_map,lookup_mg) schedule(dynamic,nchunk)
+!$omp parallel do default(firstprivate) shared(active_mg,father,cpu_map,lookup_mg) schedule(static,nchunk)
    do istart=1,ngrid_f,nvector
 
       ! Gather nvector grids
