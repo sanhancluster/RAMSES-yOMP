@@ -88,7 +88,7 @@ subroutine set_unew(ilevel)
   end do
 
   ! Set unew to 0 for virtual boundary cells
-!$omp parallel do private(ind,iskip,ivar,i,d,u,v,w,e,icpu) collapse(2) schedule(dynamic,nchunk)
+!$omp parallel do private(ind,iskip,ivar,i,d,u,v,w,e,icpu) collapse(2) schedule(static,nchunk)
   do ind=1,twotondim
      do icpu=1,ncpu
         iskip=ncoarse+(ind-1)*ngridmax

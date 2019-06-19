@@ -1150,7 +1150,7 @@ subroutine build_comm(ilevel)
   ! Compute number and index of virtual boundary grids
   !----------------------------------------------------
 #ifndef WITHOUTMPI
-!$omp parallel do private(icpu,ncache,igrid,jgrid,i) schedule(dynamic)
+!$omp parallel do private(icpu,ncache,igrid,jgrid,i) schedule(static)
    do icpu=1,ncpu
       ncache=0
       if(icpu.ne.myid)ncache=numbl(icpu,ilevel)
@@ -1199,7 +1199,7 @@ subroutine build_comm(ilevel)
   call MPI_ALLTOALL(sendbuf,1,MPI_INTEGER,recvbuf,1,MPI_INTEGER,MPI_COMM_WORLD,info)
 
   ! Allocate grid index
-!$omp parallel do private(icpu,ncache) schedule(dynamic)
+!$omp parallel do private(icpu,ncache) schedule(static)
   do icpu=1,ncpu
      emission(icpu,ilevel)%ngrid=recvbuf(icpu)
      ncache=emission(icpu,ilevel)%ngrid
@@ -1242,7 +1242,7 @@ subroutine build_comm(ilevel)
   end do
 
   ! Allocate temporary communication buffers
-!$omp parallel do private(icpu,ncache) schedule(dynamic)
+!$omp parallel do private(icpu,ncache) schedule(static)
   do icpu=1,ncpu
      ncache=emission(icpu,ilevel)%ngrid
      if(ncache>0)then
