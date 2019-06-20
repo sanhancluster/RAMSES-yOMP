@@ -87,7 +87,7 @@
 #endif
 
   ! MC_tracer
-  integer :: maxidp, minidp
+  integer(i8b) :: maxidp, minidp
   if(verbose)write(*,*)'Entering init_part'
 
   if(myid.eq.1)write(*,*)'WARNING: NEVER USE FAMILY CODES / TAGS > 127.'

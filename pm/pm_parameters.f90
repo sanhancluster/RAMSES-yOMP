@@ -1,12 +1,12 @@
 module pm_parameters
-  use amr_parameters, ONLY: dp
+  use amr_parameters, ONLY: dp, i8b
   integer::nsinkmax=0               ! Maximum number of sinks
   integer::npartmax=0               ! Maximum number of particles
   integer::npart=0                  ! Actual number of particles
   integer::nsink=0                  ! Actual number of sinks
   integer::iseed=0                  ! Seed for stochastic star formation
   integer::tseed=0                  ! Seed for MC tracers
-  integer::nstar_tot=0              ! Total number of star particle
+  integer(i8b)::nstar_tot=0         ! Total number of star particle
   real(dp)::mstar_tot=0             ! Total star mass
   real(dp)::mstar_lost=0            ! Missing star mass
 

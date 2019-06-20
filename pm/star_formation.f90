@@ -39,7 +39,8 @@ subroutine star_formation(ilevel)
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
   real(dp),dimension(1:twotondim,1:3)::xc
   ! other variables
-  integer ::ncache,nnew,ivar,ngrid,icpu,index_star,index_star_omp,ndebris_tot,ilun=10
+  integer(i8b) :: index_star,index_star_omp
+  integer ::ncache,nnew,ivar,ngrid,icpu,ndebris_tot,ilun=10
   integer ::igrid,ix,iy,iz,ind,i,n,iskip,nx_loc,idim
   integer ::ntot,ntot_all
   logical ::ok_free
@@ -62,7 +63,7 @@ subroutine star_formation(ilevel)
   integer ,dimension(1:nvector)::ind_debris
   integer ,dimension(1:nvector,0:twondim)::ind_nbor
   logical ,dimension(1:nvector)::ok,ok_new
-  integer ,dimension(1:ncpu)::ntot_star_cpu,ntot_star_all
+  integer(i8b) ,dimension(1:ncpu)::ntot_star_cpu,ntot_star_all
   character(LEN=80)::filename,filedir,fileloc,filedirini
   character(LEN=5)::nchar,ncharcpu
   logical::file_exist
