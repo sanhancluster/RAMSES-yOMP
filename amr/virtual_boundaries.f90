@@ -482,7 +482,6 @@ subroutine make_virtual_fine_dp(xx,ilevel)
 #ifndef WITHOUTMPI
   ! Receive all messages
   countrecv=0
-
   do icpu=1,ncpu
      ncache=reception(icpu,ilevel)%ngrid
      if(ncache>0) then

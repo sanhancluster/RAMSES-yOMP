@@ -88,6 +88,7 @@ subroutine phi_fine_cg(ilevel,icount)
   !====================================
   iter=0; itermax=10000
   error=1.0D0; error_ini=1.0D0
+  !! Main bottleneck
   do while(error>epsilon*error_ini.and.iter<itermax)
 
      iter=iter+1
@@ -96,14 +97,17 @@ subroutine phi_fine_cg(ilevel,icount)
      ! Compute residual norm
      !====================================
      r2=0.0d0
-!$omp parallel do private(ind,iskip,i,idx) reduction(+:r2) schedule(static,nvector)
-	  do i=1,active(ilevel)%ngrid
-		  do ind=1,twotondim
-			  iskip=ncoarse+(ind-1)*ngridmax
+!$omp parallel private(ind,iskip,i,idx) reduction(+:r2)
+      do ind=1,twotondim
+		  iskip=ncoarse+(ind-1)*ngridmax
+!$omp do schedule(static,nvector)
+	      do i=1,active(ilevel)%ngrid
 			  idx=active(ilevel)%igrid(i)+iskip
 			  r2=r2+f(idx,1)*f(idx,1)
 		  end do
+!$omp end do nowait
 	  end do
+!$omp end parallel
 	  ! Compute global norm
 #ifndef WITHOUTMPI
 	  call MPI_ALLREDUCE(r2,r2_all,1,MPI_DOUBLE_PRECISION,MPI_SUM,&
@@ -124,14 +128,17 @@ subroutine phi_fine_cg(ilevel,icount)
 	  !====================================
 	  ! Recurrence on p
 	  !====================================
-!$omp parallel do private(ind,iskip,i,idx) schedule(static,nvector)
-	  do i=1,active(ilevel)%ngrid
-		  do ind=1,twotondim
-			  iskip=ncoarse+(ind-1)*ngridmax
+!$omp parallel private(ind,iskip,i,idx)
+	  do ind=1,twotondim
+		  iskip=ncoarse+(ind-1)*ngridmax
+!$omp do schedule(static,nvector)
+          do i=1,active(ilevel)%ngrid
 			  idx=active(ilevel)%igrid(i)+iskip
 			  f(idx,2)=f(idx,1)+beta_cg*f(idx,2)
 		  end do
+!$omp end do nowait
 	  end do
+!$omp end parallel
 		  ! Update boundaries
 	  call make_virtual_fine_dp(f(1,2),ilevel)
 
@@ -144,14 +151,17 @@ subroutine phi_fine_cg(ilevel,icount)
 	  ! Compute p.Ap scalar product
 	  !====================================
 	  pAp=0.0d0
-!$omp parallel do private(ind,iskip,i,idx) reduction(+:pAp) schedule(static,nvector)
-	  do i=1,active(ilevel)%ngrid
-		  do ind=1,twotondim
-			  iskip=ncoarse+(ind-1)*ngridmax
+!$omp parallel private(ind,iskip,i,idx) reduction(+:pAp)
+	  do ind=1,twotondim
+		  iskip=ncoarse+(ind-1)*ngridmax
+!$omp do schedule(static,nvector)
+	      do i=1,active(ilevel)%ngrid
 			  idx=active(ilevel)%igrid(i)+iskip
 			  pAp=pAp+f(idx,2)*f(idx,3)
 		  end do
+!$omp end do nowait
 	  end do
+!$omp end parallel
 		  ! Compute global sum
 #ifndef WITHOUTMPI
 	  call MPI_ALLREDUCE(pAp,pAp_all,1,MPI_DOUBLE_PRECISION,MPI_SUM,&
@@ -167,17 +177,19 @@ subroutine phi_fine_cg(ilevel,icount)
 	  !====================================
 	  ! Recurrence on x and r
 	  !====================================
-!$omp parallel do private(ind,iskip,i,idx) schedule(static,nvector)
-	  do i=1,active(ilevel)%ngrid
-		  do ind=1,twotondim
-			  iskip=ncoarse+(ind-1)*ngridmax
+!$omp parallel private(ind,iskip,i,idx)
+	  do ind=1,twotondim
+		  iskip=ncoarse+(ind-1)*ngridmax
+!$omp do schedule(static,nvector)
+	      do i=1,active(ilevel)%ngrid
 			  idx=active(ilevel)%igrid(i)+iskip
 
 			  phi(idx)=phi(idx)+alpha_cg*f(idx,2)
 			  f(idx,1)=f(idx,1)-alpha_cg*f(idx,3)
 		  end do
+!$omp end do nowait
 	  end do
-
+!$omp end parallel
      ! Compute error
      error=DSQRT(r2/dble(twotondim*numbtot(1,ilevel)))
      if(iter==1)error_ini=error

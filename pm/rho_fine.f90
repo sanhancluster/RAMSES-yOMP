@@ -72,7 +72,7 @@ subroutine rho_fine(ilevel,icount)
           call cic_from_multipole(i)
 #endif
           ! Update boundaries
-! TODO: Bottleneck
+          !! Main bottleneck
           call make_virtual_reverse_dp(rho(1),i)
           call make_virtual_fine_dp   (rho(1),i)
        end do

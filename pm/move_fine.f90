@@ -21,8 +21,6 @@ subroutine move_fine(ilevel)
   type(part_t) :: part_type
 
   !OMP
-  integer :: ithr
-  integer,dimension(1:nthr) :: head_thr,ngrid_thr
   integer, dimension(1:IRandNumSize), save :: ompseed
 !$omp threadprivate(ompseed)
 
@@ -45,64 +43,55 @@ subroutine move_fine(ilevel)
      end do
   endif
 
-  ! Update particles position and velocity
-#ifdef _OPENMP
-  call parallel_link_notracer(headl(myid,ilevel),numbl(myid,ilevel),head_thr,ngrid_thr)
-#else
-  head_thr(1)=headl(myid,ilevel)
-  ngrid_thr(1)=numbl(myid,ilevel)
-#endif
-!$omp parallel do private(ithr,igrid,jgrid,npart1,ipart,next_part,jpart,ip,ig,ind_grid,ind_part,ind_grid_part,local_counter)
-  do ithr=1,nthr
-     ig=0
-     ip=0
-     igrid=head_thr(ithr)
-     ! Loop over grids
-     do jgrid=1,ngrid_thr(ithr)
-        npart1=numbp(igrid)  ! Number of particles in the grid
-        if(npart1>0)then
-           ig=ig+1
-           ind_grid(ig)=igrid
-           ipart=headp(igrid)
-           local_counter=0
-           ! Loop over particles
-           do jpart=1,npart1
-              ! Save next particle  <---- Very important !!!
-              next_part=nextp(ipart)
-              ! Classical particles
-              if(ig==0)then
-                 ig=1
-                 ind_grid(ig)=igrid
-              end if
-              ! Skip tracers (except "classic" tracers)
-              if (.not. (MC_tracer .and. is_tracer(typep(ipart)))) then
-                 local_counter=local_counter+1
-                 ip=ip+1
-                 ind_part(ip)=ipart
-                 ind_grid_part(ip)=ig
-                 if(ip==nvector)then
-                    call move1(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
-                    local_counter=0
-                    ip=0
-                    ig=0
-                 end if
-              end if
-
-              ! End MC Tracer patch
-              ipart=next_part  ! Go to next particle
-           end do
-           ! End loop over particles
-
-           ! If there was no particle in the grid, remove the grid from the buffer
-           if(local_counter==0 .and. ig>0)then
-              ig=ig-1
+!$omp parallel private(igrid,jgrid,npart1,ipart,next_part,jpart,ig,ip,ind_grid,ind_part,ind_grid_part,local_counter)
+  ig=0
+  ip=0
+!$omp do schedule(dynamic,nvector)
+  do jgrid=1,active(ilevel)%ngrid
+     igrid=active(ilevel)%igrid(jgrid)
+     npart1=numbp(igrid)  ! Number of particles in the grid
+     if(npart1>0)then
+        ig=ig+1
+        ind_grid(ig)=igrid
+        ipart=headp(igrid)
+        local_counter=0
+        ! Loop over particles
+        do jpart=1,npart1
+           ! Save next particle  <---- Very important !!!
+           next_part=nextp(ipart)
+           ! Classical particles
+           if(ig==0)then
+              ig=1
+              ind_grid(ig)=igrid
            end if
-        end if
-        igrid=next(igrid)   ! Go to next grid
-     end do ! End loop over grids
+           ! Skip tracers (except "classic" tracers)
+           if (.not. (MC_tracer .and. is_tracer(typep(ipart)))) then
+              local_counter=local_counter+1
+              ip=ip+1
+              ind_part(ip)=ipart
+              ind_grid_part(ip)=ig
+              if(ip==nvector)then
+                 call move1(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+                 local_counter=0
+                 ip=0
+                 ig=0
+              end if
+           end if
 
-     if(ip>0)call move1(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
-   end do ! End loop over threads
+           ! End MC Tracer patch
+           ipart=next_part  ! Go to next particle
+        end do
+        ! End loop over particles
+
+        ! If there was no particle in the grid, remove the grid from the buffer
+        if(local_counter==0 .and. ig>0)then
+           ig=ig-1
+        end if
+     end if
+  end do
+  ! End loop over grids
+  if(ip>0)call move1(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+!$omp end parallel
 
   !--------------------------------------------------------------------------------
   ! Moving sinks
@@ -130,25 +119,13 @@ subroutine move_fine(ilevel)
   ! Moving tracers
   !--------------------------------------------------------------------------------
   if (MC_tracer) then  ! Loop over grids for MC tracers
-#ifdef _OPENMP
-     call parallel_link_tracer(headl(myid,ilevel),numbl(myid,ilevel),head_thr,ngrid_thr)
-#else
-     head_thr(1)=headl(myid,ilevel)
-     ngrid_thr(1)=numbl(myid,ilevel)
-#endif
+!$omp parallel private(igrid,jgrid,npart1,ipart,next_part,jpart,ip,ig,ind_grid,ind_part,ind_grid_part,local_counter,part_type)
      ig=0
      ip=0
-     ind_grid=0
-     ind_part=0
-     ind_grid_part=0
-!$omp parallel do private(ithr,igrid,jgrid,npart1,ipart,next_part,jpart,ip,ig,ind_grid,ind_part,ind_grid_part,local_counter) &
-!$omp & private(part_type)
-     do ithr=1,nthr
-        ig=0
-        ip=0
-        igrid=head_thr(ithr)
-        do jgrid=1,ngrid_thr(ithr)
-           npart1=numbp(igrid)  ! Number of particles in the grid
+!$omp do schedule(dynamic,nvector)
+     do jgrid=1,active(ilevel)%ngrid
+        igrid=active(ilevel)%igrid(jgrid)
+        npart1=numbp(igrid)  ! Number of particles in the grid
            if(npart1>0)then
               ig=ig+1
 
@@ -193,12 +170,12 @@ subroutine move_fine(ilevel)
                  ig=ig-1
               end if
            end if
-           igrid=next(igrid)   ! Go to next grid
-        end do
-        ! End loop over grids
-        if(ip>0) call move_gas_tracer(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,ompseed) ! MC Tracer
+
 
      end do
+
+     if(ip>0) call move_gas_tracer(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,ompseed) ! MC Tracer
+!$omp end parallel
   end if
 
 111 format('   Entering move_fine for level ',I2)

@@ -29,10 +29,9 @@ subroutine star_formation(ilevel)
   integer :: ip, ipart
   real(dp) :: delta_m_over_m
   integer,save :: nattach
-  integer, dimension(1:nvector),save :: itracer, istar_tracer
-  real(dp), dimension(1:nvector, 1:3),save :: xstar
-  real(dp), dimension(1:nvector),save :: proba
-!$omp threadprivate(itracer,proba,xstar,istar_tracer,nattach)
+  integer, dimension(1:nvector) :: itracer, istar_tracer
+  real(dp), dimension(1:nvector, 1:3) :: xstar
+  real(dp), dimension(1:nvector) :: proba
   logical :: move_tracer
 
   real(dp)::t0,d0
@@ -322,19 +321,15 @@ subroutine star_formation(ilevel)
      index_star=nstar_tot-ntot_all+ntot_star_cpu(myid-1)
   end if
 
-  ! MC Tracer patch
-!$omp parallel
-  nattach = 0
-!$omp end parallel
-  ! End MC Tracer patch
-
   ok_new=.true.
 
   ! Loop over grids
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,i,ind_grid,ind,iskip,ind_cell,ok,nnew,ind_grid_new,ind_cell_new,ind_part) &
-!$omp & private(n,d,u,v,w,x,y,z,tg,zg,Randnum,v_kick,v_kick_mag,mdebris)&
-!$omp & private(delta_m_over_m,ipart,ip,move_tracer) schedule(static,nchunk)
+!$omp parallel private(igrid,ngrid,i,ind_grid,ind,iskip,ind_cell,ok,nnew,ind_grid_new,ind_cell_new,ind_part, &
+!$omp & n,d,u,v,w,x,y,z,tg,zg,Randnum,v_kick,v_kick_mag,mdebris, &
+!$omp & delta_m_over_m,ipart,ip,move_tracer,itracer,proba,xstar,istar_tracer,nattach)
+  nattach = 0
+!$omp do schedule(static,nchunk)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -560,7 +555,6 @@ subroutine star_formation(ilevel)
   ! End loop over grids
 
   ! Empty tracer part cache
-!$omp parallel
   if (MC_tracer .and. nattach > 0) then
      call tracer2star(itracer, proba, xstar, istar_tracer, nattach, ompseed)
      nattach = 0

@@ -1031,8 +1031,7 @@ subroutine merge_sink(ilevel)
   end if
   !/Particles dynamical friction (HP)
 
-! The cause of MPI error
-! TODO: deal with duplicate igrp condition
+! TODO: deal with duplicate igrp b/w loops, which causes race condition.
 !!$omp parallel do private(isink,igrp) &
 !!$omp & private(M1,M2,a1,a2,ax1,ay1,az1,ax2,ay2,az2,xx1,yy1,zz1,xx2,yy2,zz2,vvx1,vvy1,vvz1,vvx2,vvy2,vvz2) &
 !!$omp & private(q,mu,a1mod,a2mod,a1a2,xx,yy,zz,xc,yc,zc,vxc,vyc,vzc,x1,y1,z1,x2,y2,z2,vx1,vy1,vz1,vx2,vy2,vz2,Lx1,Ly1,Lz1,Lx2,Ly2,Lz2,Lx,Ly,Lz,Lmod) &
@@ -1069,6 +1068,7 @@ subroutine merge_sink(ilevel)
      endif
      !YDspin----------------------------------------------------
      if(msink_new(igrp).ge.msink(isink))then
+        ! If current sink is smaller then another (grp)
         if(msink(isink).eq.0d0)then
            write(*,*)'Problem in merge_sink for spins, msink=0'
            stop
@@ -1097,6 +1097,7 @@ subroutine merge_sink(ilevel)
         vvz2=vsink(isink,3)
      else
         if(msink_new(igrp).gt.0d0)then
+           ! If current sink is larger then another (grp)
            M1=msink(isink)
            M2=msink_new(igrp)
            a1=ABS(spinmag(isink))
@@ -1120,6 +1121,7 @@ subroutine merge_sink(ilevel)
            vvy2=vsink_new(igrp,2)
            vvz2=vsink_new(igrp,3)
         else
+           ! If it's first time
            M2=0d0
         endif
      endif
@@ -6676,9 +6678,9 @@ subroutine get_drag_part(ilevel)
   !loops on cells.
   v_background(1:nsink, 1:ndim, 1:2) = 0d0
   m_background(1:nsink, 1:2) = tiny(0d0)
-  do ii = levelmin, nlevelmax
-!$omp parallel do private(isink, itype, idim)
-     do isink = 1,nsink
+!$omp parallel do private(isink, itype, idim) collapse(3)
+  do isink = 1,nsink
+     do ii = levelmin, nlevelmax
         do itype = 1, 2
             do idim = 1, ndim
                 v_background(isink, idim, itype) =&
@@ -6700,7 +6702,7 @@ subroutine get_drag_part(ilevel)
      vrel_sink_norm(isink, 1:2) = tiny(0d0)
   end do
 
-!$omp parallel do private(isink, itype, idim)
+!$omp parallel do private(isink, itype, idim) collapse(2)
   do isink = 1, nsink
      do itype = 1, 2
         do idim = 1, ndim
@@ -6916,7 +6918,7 @@ subroutine get_drag_part(ilevel)
   !   3) we remove the momentum due to matter which is at THIS level
   !   using eq. (6) and (7) from Antonini+11
 
-!$omp parallel do private(isink,itype,b90,Rsh,bmin,CoulombLog,volume,factor) schedule(static,nchunk)
+!$omp parallel do private(isink,itype,b90,Rsh,bmin,CoulombLog,volume,factor) schedule(static,nchunk) collapse(2)
   do isink = 1 ,nsink
      do itype = 1,2
         mass_DF(isink, ilevel, itype)       = mass_DFall(isink, itype)
@@ -6958,7 +6960,7 @@ subroutine get_drag_part(ilevel)
   ! We remove momentum from cloud particles from this level
   ! Loop over cpus
 
-  !$omp parallel do private(isink)
+!$omp parallel do private(isink)
   do isink = 1, nsink
      v_DFnew(isink, 1:ndim, 1:2) = 0d0
      mass_DFnew(isink, 1:2) = tiny(0d0)
