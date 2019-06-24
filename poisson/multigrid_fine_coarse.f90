@@ -174,7 +174,7 @@ subroutine cmp_residual_mg_coarse(ilevel)
    ngrid=active_mg(myid,ilevel)%ngrid
 
    ! Loop over cells myid
-!$omp parallel default(firstprivate) shared(active_mg,son,cpu_map,nbor,lookup_mg)
+!$omp parallel private(iskip_mg,iskip_amr,igshift,igrid_nbor_mg,igrid_nbor_amr,igrid_amr,icell_nbor_mg,icell_mg,cpu_nbor_amr,nb_sum,phi_c)
    do ind=1,twotondim
       iskip_mg  = (ind-1)*ngrid
       iskip_amr = ncoarse+(ind-1)*ngridmax
@@ -572,7 +572,7 @@ subroutine restrict_residual_coarse_reverse(ifinelevel)
    icoarselevel=ifinelevel-1
 
    ! Loop over fine cells of the myid active comm
-!$omp parallel default(firstprivate) shared(active_mg,father,cpu_map,lookup_mg)
+!$omp parallel private(iskip_f_mg,iskip_c_mg,ind_c_cell,igrid_f_amr,igrid_c_mg,igrid_c_amr,icell_f_mg,icell_c_mg,icell_c_amr,cpu_amr,res)
    do ind_f_cell=1,twotondim
       iskip_f_mg =(ind_f_cell-1)*active_mg(myid,ifinelevel)%ngrid
 

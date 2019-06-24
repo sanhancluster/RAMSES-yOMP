@@ -742,7 +742,7 @@ contains
     end if
     ! Add family
     do i = 1, np
-       typep(ind_part(i)) = int2part(emission(icpu, ilevel)%fp(ind_com(i), 4))
+       typep(ind_part(i)) = int2part(int(emission(icpu, ilevel)%fp(ind_com(i), 4)))
        typep(ind_part(i))%tag = typep(ind_part(i))%tag + 10
     end do
     ! MC Tracer

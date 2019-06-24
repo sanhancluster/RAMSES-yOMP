@@ -43,7 +43,7 @@ subroutine star_formation(ilevel)
   integer ::igrid,ix,iy,iz,ind,i,n,iskip,nx_loc,idim
   integer ::ntot,ntot_all
   logical ::ok_free
-  real(dp)::d,x,y,z,u,v,w,e,tg,zg
+  real(dp)::d,x,y,z,u,v,w,tg,zg
   real(dp)::mstar,dstar,nISM,nCOM
   real(dp)::trel,uvar
   real(dp)::birth_epoch,factG
@@ -51,16 +51,15 @@ subroutine star_formation(ilevel)
 #ifndef WITHOUTMPI
   real(kind=8)::mlost,mtot
 #endif
-  real(kind=8)::RandNum,PoissMean
+  real(kind=8)::RandNum
   real(dp),parameter::pi=0.5*twopi
   real(dp),dimension(1:3)::skip_loc
-  real(dp)::dx,dx_loc,scale,vol_loc,dx_min,vol_min,d1,d2,d3,d4,d5,d6
+  real(dp)::dx,dx_loc,scale,vol_loc,dx_min,vol_min
   real(dp)::mdebris
   integer ,dimension(1:ncpu,1:IRandNumSize)::allseed
   integer ,dimension(1:nvector)::ind_grid,ind_cell,ind_part
   integer ,dimension(1:nvector)::ind_grid_new,ind_cell_new
   integer ,dimension(1:nvector)::ind_debris
-  integer ,dimension(1:nvector,0:twondim)::ind_nbor
   logical ,dimension(1:nvector)::ok,ok_new
   integer(i8b) ,dimension(1:ncpu)::ntot_star_cpu,ntot_star_all
   character(LEN=80)::filename,filedir,fileloc,filedirini
@@ -587,7 +586,7 @@ subroutine starform1(ind_grid,ngrid)
   use hydro_commons
   integer ::ngrid
   integer ::ind,i,iskip
-  real(dp)::d,x,y,z,u,v,w,e,tg,zg
+  real(dp)::d,u,v,w,e
   integer ,dimension(1:nvector)::ind_grid,ind_cell
 
   do ind=1,twotondim
@@ -649,7 +648,7 @@ subroutine starform2(ind_grid,ngrid,ilevel,ntot,ompseed)
   real(dp),dimension(1:twotondim,1:3)::xc
   ! other variables
   integer ::ngrid
-  integer ::ind,i,n,iskip,idim
+  integer ::ind,i,iskip
   integer ::ntot,nstar_corrected,ncell
   real(dp)::d
   real(dp)::mstar,dstar,tstar,nISM,phi_t,phi_x,theta,sigs,scrit,b_turb,zeta
@@ -1057,7 +1056,7 @@ subroutine starform4(ind_grid,ngrid)
   use hydro_commons
   integer ::ngrid
   integer ::ind,i,iskip
-  real(dp)::d,x,y,z,u,v,w,e,tg,zg
+  real(dp)::d,u,v,w,e
   integer ,dimension(1:nvector)::ind_grid,ind_cell
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax

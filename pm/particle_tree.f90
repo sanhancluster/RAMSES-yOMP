@@ -765,7 +765,6 @@ subroutine virtual_tree_fine(ilevel)
                  if (is_star(typep(ipart))) then
                     itmpp(ipart) = ipcom
                  end if
-
                  ipart = nextp(ipart)
               end do
            end do
@@ -907,7 +906,6 @@ subroutine virtual_tree_fine(ilevel)
 
   ! Compute total number of newly created particles
   ncache_tot=0
-!$omp parallel do private(icpu) reduction(+:ncache_tot) schedule(static)
   do icpu=1,ncpu
      ncache_tot=ncache_tot+emission(icpu,ilevel)%npart
   end do

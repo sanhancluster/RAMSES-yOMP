@@ -538,19 +538,19 @@ contains
        if (ind(1)) axis = 1
        if (ind(2)) axis = 2
        if (ind(3)) axis = 3
-       call CaseTwoZeroComponents_omp(newLine_origin, newLine_direction, newBox_origin, newBox_extents, newBox_u, newBox_v, newBox_w, axis, d2, t)
+       call CaseTwoZeroComponents_omp(newLine_origin, newLine_direction, newBox_extents, axis, d2, t)
     else if (n0 == 1) then
        ! Select non null axis
        if (.not. ind(1)) axis = 1
        if (.not. ind(2)) axis = 2
        if (.not. ind(3)) axis = 3
-       call CaseOneZeroComponents_omp(newLine_origin, newLine_direction, newBox_origin, newBox_extents, newBox_u, newBox_v, newBox_w, axis, d2, t)
+       call CaseOneZeroComponents_omp(newLine_origin, newLine_direction, newBox_extents, axis, d2, t)
     else if (n0 == 0) then
-       call CaseNoZeroComponents_omp(newLine_origin, newLine_direction, newBox_origin, newBox_extents, newBox_u, newBox_v, newBox_w, d2, t)
+       call CaseNoZeroComponents_omp(newLine_origin, newLine_direction, newBox_extents, d2, t)
     end if
 
   contains
-    subroutine CaseTwoZeroComponents_omp(line_origin, line_direction, box_origin, box_extents, box_u, box_v, box_w, X, d2, t)
+    subroutine CaseTwoZeroComponents_omp(line_origin, line_direction, box_extents, X, d2, t)
       integer, intent(in) :: X
 
       real(dp), intent(out) :: d2, t
@@ -558,7 +558,7 @@ contains
       real(dp) :: delta
       integer :: Y, Z
 
-      real(dp), dimension(3) :: box_origin, box_extents, box_u, box_v, box_w
+      real(dp), dimension(3) :: box_extents
       real(dp), dimension(3) :: line_origin, line_direction
 
 
@@ -590,7 +590,7 @@ contains
 
     end subroutine CaseTwoZeroComponents_omp
 
-    subroutine CaseOneZeroComponents_omp(line_origin, line_direction, box_origin, box_extents, box_u, box_v, box_w, Z, d2, t)
+    subroutine CaseOneZeroComponents_omp(line_origin, line_direction, box_extents, Z, d2, t)
       integer, intent(in) :: Z
 
       real(dp), intent(out) :: d2, t
@@ -598,7 +598,7 @@ contains
       real(dp) :: prod0, prod1, ptMinusExtents(3), tmp, delta, invLSquared, inv
       integer :: X, Y
 
-      real(dp), dimension(3) :: box_origin, box_extents, box_u, box_v, box_w
+      real(dp), dimension(3) :: box_extents
       real(dp), dimension(3) :: line_origin, line_direction
 
       d2 = 0
@@ -663,13 +663,13 @@ contains
 
     end subroutine CaseOneZeroComponents_omp
 
-    subroutine CaseNoZeroComponents_omp(line_origin, line_direction, box_origin, box_extents, box_u, box_v, box_w, d2, t)
+    subroutine CaseNoZeroComponents_omp(line_origin, line_direction, box_extents, d2, t)
       real(dp), intent(out) :: d2, t
 
       real(dp) :: ptMinusExtents(3), dyEx, dxEy, dzEx, dxEz, dzEy, dyEz
       integer :: X=1, Y=2, Z=3
 
-      real(dp), dimension(3) :: box_origin, box_extents, box_u, box_v, box_w
+      real(dp), dimension(3) :: box_extents
       real(dp), dimension(3) :: line_origin, line_direction
 
       ptMinusExtents = line_origin - box_extents
@@ -682,10 +682,10 @@ contains
 
          if (dzEx>= dxEz) then
             ! Line intersects x = box.extent.x plane
-            call Face_omp(line_origin, line_direction, box_origin, box_extents, box_u, box_v, box_w, ptMinusExtents, X, d2, t)
+            call Face_omp(line_origin, line_direction, box_extents, ptMinusExtents, X, d2, t)
          else
             ! Line intersects z = box.extent.z plane
-            call Face_omp(line_origin, line_direction, box_origin, box_extents, box_u, box_v, box_w, ptMinusExtents, Z, d2, t)
+            call Face_omp(line_origin, line_direction, box_extents, ptMinusExtents, Z, d2, t)
          end if
       else
          dzEy = line_direction(Z) * ptMinusExtents(Y)
@@ -693,16 +693,16 @@ contains
 
          if (dzEy >= dyEz) then
             ! Line intersects y = box.extent.y plane
-            call Face_omp(line_origin, line_direction, box_origin, box_extents, box_u, box_v, box_w, ptMinusExtents, Y, d2, t)
+            call Face_omp(line_origin, line_direction, box_extents, ptMinusExtents, Y, d2, t)
          else
             ! Line intersects z = box.extent.z plane
-            call Face_omp(line_origin, line_direction, box_origin, box_extents, box_u, box_v, box_w, ptMinusExtents, Z, d2, t)
+            call Face_omp(line_origin, line_direction, box_extents, ptMinusExtents, Z, d2, t)
          end if
       end if
 
     end subroutine CaseNoZeroComponents_omp
 
-    subroutine Face_omp(line_origin, line_direction, box_origin, box_extents, box_u, box_v, box_w, ptMinusExtents, axis, d2, t)
+    subroutine Face_omp(line_origin, line_direction, box_extents, ptMinusExtents, axis, d2, t)
       real(dp), intent(in) :: ptMinusExtents(3)
       integer, intent(in) :: axis
 
@@ -711,7 +711,7 @@ contains
       real(dp) :: ptPlusExtents(3), lSqr, tmp, delta, inverse
       integer :: X, Y, Z
 
-      real(dp), dimension(3) :: box_origin, box_extents, box_u, box_v, box_w
+      real(dp), dimension(3) :: box_extents
       real(dp), dimension(3) :: line_origin, line_direction
 
       X = axis
@@ -737,11 +737,11 @@ contains
 
             if (tmp <= 2 * lSqr * box_extents(Y)) then
                ! Region 4
-               call region4code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
+               call region4code_omp(line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
                     tmp, lSqr, delta, t, d2)
             else
                ! Region 5
-               call region5code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
+               call region5code_omp(line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
                     lSqr, delta, t, d2)
             end if
          end if
@@ -753,11 +753,11 @@ contains
                  (line_direction(X) * ptMinusExtents(X) + line_direction(Y) * ptPlusExtents(Y))
             if (tmp <= 2 * lSqr * box_extents(Z)) then
                ! Region 2
-               call region2code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
+               call region2code_omp(line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
                     tmp, lSqr, delta, t, d2)
             else
                ! Region 1
-               call region1code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
+               call region1code_omp(line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
                     lSqr, delta, t, d2)
             end if
          else
@@ -770,11 +770,11 @@ contains
                ! Region 4 or 5
                if (tmp <= 2 * lSqr * box_extents(Y)) then
                   ! Region 4. Same as before (TODO)
-                  call region4code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
+                  call region4code_omp(line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
                     tmp, lSqr, delta, t, d2)
                else
                   ! Region 5. Same as before (TODO)
-                  call region5code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
+                  call region5code_omp(line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
                     lSqr, delta, t, d2)
                end if
             end if
@@ -787,11 +787,11 @@ contains
                ! Region 1 or 2
                if (tmp <= 2 * lSqr * box_extents(Z)) then
                   ! Region 2. Same as before
-                  call region2code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
+                  call region2code_omp(line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
                     tmp, lSqr, delta, t, d2)
                else
                   ! Region 1. Same as before
-                  call region1code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
+                  call region1code_omp(line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
                        lSqr, delta, t, d2)
                end if
                return ! d2
@@ -811,14 +811,14 @@ contains
       end if
     end subroutine Face_omp
 
-    subroutine region1code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
+    subroutine region1code_omp(line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z,&
          lSqr, delta, t, d2)
       real(dp), intent(in) :: ptMinusExtents(3), ptPlusExtents(3)
       integer, intent(in) :: X, Y, Z
 
       real(dp), intent(inout) :: lSqr, delta, t, d2
 
-      real(dp), dimension(3) :: line_origin, line_direction
+      real(dp), dimension(3) :: line_direction
 
       lSqr = lSqr + line_direction(Z)**2
       delta = line_direction(X) * ptMinusExtents(X) &
@@ -833,14 +833,14 @@ contains
 
     end subroutine region1code_omp
 
-    subroutine region2code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z, &
+    subroutine region2code_omp(line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z, &
          tmp, lSqr, delta, t, d2)
       real(dp), intent(in) :: ptMinusExtents(3), ptPlusExtents(3)
       integer, intent(in) :: X, Y, Z
 
       real(dp), intent(inout) :: tmp, lSqr, delta, t, d2
 
-      real(dp), dimension(3) :: line_origin, line_direction
+      real(dp), dimension(3) :: line_direction
 
       tmp = ptPlusExtents(Z) - tmp / lSqr
       lSqr = lSqr + line_direction(Z)**2
@@ -854,14 +854,14 @@ contains
            + delta * t
     end subroutine region2code_omp
 
-    subroutine region4code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z, &
+    subroutine region4code_omp(line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z, &
          tmp, lSqr, delta, t, d2)
       real(dp), intent(in) :: ptMinusExtents(3), ptPlusExtents(3)
       integer, intent(in) :: X, Y, Z
 
       real(dp), intent(inout) :: tmp, lSqr, delta, t, d2
 
-      real(dp), dimension(3) :: line_origin, line_direction
+      real(dp), dimension(3) :: line_direction
 
       tmp = ptPlusExtents(Y) - tmp / lSqr
       lSqr = lSqr + line_direction(Y)**2
@@ -872,14 +872,14 @@ contains
       d2 = d2 + ptMinusExtents(X)**2 + tmp**2 + ptPlusExtents(Z)**2 + delta * t
     end subroutine region4code_omp
 
-    subroutine region5code_omp(line_origin, line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z, &
+    subroutine region5code_omp(line_direction, ptMinusExtents, ptPlusExtents, X, Y, Z, &
          lSqr, delta, t, d2)
       real(dp), intent(in) :: ptMinusExtents(3), ptPlusExtents(3)
       integer, intent(in) :: X, Y, Z
 
       real(dp), intent(inout) :: lSqr, delta, t, d2
 
-      real(dp), dimension(3) :: line_origin, line_direction
+      real(dp), dimension(3) :: line_direction
 
       lSqr = lSqr + line_direction(Y)**2
       delta = line_direction(X) * ptMinusExtents(X) &

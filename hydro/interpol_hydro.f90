@@ -11,7 +11,7 @@ subroutine upload_fine(ilevel)
   ! This routine performs a restriction operation (averaging down)
   ! for the hydro variables.
   !----------------------------------------------------------------------
-  integer::i,ncache,igrid,ngrid,ind
+  integer::i,ncache,igrid,ngrid
   integer,dimension(1:nvector)::ind_grid
 
   if(ilevel==nlevelmax)return

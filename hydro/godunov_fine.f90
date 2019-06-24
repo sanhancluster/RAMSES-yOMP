@@ -305,7 +305,7 @@ subroutine addpdv1(ind_grid,ngrid,ilevel)
   ! This routine adds the pdV source term to the internal
   ! energy equation and to the non-thermal energy equations.
   !---------------------------------------------------------
-  integer::i,ind,iskip,nx_loc,ind_cell1
+  integer::i,ind,iskip,nx_loc
   integer::ngrid,idim,id1,ig1,ih1,id2,ig2,ih2
   integer,dimension(1:3,1:2,1:8)::iii,jjj
   real(dp)::scale,dx,dx_loc,d,u,v,w,eold
@@ -323,91 +323,91 @@ subroutine addpdv1(ind_grid,ngrid,ilevel)
 
   ! Gather neighboring grids
   do i=1,ngrid
-	  igridn(i,0)=ind_grid(i)
+      igridn(i,0)=ind_grid(i)
   end do
   do idim=1,ndim
-	  do i=1,ngrid
-		  ind_left (i,idim)=nbor(ind_grid(i),2*idim-1)
-		  ind_right(i,idim)=nbor(ind_grid(i),2*idim  )
-		  igridn(i,2*idim-1)=son(ind_left (i,idim))
-		  igridn(i,2*idim  )=son(ind_right(i,idim))
-	  end do
+      do i=1,ngrid
+          ind_left (i,idim)=nbor(ind_grid(i),2*idim-1)
+          ind_right(i,idim)=nbor(ind_grid(i),2*idim  )
+          igridn(i,2*idim-1)=son(ind_left (i,idim))
+          igridn(i,2*idim  )=son(ind_right(i,idim))
+      end do
   end do
 
   ! Loop over cells
   do ind=1,twotondim
 
-	  ! Compute central cell index
-	  iskip=ncoarse+(ind-1)*ngridmax
-	  do i=1,ngrid
-		  ind_cell(i)=iskip+ind_grid(i)
-	  end do
+      ! Compute central cell index
+      iskip=ncoarse+(ind-1)*ngridmax
+      do i=1,ngrid
+          ind_cell(i)=iskip+ind_grid(i)
+      end do
 
-	  ! Gather all neighboring velocities
-	  do idim=1,ndim
-		  id1=jjj(idim,1,ind); ig1=iii(idim,1,ind)
-		  ih1=ncoarse+(id1-1)*ngridmax
-		  do i=1,ngrid
-			  if(igridn(i,ig1)>0)then
-				  velg(i,idim,1:ndim) = uold(igridn(i,ig1)+ih1,2:ndim+1)/max(uold(igridn(i,ig1)+ih1,1),smallr)
-				  dx_g(i,idim) = dx_loc
-			  else
-				  velg(i,idim,1:ndim) = uold(ind_left(i,idim),2:ndim+1)/max(uold(ind_left(i,idim),1),smallr)
-				  dx_g(i,idim) = dx_loc*1.5_dp
-			  end if
-		  enddo
-		  id2=jjj(idim,2,ind); ig2=iii(idim,2,ind)
-		  ih2=ncoarse+(id2-1)*ngridmax
-		  do i=1,ngrid
-			  if(igridn(i,ig2)>0)then
-				  veld(i,idim,1:ndim)= uold(igridn(i,ig2)+ih2,2:ndim+1)/max(uold(igridn(i,ig2)+ih2,1),smallr)
-				  dx_d(i,idim)=dx_loc
-			  else
-				  veld(i,idim,1:ndim)= uold(ind_right(i,idim),2:ndim+1)/max(uold(ind_right(i,idim),1),smallr)
-				  dx_d(i,idim)=dx_loc*1.5_dp
-			  end if
-		  enddo
-	  end do
-	  ! End loop over dimensions
+      ! Gather all neighboring velocities
+      do idim=1,ndim
+          id1=jjj(idim,1,ind); ig1=iii(idim,1,ind)
+          ih1=ncoarse+(id1-1)*ngridmax
+          do i=1,ngrid
+              if(igridn(i,ig1)>0)then
+                  velg(i,idim,1:ndim) = uold(igridn(i,ig1)+ih1,2:ndim+1)/max(uold(igridn(i,ig1)+ih1,1),smallr)
+                  dx_g(i,idim) = dx_loc
+              else
+                  velg(i,idim,1:ndim) = uold(ind_left(i,idim),2:ndim+1)/max(uold(ind_left(i,idim),1),smallr)
+                  dx_g(i,idim) = dx_loc*1.5_dp
+              end if
+          enddo
+          id2=jjj(idim,2,ind); ig2=iii(idim,2,ind)
+          ih2=ncoarse+(id2-1)*ngridmax
+          do i=1,ngrid
+              if(igridn(i,ig2)>0)then
+                  veld(i,idim,1:ndim)= uold(igridn(i,ig2)+ih2,2:ndim+1)/max(uold(igridn(i,ig2)+ih2,1),smallr)
+                  dx_d(i,idim)=dx_loc
+              else
+                  veld(i,idim,1:ndim)= uold(ind_right(i,idim),2:ndim+1)/max(uold(ind_right(i,idim),1),smallr)
+                  dx_d(i,idim)=dx_loc*1.5_dp
+              end if
+          enddo
+      end do
+      ! End loop over dimensions
 
-	  ! Compute divu = Trace G
-	  divu_loc(1:ngrid)=0.0d0
-	  do i=1,ngrid
-		  do idim=1,ndim
-			  divu_loc(i) = divu_loc(i) + (veld(i,idim,idim)-velg(i,idim,idim)) &
-					 &                    / (dx_g(i,idim)     +dx_d(i,idim))
-		  enddo
-	  end do
+      ! Compute divu = Trace G
+      divu_loc(1:ngrid)=0.0d0
+      do i=1,ngrid
+          do idim=1,ndim
+              divu_loc(i) = divu_loc(i) + (veld(i,idim,idim)-velg(i,idim,idim)) &
+                     &                    / (dx_g(i,idim)     +dx_d(i,idim))
+          enddo
+      end do
 
-	  ! Update thermal internal energy
-	  if(pressure_fix)then
-		  do i=1,ngrid
-			  ! Compute old thermal energy
-			  d=max(uold(ind_cell(i),1),smallr)
-			  u=0.0; v=0.0; w=0.0
-			  if(ndim>0)u=uold(ind_cell(i),2)/d
-			  if(ndim>1)v=uold(ind_cell(i),3)/d
-			  if(ndim>2)w=uold(ind_cell(i),4)/d
-			  eold=uold(ind_cell(i),ndim+2)-0.5*d*(u**2+v**2+w**2)
+      ! Update thermal internal energy
+      if(pressure_fix)then
+          do i=1,ngrid
+              ! Compute old thermal energy
+              d=max(uold(ind_cell(i),1),smallr)
+              u=0.0; v=0.0; w=0.0
+              if(ndim>0)u=uold(ind_cell(i),2)/d
+              if(ndim>1)v=uold(ind_cell(i),3)/d
+              if(ndim>2)w=uold(ind_cell(i),4)/d
+              eold=uold(ind_cell(i),ndim+2)-0.5*d*(u**2+v**2+w**2)
 #if NENER>0
-			  do irad=1,nener
-				  eold=eold-uold(ind_cell(i),ndim+2+irad)
-			  end do
+              do irad=1,nener
+                  eold=eold-uold(ind_cell(i),ndim+2+irad)
+              end do
 #endif
-			  ! Add -pdV term
-			  enew(ind_cell(i))=enew(ind_cell(i)) &
-					 & -(gamma-1.0d0)*eold*divu_loc(i)*dtnew(ilevel)
-		  end do
-	  end if
+              ! Add -pdV term
+              enew(ind_cell(i))=enew(ind_cell(i)) &
+                     & -(gamma-1.0d0)*eold*divu_loc(i)*dtnew(ilevel)
+          end do
+      end if
 
 #if NENER>0
-	  do irad=1,nener
-		  do i=1,ngrid
-			  ! Add -pdV term
-			  unew(ind_cell(i),ndim+2+irad)=unew(ind_cell(i),ndim+2+irad) &
-				 & -(gamma_rad(irad)-1.0d0)*uold(ind_cell(i),ndim+2+irad)*divu_loc(i)*dtnew(ilevel)
-		  end do
-	  end do
+      do irad=1,nener
+          do i=1,ngrid
+              ! Add -pdV term
+              unew(ind_cell(i),ndim+2+irad)=unew(ind_cell(i),ndim+2+irad) &
+                 & -(gamma_rad(irad)-1.0d0)*uold(ind_cell(i),ndim+2+irad)*divu_loc(i)*dtnew(ilevel)
+          end do
+      end do
 #endif
 
   enddo

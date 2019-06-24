@@ -162,7 +162,7 @@ subroutine cmp_residual_mg_fine(ilevel)
    ngrid=active(ilevel)%ngrid
 
    ! Loop over cells
-!$omp parallel default(firstprivate) shared(active,flag2,son,nbor,phi,f)
+!$omp parallel private(iskip_amr,igshift,igrid_nbor_amr,igrid_amr,icell_nbor_amr,icell_amr,phi_c,nb_sum)
    do ind=1,twotondim
       iskip_amr = ncoarse+(ind-1)*ngridmax
 
@@ -261,7 +261,7 @@ subroutine cmp_residual_norm2_fine(ilevel, norm2)
 
    norm2 = 0.0d0
    ! Loop over cells
-!$omp parallel default(firstprivate) shared(active,f) reduction(+:norm2)
+!$omp parallel private(iskip_amr,igrid_amr,icell_amr) reduction(+:norm2)
    do ind=1,twotondim
       iskip_amr = ncoarse+(ind-1)*ngridmax
       ! Loop over active grids
@@ -363,8 +363,8 @@ subroutine gauss_seidel_mg_fine(ilevel,redstep)
    ngrid=active(ilevel)%ngrid
 
    ! Loop over cells, with red/black ordering
-!$omp parallel default(firstprivate) shared(active,flag2,son,nbor,phi,f,safe_mode)
-   do ind0=1,twotondim/2      ! Only half of the cells for a red or black sweep
+!$omp parallel private(ind,iskip_amr,igshift,igrid_nbor_amr,igrid_amr,icell_nbor_amr,icell_amr,nb_sum,weight)
+      do ind0=1,twotondim/2      ! Only half of the cells for a red or black sweep
       if(redstep) then
          ind = ired  (ndim,ind0)
       else
@@ -535,7 +535,7 @@ subroutine restrict_residual_fine_reverse(ifinelevel)
    icoarselevel=ifinelevel-1
 
    ! Loop over fine cells of the myid active comm
-!$omp parallel default(firstprivate) shared(active,active_mg,f,cpu_map,father,lookup_mg)
+!$omp parallel private(iskip_f_amr,iskip_c_mg,ind_c_cell,igrid_f_amr,igrid_c_mg,igrid_c_amr,icell_f_amr,icell_c_mg,icell_c_amr,cpu_amr,res)
    do ind_f_cell=1,twotondim
       iskip_f_amr=ncoarse+(ind_f_cell-1)*ngridmax
 
@@ -615,7 +615,8 @@ subroutine interpolate_and_correct_fine(ifinelevel)
 
    ! Loop over fine grids by vector sweeps
    ngrid_f=active(ifinelevel)%ngrid
-!$omp parallel do default(firstprivate) shared(active,active_mg,father,cpu_map,lookup_mg,f,phi) schedule(static,nchunk)
+!$omp parallel do private(igrid_f_amr,icell_amr,nbors_father_cells,nbors_father_grids,corr, &
+!$omp & nbatch,iskip_f_amr,ind_father,ind_c,igrid_c_mg,igrid_c_amr,icell_c_mg,icell_c_amr,cpu_amr,coeff) schedule(static,nchunk)
    do istart=1,ngrid_f,nvector
 
       ! Gather nvector grids
@@ -707,8 +708,10 @@ subroutine set_scan_flag_fine(ilevel)
    ngrid = active(ilevel)%ngrid
 
    ! Loop over cells and set fine SCAN flag
+!$omp parallel private(iskip_amr,igrid_amr,icell_amr,scan_flag,igshift,igrid_nbor_amr,icell_nbor_amr)
    do ind=1,twotondim
       iskip_amr = ncoarse+(ind-1)*ngridmax
+!$omp do
       do igrid_mg=1,ngrid
          igrid_amr = active(ilevel)%igrid(igrid_mg)
          icell_amr = iskip_amr + igrid_amr
@@ -747,5 +750,7 @@ subroutine set_scan_flag_fine(ilevel)
          ! Do NOT overwrite flag2 !
          flag2(icell_amr)=flag2(icell_amr)+ngridmax*scan_flag
       end do
+!$omp end do nowait
    end do
+!$omp end parallel
 end subroutine set_scan_flag_fine
