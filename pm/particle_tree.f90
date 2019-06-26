@@ -672,7 +672,7 @@ subroutine virtual_tree_fine(ilevel)
   !-----------------------------------------------------------------------
 #ifndef WITHOUTMPI
   integer::ip,ipcom,npart1,next_part,ncache,ncache_tot
-  integer::icpu,igrid,ipart,jpart
+  integer::icpu,igrid,jgrid,ipart,jpart
   integer::info,buf_count,tagf=102,tagu=102
   integer::countsend,countrecv
   integer,dimension(MPI_STATUS_SIZE,2*ncpu)::statuses
@@ -751,14 +751,16 @@ subroutine virtual_tree_fine(ilevel)
      ! Use itmpp to store the index within communicator
      ! Note: itmpp is also used in `sink_particle_tracer` for
      ! `gas_tracers`, so there is no interference here.
-!$omp parallel do private(icpu,ipcom,igrid,npart1,ipart,jpart) schedule(static)
+!$omp parallel do private(icpu,ipcom,igrid,jgrid,npart1,ipart,jpart)
      do icpu=1,ncpu
         if(reception(icpu,ilevel)%npart>0)then
            ! Gather particles by vector sweeps
            ipcom=0
-           do igrid=1,reception(icpu,ilevel)%ngrid
-              npart1=numbp(reception(icpu,ilevel)%igrid(igrid))
-              ipart =headp(reception(icpu,ilevel)%igrid(igrid))
+		   ! This loop should be serial?
+           do jgrid=1,reception(icpu,ilevel)%ngrid
+			  igrid =reception(icpu,ilevel)%igrid(jgrid)
+              npart1=numbp(igrid)
+              ipart =headp(igrid)
               ! Store index within communicator for stars
               do jpart = 1, npart1
                  ipcom = ipcom+1

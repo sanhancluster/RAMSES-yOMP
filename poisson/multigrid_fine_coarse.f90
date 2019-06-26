@@ -374,7 +374,7 @@ subroutine gauss_seidel_mg_coarse(ilevel,safe,redstep)
    ngrid=active_mg(myid,ilevel)%ngrid
 
    ! Loop over cells, with red/black ordering
-!$omp parallel default(firstprivate) shared(active_mg,son,cpu_map,nbor,lookup_mg)
+!$omp parallel private(iskip_mg,ind,igshift,igrid_nbor_mg,igrid_nbor_amr,igrid_amr,icell_nbor_mg,icell_mg,cpu_nbor_amr,nb_sum,weight)
    do ind0=1,twotondim/2      ! Only half of the cells for a red or black sweep
       if(redstep) then
          ind = ired  (ndim,ind0)
@@ -652,7 +652,8 @@ subroutine interpolate_and_correct_coarse(ifinelevel)
 
    ! Loop over fine grids by vector sweeps
    ngrid_f=active_mg(myid,ifinelevel)%ngrid
-!$omp parallel do default(firstprivate) shared(active_mg,father,cpu_map,lookup_mg) schedule(static,nchunk)
+!$omp parallel do private(nbatch,iskip_f_mg,iskip_f_amr,ind_father,ind_c,igrid_c_mg,igrid_c_amr,icell_f_mg,icell_c_mg,icell_c_amr,cpu_c_amr, &
+!$omp & igrid_f_amr,icell_amr,cpu_amr,nbors_father_cells,nbors_father_grids,corr,coeff)
    do istart=1,ngrid_f,nvector
 
       ! Gather nvector grids
@@ -747,8 +748,10 @@ subroutine set_scan_flag_coarse(ilevel)
    if(ngrid==0) return
 
    ! Loop over cells and set coarse SCAN flag
+!$omp parallel private(iskip_mg,igrid_amr,icell_mg,scan_flag,igshift,igrid_nbor_amr,cpu_nbor_amr,igrid_nbor_mg,icell_nbor_mg)
    do ind=1,twotondim
       iskip_mg  = (ind-1)*ngrid
+!$omp do
       do igrid_mg=1,ngrid
          igrid_amr = active_mg(myid,ilevel)%igrid(igrid_mg)
          icell_mg  = iskip_mg  + igrid_mg
@@ -790,5 +793,7 @@ subroutine set_scan_flag_coarse(ilevel)
          end if
          active_mg(myid,ilevel)%f(icell_mg,1)=scan_flag
       end do
+!$omp end do nowait
    end do
+!$omp end parallel
 end subroutine set_scan_flag_coarse

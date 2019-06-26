@@ -16,6 +16,7 @@ subroutine create_sink
   ! This routine is called only once per coarse step by routine amr_step.
   ! Romain Teyssier, October 7th, 2007
   !-------------------------------------------------------------------------------
+  ! Main bottleneck: virtual_tree_fine
   ! local constants
   integer::ilevel,ivar
 
@@ -200,10 +201,11 @@ subroutine make_sink(ilevel)
   call ranf(tracer_seed,rand)
 
   ! Set new sink variables to old ones
+!$omp parallel do private(isink)
   do isink=1,nsinkmax
-     msink_new(isink)=0d0; xsink_new=0d0; dMsmbh_new=0d0; Esave_new=0d0; vsink_new=0d0; oksink_new=0d0; tsink_new=0d0; idsink_new=0
-     bhspin_new=0d0; spinmag_new=0d0; Efeed_new=0d0
-
+     xsink_new(isink,:)=0d0; msink_new(isink)=0d0; dMsmbh_new(isink)=0d0; Esave_new(isink)=0d0
+     vsink_new(isink,:)=0d0; oksink_new(isink)=0d0; tsink_new(isink)=0d0; idsink_new(isink)=0
+     bhspin_new(isink,:)=0d0; spinmag_new(isink)=0d0; Efeed_new(isink)=0d0
   end do
   ! Particles dynamical friction (HP)
   if(drag_part) then
