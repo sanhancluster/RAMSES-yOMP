@@ -3335,10 +3335,14 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,ompseed)
 
         ! Add the accreted mass to the total accreted mass over
         ! a coarse time step
+        ! isink could be duplicate between loops
+!$omp atomic update
         dMBH_coarse_new(isink)=dMBH_coarse_new(isink) + &
              & dMBHoverdt(isink)*weight/total_volume(isink)*dtnew(ilevel)
+!$omp atomic update
         dMEd_coarse_new(isink)=dMEd_coarse_new(isink) + &
              & dMEdoverdt(isink)*weight/total_volume(isink)*dtnew(ilevel)
+!$omp atomic update
         dMsmbh_new     (isink)=dMsmbh_new     (isink) + dmsink
 
 ! AGNRT
@@ -3347,12 +3351,16 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,ompseed)
 #endif
 !/AGNRT
 
+!$omp atomic update
         msink_new(isink  )=msink_new(isink  )+dmsink
+!$omp atomic update
         vsink_new(isink,1)=vsink_new(isink,1)+dmsink*u
 #if NDIM>1
+!$omp atomic update
         vsink_new(isink,2)=vsink_new(isink,2)+dmsink*v
 #endif
 #if NDIM>2
+!$omp atomic update
         vsink_new(isink,3)=vsink_new(isink,3)+dmsink*w
 #endif
 
@@ -3450,6 +3458,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,ompseed)
                  dvdrag = fdrag(idim)*ddt  ! HP: replaced dtnew(ilevel) by ddt
                  dpdrag(idim)=mp(ind_part(j))*dvdrag
                  vp(ind_part(j),idim)=vp(ind_part(j),idim)+dvdrag
+!$omp atomic update
                  vsink_new(isink,idim)=vsink_new(isink,idim)+dvdrag*mp(ind_part(j))
               enddo
 

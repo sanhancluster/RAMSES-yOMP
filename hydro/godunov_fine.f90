@@ -465,7 +465,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
   scale=boxlen/dble(nx_loc)
   dx=0.5D0**ilevel*scale
 
-  ploc=0.0d0; gloc=0.0d0;
+  ploc=0.0d0; gloc=0.0d0
 
   ! Integer constants
   i1min=0; i1max=0; i2min=0; i2max=0; i3min=1; i3max=1
@@ -596,8 +596,8 @@ subroutine godfine1(ind_grid,ncache,ilevel)
   !-----------------------------------------------
   ! Compute flux using second-order Godunov method
   !-----------------------------------------------
-
   call unsplit(uloc,gloc,ploc,flux,tmp,dx,dx,dx,dtnew(ilevel),ncache)
+
   !--------------------------------------
   ! Store the fluxes for later use
   !--------------------------------------
@@ -620,9 +620,11 @@ subroutine godfine1(ind_grid,ncache,ilevel)
                  k3=1+k2
                  do i=1,ncache
                     ! Copy left flux
+!$omp atomic write
                     fluxes(ind_cell(i),(idim-1)*2+1)= flux(i,i3   ,j3   ,k3,   1,idim)&
                          / uold(ind_cell(i), 1)
                     ! Copy right flux
+!$omp atomic write
                     fluxes(ind_cell(i),(idim-1)*2+2)=-flux(i,i3+i0,j3+j0,k3+k0,1,idim)&
                          / uold(ind_cell(i), 1)
                  end do
@@ -686,6 +688,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
         ! Update conservative variables new state vector
         do ivar=1,nvar
            do i=1,ncache
+!$omp atomic update
               unew(ind_cell(i),ivar)=unew(ind_cell(i),ivar)+ &
                    & (flux(i,i3   ,j3   ,k3   ,ivar,idim) &
                    & -flux(i,i3+i0,j3+j0,k3+k0,ivar,idim))
@@ -694,12 +697,14 @@ subroutine godfine1(ind_grid,ncache,ilevel)
         if(pressure_fix)then
         ! Update velocity divergence
         do i=1,ncache
+!$omp atomic update
            divu(ind_cell(i))=divu(ind_cell(i))+ &
                 & (tmp(i,i3   ,j3   ,k3   ,1,idim) &
                 & -tmp(i,i3+i0,j3+j0,k3+k0,1,idim))
         end do
         ! Update internal energy
         do i=1,ncache
+!$omp atomic update
            enew(ind_cell(i))=enew(ind_cell(i))+ &
                 & (tmp(i,i3   ,j3   ,k3   ,2,idim) &
                 & -tmp(i,i3+i0,j3+j0,k3+k0,2,idim))
@@ -740,6 +745,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
         do j3=j3min,j3max-j0
         do i3=i3min,i3max-i0
            do i=1,nb_noneigh
+!$omp atomic update
               unew(ind_buffer(i),ivar)=unew(ind_buffer(i),ivar) &
                    & -flux(ind_cell(i),i3,j3,k3,ivar,idim)*oneontwotondim
            end do
@@ -753,6 +759,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
      do j3=j3min,j3max-j0
      do i3=i3min,i3max-i0
         do i=1,nb_noneigh
+!$omp atomic update
            divu(ind_buffer(i))=divu(ind_buffer(i)) &
                 & -tmp(ind_cell(i),i3,j3,k3,1,idim)*oneontwotondim
         end do
@@ -764,6 +771,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
      do j3=j3min,j3max-j0
      do i3=i3min,i3max-i0
         do i=1,nb_noneigh
+!$omp atomic update
            enew(ind_buffer(i))=enew(ind_buffer(i)) &
                 & -tmp(ind_cell(i),i3,j3,k3,2,idim)*oneontwotondim
         end do
@@ -792,6 +800,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
         do j3=j3min+j0,j3max
         do i3=i3min+i0,i3max
            do i=1,nb_noneigh
+!$omp atomic update
               unew(ind_buffer(i),ivar)=unew(ind_buffer(i),ivar) &
                    & +flux(ind_cell(i),i3+i0,j3+j0,k3+k0,ivar,idim)*oneontwotondim
            end do
@@ -805,6 +814,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
      do j3=j3min+j0,j3max
      do i3=i3min+i0,i3max
         do i=1,nb_noneigh
+!$omp atomic update
            divu(ind_buffer(i))=divu(ind_buffer(i)) &
                 & +tmp(ind_cell(i),i3+i0,j3+j0,k3+k0,1,idim)*oneontwotondim
         end do
@@ -816,6 +826,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
      do j3=j3min+j0,j3max
      do i3=i3min+i0,i3max
         do i=1,nb_noneigh
+!$omp atomic update
            enew(ind_buffer(i))=enew(ind_buffer(i)) &
                 & +tmp(ind_cell(i),i3+i0,j3+j0,k3+k0,2,idim)*oneontwotondim
         end do
