@@ -6689,20 +6689,22 @@ subroutine get_drag_part(ilevel)
   !loops on cells.
   v_background(1:nsink, 1:ndim, 1:2) = 0d0
   m_background(1:nsink, 1:2) = tiny(0d0)
-!$omp parallel do private(isink, itype, idim) collapse(3)
-  do isink = 1,nsink
-     do ii = levelmin, nlevelmax
+
+  ! Must be sequencial!
+  do ii = levelmin, nlevelmax
+!$omp parallel do private(isink, itype, idim) collapse(2)
+     do isink = 1,nsink
         do itype = 1, 2
-            do idim = 1, ndim
-                v_background(isink, idim, itype) =&
-                 v_background(isink, idim, itype) * m_background(isink, itype)+&
-                 v_DF(isink, ii, idim, itype) * mass_DF(isink, ii, itype)
-            end do
-            m_background(isink, itype) = m_background(isink, itype) + mass_DF(isink, ii, itype)
-            do idim = 1, ndim
-                v_background(isink, idim, itype) =&
-                 v_background(isink, idim, itype) / m_background(isink, itype)
-            end do
+           do idim = 1, ndim
+              v_background(isink, idim, itype) =&
+                    v_background(isink, idim, itype) * m_background(isink, itype)+&
+                          v_DF(isink, ii, idim, itype) * mass_DF(isink, ii, itype)
+           end do
+           m_background(isink, itype) = m_background(isink, itype) + mass_DF(isink, ii, itype)
+           do idim = 1, ndim
+              v_background(isink, idim, itype) =&
+                    v_background(isink, idim, itype) / m_background(isink, itype)
+           end do
         end do
      end do
   end do
