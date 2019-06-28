@@ -6691,8 +6691,9 @@ subroutine get_drag_part(ilevel)
   m_background(1:nsink, 1:2) = tiny(0d0)
 
   ! Must be sequencial!
+!$omp parallel private(isink, itype, idim)
   do ii = levelmin, nlevelmax
-!$omp parallel do private(isink, itype, idim) collapse(2)
+!$omp do collapse(2)
      do isink = 1,nsink
         do itype = 1, 2
            do idim = 1, ndim
@@ -6707,7 +6708,9 @@ subroutine get_drag_part(ilevel)
            end do
         end do
      end do
+!$omp end do nowait
   end do
+!$omp end parallel
 
 !$omp parallel do private(isink)
   do isink = 1, nsink
