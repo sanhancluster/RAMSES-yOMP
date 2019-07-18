@@ -1264,7 +1264,7 @@ function erfc_pre_f08(x)
   parameter(q6= 1.04765104356545238d+01, q7= 1.48455557345597957d+01)
 
   y = x*x
-  y = uEXP(-y)*x*(p7/(y+q7)+p6/(y+q6) + p5/(y+q5)+p4/(y+q4)+p3/(y+q3) &
+  y = EXP(-y)*x*(p7/(y+q7)+p6/(y+q6) + p5/(y+q5)+p4/(y+q4)+p3/(y+q3) &
        &       + p2/(y+q2)+p1/(y+q1)+p0/(y+q0))
   if (x < ph) y = y+2d0/(exp(pv*x)+1.0)
   erfc_pre_f08 = y

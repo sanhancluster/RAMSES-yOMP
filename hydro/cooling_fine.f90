@@ -310,7 +310,7 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
      ! Compute radiation boost factor
      if(self_shielding)then
         do i=1,nleaf
-           boost(i)=MAX(uEXP(-nH(i)/0.01),1.0D-20)
+           boost(i)=MAX(EXP(-nH(i)/0.01),1.0D-20)
         end do
 #ifdef ATON
      else if (aton) then

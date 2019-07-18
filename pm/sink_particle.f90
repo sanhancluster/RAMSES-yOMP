@@ -2707,7 +2707,7 @@ subroutine average_density(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
      do idim=1,ndim
         r2=r2+(xp(ind_part(j),idim)-xsink(isink,idim))**2
      end do
-     weight=uEXP(-r2/r2k(isink))
+     weight=EXP(-r2/r2k(isink))
 !$omp atomic update
      wdens(isink)=wdens(isink)+weight*dgas(j)
 !$omp atomic update
@@ -3087,6 +3087,9 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,ompseed)
   real(dp),dimension(1:ndim)::dpdrag,vrel,fdrag
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,pi,d_star
   real(dp)::epsilon_r, Deltat, ddt, dvdrag_norm
+  real(dp) ,dimension(1:nvector)::dMBH_coarse_add,dMEd_coarse_add,dMsmbh_add,msink_add
+  real(dp) ,dimension(1:nvector,1:ndim)::vsink_add
+
 #ifdef RT
   ! AGNRT
   real(dp)::Np_inj
@@ -3258,6 +3261,9 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,ompseed)
   ! Init local index
   ii = 0
 
+  ! Init temporal arrays
+  dMBH_coarse_add=0d0; dMEd_coarse_add=0d0; dMsmbh_add=0d0; msink_add=0d0; vsink_add=0d0
+
   ! Remove mass from hydro cells
   do j=1,np
      if(ok(j))then
@@ -3267,7 +3273,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,ompseed)
            r2=r2+(xp(ind_part(j),idim)-xsink(isink,idim))**2
         end do
         ! weight given by kernel function where cloud particles sit
-        weight=uEXP(-r2/r2k(isink))
+        weight=EXP(-r2/r2k(isink))
 
         d=max(uold(indp(j),1), smallr)
         u=uold(indp(j),2)/d
@@ -3335,33 +3341,28 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,ompseed)
 
         ! Add the accreted mass to the total accreted mass over
         ! a coarse time step
-        ! isink could be duplicate between loops
-!$omp atomic update
-        dMBH_coarse_new(isink)=dMBH_coarse_new(isink) + &
+        !! OMP note: isink could be duplicate between loops, store them temporarily and add later.
+        dMBH_coarse_add(j)=dMBH_coarse_add(j) + &
              & dMBHoverdt(isink)*weight/total_volume(isink)*dtnew(ilevel)
-!$omp atomic update
-        dMEd_coarse_new(isink)=dMEd_coarse_new(isink) + &
+        dMEd_coarse_add(j)=dMEd_coarse_add(j) + &
              & dMEdoverdt(isink)*weight/total_volume(isink)*dtnew(ilevel)
-!$omp atomic update
-        dMsmbh_new     (isink)=dMsmbh_new     (isink) + dmsink
+        dMsmbh_add     (j)=dMsmbh_add     (j) + dmsink
 
 ! AGNRT
 #ifdef RT
+        write(*,*) 'Warning: RT is not compatible with OMP'
+        stop
         if (rt_AGN) dMeff_coarse_new(isink) = dMeff_coarse_new     (isink) + dmsink
 #endif
 !/AGNRT
 
-!$omp atomic update
-        msink_new(isink  )=msink_new(isink  )+dmsink
-!$omp atomic update
-        vsink_new(isink,1)=vsink_new(isink,1)+dmsink*u
+        msink_add(j)=msink_add(j)+dmsink
+        vsink_add(j,1)=vsink_add(j,1)+dmsink*u
 #if NDIM>1
-!$omp atomic update
-        vsink_new(isink,2)=vsink_new(isink,2)+dmsink*v
+        vsink_add(j,2)=vsink_add(j,2)+dmsink*v
 #endif
 #if NDIM>2
-!$omp atomic update
-        vsink_new(isink,3)=vsink_new(isink,3)+dmsink*w
+        vsink_add(j,3)=vsink_add(j,3)+dmsink*w
 #endif
 
         vp(ind_part(j),1)=mp(ind_part(j))*vp(ind_part(j),1)+dmsink*u
@@ -3458,8 +3459,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,ompseed)
                  dvdrag = fdrag(idim)*ddt  ! HP: replaced dtnew(ilevel) by ddt
                  dpdrag(idim)=mp(ind_part(j))*dvdrag
                  vp(ind_part(j),idim)=vp(ind_part(j),idim)+dvdrag
-!$omp atomic update
-                 vsink_new(isink,idim)=vsink_new(isink,idim)+dvdrag*mp(ind_part(j))
+                 vsink_add(j,idim)=vsink_add(j,idim)+dvdrag*mp(ind_part(j))
               enddo
 
               ! HP: updates on the gas DF
@@ -3495,6 +3495,25 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,ompseed)
 
      endif
 
+  end do
+
+  do j=1,np
+     if(ok(j)) then
+        isink=-idp(ind_part(j))
+!$omp atomic update
+        dMBH_coarse_new(isink)=dMBH_coarse_new(isink)+dMBH_coarse_add(j)
+!$omp atomic update
+        dMEd_coarse_new(isink)=dMEd_coarse_new(isink)+dMEd_coarse_add(j)
+!$omp atomic update
+        dMsmbh_new     (isink)=dMsmbh_new     (isink)+dMsmbh_add     (j)
+
+!$omp atomic update
+        msink_new(isink)=msink_new(isink)+msink_add(j)
+        do idim=1,ndim
+!$omp atomic update
+           vsink_new(isink,idim)=vsink_new(isink,idim)+vsink_add(j,idim)
+        end do
+     endif
   end do
 
   if (MC_tracer .and. ii > 0) then
@@ -4127,7 +4146,7 @@ subroutine jet_AGN(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
         do idim=1,ndim
            r2=r2+(xp(ind_part(j),idim)-xsink(isink,idim))**2
         end do
-        weight=uEXP(-r2/r2k(isink))
+        weight=EXP(-r2/r2k(isink))
 
         d=max(uold(indp(j),1), smallr)
         u=uold(indp(j),2)/d
@@ -6009,7 +6028,7 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
                                 else
                                    vol_gas(iAGN) = vol_gas(iAGN) + vol_loc
                                    drjet=sqrt(max(dr_AGN-dzjet*dzjet, 0._dp))
-                                   psy = uEXP(-drjet**2/2d0/rmax2)
+                                   psy = EXP(-drjet**2/2d0/rmax2)
                                 end if
 
                                 if (dzjet < 0._dp) then
