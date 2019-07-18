@@ -61,14 +61,17 @@ subroutine phi_fine_cg(ilevel,icount)
   ! Compute right-hand side norm
   !===============================
   rhs_norm=0.d0
-!$omp parallel do private(ind,iskip,i,idx) reduction(+:rhs_norm) schedule(static,nvector)
-  do i=1,active(ilevel)%ngrid
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
-        idx=active(ilevel)%igrid(i)+iskip
-        rhs_norm=rhs_norm+fact2*(rho(idx)-rho_tot)*(rho(idx)-rho_tot)
+!$omp parallel private(ind,iskip,i,idx) reduction(+:rhs_norm)
+  do ind=1,twotondim
+     iskip=ncoarse+(ind-1)*ngridmax
+!$omp do schedule(static,nvector)
+	 do i=1,active(ilevel)%ngrid
+		idx=active(ilevel)%igrid(i)+iskip
+		rhs_norm=rhs_norm+fact2*(rho(idx)-rho_tot)*(rho(idx)-rho_tot)
      end do
+!$omp end do nowait
   end do
+!$omp end parallel
   ! Compute global norms
 #ifndef WITHOUTMPI
   call MPI_ALLREDUCE(rhs_norm,rhs_norm_all,1,MPI_DOUBLE_PRECISION,MPI_SUM,&

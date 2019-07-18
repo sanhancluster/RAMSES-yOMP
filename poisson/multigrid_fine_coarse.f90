@@ -180,7 +180,7 @@ subroutine cmp_residual_mg_coarse(ilevel)
       iskip_amr = ncoarse+(ind-1)*ngridmax
 
       ! Loop over active grids myid
-!$omp do
+!$omp do schedule(static,nvector)
       do igrid_mg=1,ngrid
          igrid_amr = active_mg(myid,ilevel)%igrid(igrid_mg)
          icell_mg = igrid_mg + iskip_mg
@@ -385,7 +385,7 @@ subroutine gauss_seidel_mg_coarse(ilevel,safe,redstep)
       iskip_mg  = (ind-1)*ngrid
 
       ! Loop over active grids
-!$omp do
+!$omp do schedule(static,nvector)
       do igrid_mg=1,ngrid
          igrid_amr = active_mg(myid,ilevel)%igrid(igrid_mg)
          icell_mg  = iskip_mg  + igrid_mg
@@ -577,7 +577,7 @@ subroutine restrict_residual_coarse_reverse(ifinelevel)
       iskip_f_mg =(ind_f_cell-1)*active_mg(myid,ifinelevel)%ngrid
 
       ! Loop over fine grids of myid
-!$omp do
+!$omp do schedule(static,nvector)
       do igrid_f_mg=1,active_mg(myid,ifinelevel)%ngrid
          icell_f_mg=iskip_f_mg+igrid_f_mg
          ! Is fine cell masked?
@@ -751,7 +751,7 @@ subroutine set_scan_flag_coarse(ilevel)
 !$omp parallel private(iskip_mg,igrid_amr,icell_mg,scan_flag,igshift,igrid_nbor_amr,cpu_nbor_amr,igrid_nbor_mg,icell_nbor_mg)
    do ind=1,twotondim
       iskip_mg  = (ind-1)*ngrid
-!$omp do
+!$omp do schedule(static,nvector)
       do igrid_mg=1,ngrid
          igrid_amr = active_mg(myid,ilevel)%igrid(igrid_mg)
          icell_mg  = iskip_mg  + igrid_mg
