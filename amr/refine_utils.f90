@@ -364,6 +364,7 @@ subroutine refine_fine(ilevel)
   integer :: ithr,ngrid_now
   integer,dimension(1:nthr) :: icpu_thr,igrid_thr,ngrid_thr
   integer,dimension(1:IRandNumSize),save :: ompseed
+  integer, dimension(1:ncpu,1:IRandNumSize)::allseed
   real(dp) :: rand
 !$omp threadprivate(ompseed)
 
@@ -381,6 +382,13 @@ subroutine refine_fine(ilevel)
   ! Step 1: if cell is flagged for refinement and
   ! if it is not already refined, create a son grid.
   !---------------------------------------------------
+  ! This subroutine is called earlier than init_part, which means tracer_seed needs to be initialized
+  if(tracer) then
+     if(tracer_seed(1)==-1)then
+        call rans(ncpu, tseed, allseed)
+        tracer_seed = allseed(myid, 1:IRandNumSize)
+     end if
+  end if
 
 !$omp parallel
   ! Give slight offsets for each OMP threads
