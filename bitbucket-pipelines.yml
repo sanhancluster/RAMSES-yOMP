@@ -12,11 +12,3 @@ pipelines:
           name: Default version
           script:
           - bash tests/build.default.sh
-      - step:     # Build DICE
-          name: Dice version
-          script:
-          - bash tests/build.dice.sh
-      - step:     # Build rt
-          name: RT version
-          script:
-          - bash tests/build.rt.sh
