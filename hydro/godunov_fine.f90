@@ -449,6 +449,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
   real(dp),dimension(1:nvector,if1:if2,jf1:jf2,kf1:kf2,1:2,1:ndim)::tmp
   logical ,dimension(1:nvector,iu1:iu2,ju1:ju2,ku1:ku2)::ok
   real(dp),dimension(1:nvector,1:nvar)::uflow
+  real(dp),dimension(1:nvector)::dflow,eflow
 
   integer,dimension(1:nvector)::igrid_nbor,ind_cell,ind_buffer,ind_exist,ind_nexist
 
@@ -779,7 +780,6 @@ subroutine godfine1(ind_grid,ncache,ilevel)
      end do
   end do
 
-  !! TODO OMP note: need to be optimized
   if(pressure_fix) then
      do idim=1,ndim
         i0=0; j0=0; k0=0
@@ -837,38 +837,56 @@ subroutine godfine1(ind_grid,ncache,ilevel)
         end do
 
         ! Update velocity divergence
+        dflow=0d0
         do k3=k3min,k3max-k0
         do j3=j3min,j3max-j0
         do i3=i3min,i3max-i0
            do i=1,nb_noneigh
-   !$omp atomic update
-              divu(ind_buffer(i))=divu(ind_buffer(i)) &
-                   & -tmp(ind_cell(i),i3,j3,k3,1,idim)*oneontwotondim
+              dflow(i)=dflow(i)-tmp(ind_cell(i),i3,j3,k3,1,idim)
            end do
         end do
         end do
         end do
         ! Update internal energy
+        eflow=0d0
         do k3=k3min,k3max-k0
         do j3=j3min,j3max-j0
         do i3=i3min,i3max-i0
            do i=1,nb_noneigh
-   !$omp atomic update
-              enew(ind_buffer(i))=enew(ind_buffer(i)) &
-                   & -tmp(ind_cell(i),i3,j3,k3,2,idim)*oneontwotondim
+              eflow(i)=eflow(i)-tmp(ind_cell(i),i3,j3,k3,2,idim)*oneontwotondim
            end do
         end do
         end do
         end do
 
+        do i=1,nb_noneigh
+!$omp atomic update
+           divu(ind_buffer(i))=divu(ind_buffer(i))+dflow(i)*oneontwotondim
+!$omp atomic update
+           enew(ind_buffer(i))=enew(ind_buffer(i))+eflow(i)*oneontwotondim
+        end do
+
+        !-----------------------
+        ! Right flux at boundary
+        !-----------------------
+        ! Check if grids sits near right boundary
+        ! and gather neighbor father cells index
+        nb_noneigh=0
+        do i=1,ncache
+           if (son(nbor(ind_grid(i),2*idim))==0) then
+              nb_noneigh = nb_noneigh + 1
+              ind_buffer(nb_noneigh) = nbor(ind_grid(i),2*idim)
+              ind_cell(nb_noneigh) = i
+           end if
+        end do
+
         ! Update velocity divergence
+        dflow=0d0
         do k3=k3min+k0,k3max
         do j3=j3min+j0,j3max
         do i3=i3min+i0,i3max
            do i=1,nb_noneigh
-   !$omp atomic update
-              divu(ind_buffer(i))=divu(ind_buffer(i)) &
-                   & +tmp(ind_cell(i),i3+i0,j3+j0,k3+k0,1,idim)*oneontwotondim
+              dflow(i)=dflow(i)+tmp(ind_cell(i),i3+i0,j3+j0,k3+k0,1,idim)*oneontwotondim
            end do
         end do
         end do
@@ -878,12 +896,17 @@ subroutine godfine1(ind_grid,ncache,ilevel)
         do j3=j3min+j0,j3max
         do i3=i3min+i0,i3max
            do i=1,nb_noneigh
-   !$omp atomic update
-              enew(ind_buffer(i))=enew(ind_buffer(i)) &
-                   & +tmp(ind_cell(i),i3+i0,j3+j0,k3+k0,2,idim)*oneontwotondim
+              eflow(i)=eflow(i)+tmp(ind_cell(i),i3+i0,j3+j0,k3+k0,2,idim)*oneontwotondim
            end do
         end do
         end do
+        end do
+
+        do i=1,nb_noneigh
+!$omp atomic update
+           divu(ind_buffer(i))=divu(ind_buffer(i))+dflow(i)*oneontwotondim
+!$omp atomic update
+           enew(ind_buffer(i))=enew(ind_buffer(i))+eflow(i)*oneontwotondim
         end do
 
      end do
