@@ -277,15 +277,15 @@ subroutine riemann_approx(qleft,qright,fgdnv,ngrid)
   real(dp),dimension(1:nvector,1:nvar+1)::fgdnv
 
   ! local arrays
-  real(dp),dimension(1:nvector,1:nvar+1),save::qgdnv
-  real(dp),dimension(1:nvector),save::rl   ,ul   ,pl   ,cl
-  real(dp),dimension(1:nvector),save::rr   ,ur   ,pr   ,cr
-  real(dp),dimension(1:nvector),save::ro   ,uo   ,po   ,co
-  real(dp),dimension(1:nvector),save::rstar,ustar,pstar,cstar
-  real(dp),dimension(1:nvector),save::wl   ,wr   ,wo
-  real(dp),dimension(1:nvector),save::sgnm ,spin ,spout,ushock
-  real(dp),dimension(1:nvector),save::frac ,delp ,pold
-  integer ,dimension(1:nvector),save::ind  ,ind2
+  real(dp),dimension(1:nvector,1:nvar+1)::qgdnv
+  real(dp),dimension(1:nvector)::rl   ,ul   ,pl   ,cl
+  real(dp),dimension(1:nvector)::rr   ,ur   ,pr   ,cr
+  real(dp),dimension(1:nvector)::ro   ,uo   ,po   ,co
+  real(dp),dimension(1:nvector)::rstar,ustar,pstar,cstar
+  real(dp),dimension(1:nvector)::wl   ,wr   ,wo
+  real(dp),dimension(1:nvector)::sgnm ,spin ,spout,ushock
+  real(dp),dimension(1:nvector)::frac ,delp ,pold
+  integer ,dimension(1:nvector)::ind  ,ind2
 
   ! local variables
   real(dp)::smallp, gamma6, ql, qr, usr, usl, wwl, wwr, smallpp, entho, etot
@@ -513,14 +513,14 @@ subroutine riemann_acoustic(qleft,qright,fgdnv,ngrid)
   real(dp)::smallp, entho, etot
 
   ! local arrays
-  real(dp),dimension(1:nvector,1:nvar+1),save::qgdnv
-  real(dp),dimension(1:nvector),save::rl   ,ul   ,pl   ,cl
-  real(dp),dimension(1:nvector),save::rr   ,ur   ,pr   ,cr
-  real(dp),dimension(1:nvector),save::ro   ,uo   ,po   ,co
-  real(dp),dimension(1:nvector),save::rstar,ustar,pstar,cstar
-  real(dp),dimension(1:nvector),save::wl   ,wr   ,wo
-  real(dp),dimension(1:nvector),save::sgnm ,spin ,spout,ushock
-  real(dp),dimension(1:nvector),save::frac
+  real(dp),dimension(1:nvector,1:nvar+1)::qgdnv
+  real(dp),dimension(1:nvector)::rl   ,ul   ,pl   ,cl
+  real(dp),dimension(1:nvector)::rr   ,ur   ,pr   ,cr
+  real(dp),dimension(1:nvector)::ro   ,uo   ,po   ,co
+  real(dp),dimension(1:nvector)::rstar,ustar,pstar,cstar
+  real(dp),dimension(1:nvector)::wl   ,wr   ,wo
+  real(dp),dimension(1:nvector)::sgnm ,spin ,spout,ushock
+  real(dp),dimension(1:nvector)::frac
 
   ! constants
   smallp = smallc**2/gamma
@@ -669,9 +669,9 @@ subroutine riemann_llf(qleft,qright,fgdnv,ngrid)
   real(dp),dimension(1:nvector,1:nvar+1)::fgdnv
 
   ! local arrays
-  real(dp),dimension(1:nvector,1:nvar+1),save::fleft,fright
-  real(dp),dimension(1:nvector,1:nvar+1),save::uleft,uright
-  real(dp),dimension(1:nvector),save::cmax
+  real(dp),dimension(1:nvector,1:nvar+1)::fleft,fright
+  real(dp),dimension(1:nvector,1:nvar+1)::uleft,uright
+  real(dp),dimension(1:nvector)::cmax
 
   ! local variables
   integer::i,n
@@ -832,9 +832,9 @@ subroutine riemann_hll(qleft,qright,fgdnv,ngrid)
   real(dp),dimension(1:nvector,1:nvar)::qleft,qright
   real(dp),dimension(1:nvector,1:nvar+1)::fgdnv
 
-  real(dp),dimension(1:nvector,1:nvar+1),save::fleft,fright
-  real(dp),dimension(1:nvector,1:nvar+1),save::uleft,uright
-  real(dp),dimension(1:nvector),save::SL,SR
+  real(dp),dimension(1:nvector,1:nvar+1)::fleft,fright
+  real(dp),dimension(1:nvector,1:nvar+1)::uleft,uright
+  real(dp),dimension(1:nvector)::SL,SR
   integer::i,n
   real(dp)::smallp, entho
   real(dp)::rl   ,ul   ,pl   ,cl
