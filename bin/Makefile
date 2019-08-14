@@ -17,9 +17,11 @@ SOLVER = hydro
 GRACKLE = 0
 RT=0
 DICE=0
-REFMASK=1
+REFMASK=0
+LONGINT=0
+QUADHILBERT=0
 # Set to 1 to use old MPI include statements instead of more recent `use mpi`.
-USE_OLD_MPI_INCLUDE = 1
+USE_OLD_MPI_INCLUDE = 0
 EXEC = ramses
 # Activate OpenMP
 OPENMP=1
@@ -28,7 +30,7 @@ OMP_NCHUNK=1
 # Patches to include (without DICE)
 #PATCH = ../patch/AGNSFSNpatch/AGNspinRT:../patch/AGNSFSNpatch/sfsn
 #PATCH = ../patch/AGNSFSNpatch/sfsn
-#PATCH = ../patch/debug
+PATCH = ../patch/debug
 #############################################################################
 # Compute the right value for NVAR
 NVAR := $(shell echo $$(($(NDIM) + 2 + $(NVAR_EXTRA) + $(NIONS) + $(NENER) + $(REFMASK)+ $(METALS) )) )
@@ -65,11 +67,21 @@ ifeq ($(GRACKLE),1)
 DEFINES += -Dgrackle
 CEXEC += _grackle
 endif
-# --- Grackle ---------------------------------------------------------------
+# --- OpenMP ----------------------------------------------------------------
 ifeq ($(OPENMP),1)
-OMPFLAG += -fopenmp
+OMPFLAG += -qopenmp #-fopenmp
 DEFINES += -DOMP_NCHUNK=$(OMP_NCHUNK)
 CEXEC += _omp
+endif
+# --- LONGINT ---------------------------------------------------------------
+ifeq ($(LONGINT),1)
+DEFINES += -DLONGINT
+CEXEC += _longint
+endif
+# --- QUADHILBERT -----------------------------------------------------------
+ifeq ($(QUADHILBERT),1)
+DEFINES += -DQUADHILBERT
+CEXEC += _qhil
 endif
 #############################################################################
 # Regroup exec suffixes and patches
@@ -109,21 +121,28 @@ F90 = mpif90 -frecord-marker=4 -O3 -ffree-line-length-none -g -fbacktrace $(OMPF
 FFLAGS = -x f95-cpp-input $(DEFINES)
 
 # --- MPI, gfortran DEBUG syntax ------------------------------
-#F90 = mpif90 -frecord-marker=4 -ffree-line-length-none -fbacktrace -g -O -fbounds-check -Wuninitialized -Wall $(OMPFLAG)
-#FFLAGS = -x f95-cpp-input -ffpe-trap=zero,overflow,underflow,invalid,denormal -finit-real=nan  $(DEFINES)
+#F90 = mpif90 -frecord-marker=4 -ffree-line-length-none -fbacktrace -g -O0 -fbounds-check -Wuninitialized -Wall $(OMPFLAG)
+#FFLAGS = -x f95-cpp-input -ffpe-trap=zero,overflow,invalid -finit-real=nan  $(DEFINES)
 
 # --- MPI, pgf90 syntax ------------------------------
 #F90 = mpif90 -O3
 #FFLAGS = -Mpreprocess $(DEFINES)
 
 # --- MPI, ifort syntax ------------------------------
-#F90 = mpif90 -qopenmp $(OMPFLAG)
+#F90 = mpif90 -qopenmp
 #FFLAGS = -cpp -O3 -xAVX -fpp $(DEFINES) -DNOSYSTEM
 
 # --- MPI, ifort syntax, additional checks -----------
-#F90 = mpif90 $(OMPFLAG)
+#F90 = mpif90
 #FFLAGS = -warn all -O0 -g -traceback -fpe0 -ftrapuv -check bounds -cpp $(DEFINES) -DNOSYSTEM
 
+# --- MPI, ifort syntax for Xeon phi ------------------------------
+#F90 = mpiifort -Wl,-z,noexecstack $(OMPFLAG)
+#FFLAGS = -cpp $(DEFINES) -O3 -fPIC -free -xMIC-AVX512 -fma -align array64byte -finline-functions -DNOSYSTEM
+
+# --- MPI, ifort DEBUG syntax for Xeon phi ------------------------------
+#F90 = mpiifort -Wl,-z,noexecstack $(OMPFLAG) 
+#FFLAGS = -cpp -O0 -g -traceback -fpe0 -ftrapuv -check bounds $(DEFINES) -DNOSYSTEM
 
 # --- MPI, ifort syntax ------------------------------
 #F90 = ftn
