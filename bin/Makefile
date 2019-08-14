@@ -67,7 +67,6 @@ CEXEC += _grackle
 endif
 # --- Grackle ---------------------------------------------------------------
 ifeq ($(OPENMP),1)
-#DEFINES += -fopenmp #-qopenmp
 OMPFLAG += -fopenmp
 DEFINES += -DOMP_NCHUNK=$(OMP_NCHUNK)
 CEXEC += _omp
@@ -118,11 +117,11 @@ FFLAGS = -x f95-cpp-input $(DEFINES)
 #FFLAGS = -Mpreprocess $(DEFINES)
 
 # --- MPI, ifort syntax ------------------------------
-#F90 = mpif90 -qopenmp
+#F90 = mpif90 -qopenmp $(OMPFLAG)
 #FFLAGS = -cpp -O3 -xAVX -fpp $(DEFINES) -DNOSYSTEM
 
 # --- MPI, ifort syntax, additional checks -----------
-#F90 = mpif90
+#F90 = mpif90 $(OMPFLAG)
 #FFLAGS = -warn all -O0 -g -traceback -fpe0 -ftrapuv -check bounds -cpp $(DEFINES) -DNOSYSTEM
 
 
