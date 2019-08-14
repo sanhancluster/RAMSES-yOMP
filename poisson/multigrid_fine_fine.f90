@@ -167,7 +167,7 @@ subroutine cmp_residual_mg_fine(ilevel)
       iskip_amr = ncoarse+(ind-1)*ngridmax
 
       ! Loop over active grids
-!$omp do schedule(dynamic,nvector)
+!$omp do schedule(static)
       do igrid_mg=1,ngrid
          igrid_amr = active(ilevel)%igrid(igrid_mg)
          icell_amr = iskip_amr + igrid_amr
@@ -233,7 +233,7 @@ subroutine cmp_residual_mg_fine(ilevel)
          ! Store ***MINUS THE RESIDUAL*** in f(:,1), using BC-modified RHS
          f(icell_amr,1) = -oneoverdx2*( nb_sum - dtwondim*phi_c )+f(icell_amr,2)
       end do
-!$omp end do
+!$omp end do nowait
    end do
 !$omp end parallel
 
@@ -265,7 +265,7 @@ subroutine cmp_residual_norm2_fine(ilevel, norm2)
    do ind=1,twotondim
       iskip_amr = ncoarse+(ind-1)*ngridmax
       ! Loop over active grids
-!$omp do schedule(dynamic,nvector)
+!$omp do schedule(static)
       do igrid_mg=1,ngrid
          igrid_amr = active(ilevel)%igrid(igrid_mg)
          icell_amr = iskip_amr + igrid_amr
@@ -374,7 +374,7 @@ subroutine gauss_seidel_mg_fine(ilevel,redstep)
       iskip_amr = ncoarse+(ind-1)*ngridmax
 
       ! Loop over active grids
-!$omp do schedule(dynamic,nvector)
+!$omp do schedule(static)
       do igrid_mg=1,ngrid
          igrid_amr = active(ilevel)%igrid(igrid_mg)
          icell_amr = iskip_amr + igrid_amr
@@ -540,7 +540,7 @@ subroutine restrict_residual_fine_reverse(ifinelevel)
       iskip_f_amr=ncoarse+(ind_f_cell-1)*ngridmax
 
       ! Loop over fine grids of myid
-!$omp do schedule(dynamic,nvector)
+!$omp do schedule(static)
       do igrid_f_mg=1,active(ifinelevel)%ngrid
          igrid_f_amr=active(ifinelevel)%igrid(igrid_f_mg)
          icell_f_amr=igrid_f_amr+iskip_f_amr
@@ -711,7 +711,7 @@ subroutine set_scan_flag_fine(ilevel)
 !$omp parallel private(iskip_amr,igrid_amr,icell_amr,scan_flag,igshift,igrid_nbor_amr,icell_nbor_amr)
    do ind=1,twotondim
       iskip_amr = ncoarse+(ind-1)*ngridmax
-!$omp do schedule(dynamic,nvector)
+!$omp do schedule(static)
       do igrid_mg=1,ngrid
          igrid_amr = active(ilevel)%igrid(igrid_mg)
          icell_amr = iskip_amr + igrid_amr

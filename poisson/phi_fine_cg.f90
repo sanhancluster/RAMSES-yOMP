@@ -64,7 +64,7 @@ subroutine phi_fine_cg(ilevel,icount)
 !$omp parallel private(ind,iskip,i,idx) reduction(+:rhs_norm)
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
-!$omp do schedule(static,nvector)
+!$omp do schedule(static)
 	 do i=1,active(ilevel)%ngrid
 		idx=active(ilevel)%igrid(i)+iskip
 		rhs_norm=rhs_norm+fact2*(rho(idx)-rho_tot)*(rho(idx)-rho_tot)
@@ -103,7 +103,7 @@ subroutine phi_fine_cg(ilevel,icount)
 !$omp parallel private(ind,iskip,i,idx) reduction(+:r2)
       do ind=1,twotondim
 		  iskip=ncoarse+(ind-1)*ngridmax
-!$omp do schedule(static,nvector)
+!$omp do schedule(static)
 	      do i=1,active(ilevel)%ngrid
 			  idx=active(ilevel)%igrid(i)+iskip
 			  r2=r2+f(idx,1)*f(idx,1)
@@ -134,7 +134,7 @@ subroutine phi_fine_cg(ilevel,icount)
 !$omp parallel private(ind,iskip,i,idx)
 	  do ind=1,twotondim
 		  iskip=ncoarse+(ind-1)*ngridmax
-!$omp do schedule(static,nvector)
+!$omp do schedule(static)
           do i=1,active(ilevel)%ngrid
 			  idx=active(ilevel)%igrid(i)+iskip
 			  f(idx,2)=f(idx,1)+beta_cg*f(idx,2)
@@ -157,7 +157,7 @@ subroutine phi_fine_cg(ilevel,icount)
 !$omp parallel private(ind,iskip,i,idx) reduction(+:pAp)
 	  do ind=1,twotondim
 		  iskip=ncoarse+(ind-1)*ngridmax
-!$omp do schedule(static,nvector)
+!$omp do schedule(static)
 	      do i=1,active(ilevel)%ngrid
 			  idx=active(ilevel)%igrid(i)+iskip
 			  pAp=pAp+f(idx,2)*f(idx,3)
@@ -183,7 +183,7 @@ subroutine phi_fine_cg(ilevel,icount)
 !$omp parallel private(ind,iskip,i,idx)
 	  do ind=1,twotondim
 		  iskip=ncoarse+(ind-1)*ngridmax
-!$omp do schedule(static,nvector)
+!$omp do schedule(static)
 	      do i=1,active(ilevel)%ngrid
 			  idx=active(ilevel)%igrid(i)+iskip
 
