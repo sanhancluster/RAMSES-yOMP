@@ -1191,11 +1191,13 @@ end subroutine mech_fine_mpi
 !################################################################
 subroutine get_number_of_sn2(birth_time,zp_star,id_star,mass0,mass1,nsn,done_star)
   use amr_commons, ONLY:dp,M_SNII,eta_sn,sn2_real_delay
+  use amr_parameters, ONLY:i8b
   use random
   implicit none
   real(kind=dp)::birth_time,zp_star,mass0,mass1 ! birth_time in code, mass in Msun
   integer::nsn,nsn_tot,nsn_sofar,nsn_ok,nsn_try
-  integer::i,localseed,id_star   ! necessary for the random number
+  integer::i,localseed   ! necessary for the random number
+  integer(i8b) :: id_star
   real(kind=dp)::age_star,tMyr,xdum,ydum,logzpsun
   real(kind=dp)::co0,co1,co2
   ! fit to the cumulative number fraction for Kroupa IMF

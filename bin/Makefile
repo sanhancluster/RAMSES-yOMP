@@ -69,7 +69,7 @@ CEXEC += _grackle
 endif
 # --- OpenMP ----------------------------------------------------------------
 ifeq ($(OPENMP),1)
-OMPFLAG += -qopenmp #-fopenmp
+OMPFLAG += -fopenmp
 DEFINES += -DOMP_NCHUNK=$(OMP_NCHUNK)
 CEXEC += _omp
 endif
