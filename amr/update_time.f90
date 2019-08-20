@@ -175,7 +175,7 @@ subroutine output_timer(write_file, filename)
      if (id_is_one) write (ilun,'(f12.3,4x,f6.1,4x,a)') total, 100., 'TOTAL'
   endif
 #endif
-  !if (id_is_one) close(ilun)
+  if (id_is_one .and. write_file) close(ilun)
 end subroutine
 !=======================================================================
 subroutine reset_timer
@@ -363,7 +363,6 @@ subroutine clean_stop
   character(LEN=80)::str
 
   call output_timer(.false., str)
-  close(6)
 
 #ifndef WITHOUTMPI
   call MPI_FINALIZE(info)
