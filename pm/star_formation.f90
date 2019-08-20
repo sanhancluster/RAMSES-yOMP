@@ -296,7 +296,11 @@ subroutine star_formation(ilevel)
   ntot_star_cpu=0; ntot_star_all=0
   ntot_star_cpu(myid)=ntot
 #ifndef WITHOUTMPI
+#ifndef LONGINT
   call MPI_ALLREDUCE(ntot_star_cpu,ntot_star_all,ncpu,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD,info)
+#else
+  call MPI_ALLREDUCE(ntot_star_cpu,ntot_star_all,ncpu,MPI_INTEGER8,MPI_SUM,MPI_COMM_WORLD,info)
+#endif
   ntot_star_cpu(1)=ntot_star_all(1)
 #endif
   do icpu=2,ncpu

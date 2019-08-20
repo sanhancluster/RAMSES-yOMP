@@ -1190,8 +1190,7 @@ end subroutine mech_fine_mpi
 !################################################################
 !################################################################
 subroutine get_number_of_sn2(birth_time,zp_star,id_star,mass0,mass1,nsn,done_star)
-  use amr_commons, ONLY:dp,M_SNII,eta_sn,sn2_real_delay
-  use amr_parameters, ONLY:i8b
+  use amr_commons, ONLY:dp,i8b,M_SNII,eta_sn,sn2_real_delay
   use random
   implicit none
   real(kind=dp)::birth_time,zp_star,mass0,mass1 ! birth_time in code, mass in Msun
