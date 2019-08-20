@@ -25,6 +25,7 @@ recursive subroutine amr_step(ilevel,icount)
   integer::i,idim,ivar
   logical::ok_defrag,output_now_all
   logical,save::first_step=.true.
+  character(LEN=80)::str
 
   if(numbtot(1,ilevel)==0)return
 
@@ -162,7 +163,9 @@ recursive subroutine amr_step(ilevel,icount)
         endif
 
      endif
-
+     if(foutput_timer>0.and.mod(nstep_coarse,foutput_timer)==0)then
+        call output_timer(.false.,str)
+     endif
   endif
 
   !----------------------------
