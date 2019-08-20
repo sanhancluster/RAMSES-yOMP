@@ -1148,8 +1148,9 @@ subroutine empty_comm(ind_com,np,ilevel,icpu)
 
   ! Add particle to parent linked list
   call remove_free(ind_part,np)
+!$omp critical(omp_particle_link)
   call add_list(ind_part,ind_list,ok,np)
-
+!$omp end critical(omp_particle_link)
   ! Scatter particle level and identity
   do i=1,np
      levelp(ind_part(i))=int(emission(icpu,ilevel)%fp(ind_com(i),2), 4)

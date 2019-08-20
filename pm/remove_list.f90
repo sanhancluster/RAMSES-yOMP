@@ -55,7 +55,7 @@ subroutine remove_free(ind_part,np)
   ! Get np particle from free memory linked list
   !-----------------------------------------------
   integer::j,ipart
-!$omp critical(omp_particle_link)
+!$omp critical(omp_particle_free)
   do j=1,np
      ipart=headp_free
      ind_part(j)=ipart
@@ -69,5 +69,5 @@ subroutine remove_free(ind_part,np)
      headp_free=nextp(headp_free)
   end do
   npart=npartmax-numbp_free
-!$omp end critical(omp_particle_link)
+!$omp end critical(omp_particle_free)
 end subroutine remove_free
