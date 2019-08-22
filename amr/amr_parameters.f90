@@ -111,6 +111,7 @@ module amr_parameters
   integer,allocatable,dimension(:)::remap_pscalar
 
   ! Output parameters
+  logical::output=.true.      ! Write output files
   integer::iout=1             ! Increment for output times
   integer::ifout=1            ! Increment for output files
   integer::iback=1            ! Increment for backup files

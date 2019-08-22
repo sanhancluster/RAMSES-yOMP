@@ -149,8 +149,7 @@ recursive subroutine amr_step(ilevel,icount)
         if(clumpfind .and. ndim==3) call clump_finder(.true.,.false.)
 #endif
 
-        call dump_all
-
+        if(output) call dump_all
 
         ! Dump lightcone
         if(lightcone .and. ndim==3) call output_cone()
