@@ -400,7 +400,6 @@
                  stop
               end if
               tracer_mass = omega_b / omega_m * 0.5_dp**(tracer_level*ndim) / tracer_per_cell
-              if(myid==1)write(*, *) 'Using a tracer mass of ', tracer_mass
               if(tracer_first_balance_part_per_cell==0)then
                  tracer_first_balance_part_per_cell=int(tracer_per_cell)
               end if
