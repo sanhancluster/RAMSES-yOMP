@@ -25,7 +25,6 @@
 !=============================================================================
 module cooling_module
   use amr_parameters
-  use amr_commons,ONLY:uEXP,uEXP10
   implicit none
   logical :: verbose_cooling=.false.
 

@@ -34,9 +34,9 @@ module amr_commons
 
   ! MPI variables
   integer::ncpu,ndomain,myid,overload=1
-
+#ifdef _OPENMP
   integer::nthr=1  ! OpenMP number of threads
-
+#endif
   ! Friedman model variables
   integer::n_frw
   real(dp),allocatable,dimension(:)::aexp_frw,hexp_frw,tau_frw,t_frw
@@ -139,37 +139,6 @@ module amr_commons
   real(dp)::units_density=1.0  ! [g/cm^3]
   real(dp)::units_time=1.0     ! [seconds]
   real(dp)::units_length=1.0   ! [cm]
-
-contains
-  !---------------------------------------------------------------------------
-  ! These functions are denormal-safe exponentals, can be used with debugging
-  !---------------------------------------------------------------------------
-  !=======================================================================
-  real(dp) function uEXP(x)
-  !=======================================================================
-     implicit none
-     real(dp) :: x
-     real(dp),parameter :: smallv = -500d0
-     if(x<smallv) then
-        uEXP = 0
-     else
-        uEXP = EXP(x)
-     end if
-     return
-  end function uEXP
-  !=======================================================================
-  real(dp) function uEXP10(x)
-  !=======================================================================
-     implicit none
-     real(dp) :: x
-     real(dp),parameter :: smallv = -200d0, ten=10d0
-     if(x<smallv) then
-        uEXP10=0
-     else
-        uEXP10=ten**x
-     end if
-     return
-  end function uEXP10
 
 end module amr_commons
 

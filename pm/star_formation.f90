@@ -1250,7 +1250,7 @@ end subroutine getnbor
 function erfc_pre_f08(x)
 
 ! complementary error function
-  use amr_commons, ONLY: dp,uEXP
+  use amr_commons, ONLY: dp
   implicit none
   real(dp) erfc_pre_f08
   real(dp) x, y
