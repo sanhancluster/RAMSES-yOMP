@@ -278,7 +278,7 @@ subroutine rho_from_current_level(ilevel)
 
 
   ! Loop over cpus
-!$omp parallel private(igrid,ig,ip,ncache,ind_grid,ind_part,ind_grid_part,ind_cell,x0)
+!$omp parallel private(icpu,ncache,ig,ip,ind_grid,ind_part,ind_grid_part,ind_cell,x0)
   do icpu=1,ncpu
      ! Loop over grids
      ig=0
@@ -288,7 +288,7 @@ subroutine rho_from_current_level(ilevel)
      else
         ncache=reception(icpu,ilevel)%ngrid
      end if
-!$omp do private(npart1,ipart,counter) schedule(dynamic,nvector)
+!$omp do private(igrid,npart1,ipart,counter) schedule(dynamic,nvector)
      do jgrid=1,ncache
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
