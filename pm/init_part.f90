@@ -393,6 +393,18 @@
               read(10) ! ntot
               read(10) tracer_mass
               close(10)
+            else if (trim(tracer_feed_fmt) == 'inplace' .and. tracer_mass < 0) then
+
+              if(tracer_per_cell<0 .and. tracer_level<0)then
+                 write(*,*) 'no tracer mass or tracer_per_cell and tracer_level specified.'
+                 stop
+              end if
+              tracer_mass = omega_b / omega_m * 0.5_dp**(tracer_level*ndim) / tracer_per_cell
+              if(myid==1)write(*, *) 'Using a tracer mass of ', tracer_mass
+              if(tracer_first_balance_part_per_cell==0)then
+                 tracer_first_balance_part_per_cell=int(tracer_per_cell)
+              end if
+
            end if
         end if
         ! Broadcast to all CPUs the value of the tracer mass
