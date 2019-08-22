@@ -855,7 +855,6 @@ subroutine virtual_tree_fine(ilevel)
         allocate(emission(icpu,ilevel)%up(1:ncache,1:particle_data_width))
      end if
   end do
-  call MPI_WAITALL(ncpu,reqsend1,statuses,info)
 
   ! Receive particles
   countrecv=0
