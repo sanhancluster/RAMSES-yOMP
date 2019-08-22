@@ -98,10 +98,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   ! MC Tracer =================================================
   ! Reset tmpp array that contains the probability to move away from cell
   if (MC_tracer) then
-!$omp parallel do private(ipart)
-     do ipart=1,npartmax
-        if(tmpp(ipart)>0d0)tmpp(ipart) = 0d0
-     end do
+     tmpp=0d0
   end if
   ! End MC Tracer
 

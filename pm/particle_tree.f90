@@ -680,7 +680,7 @@ subroutine virtual_tree_fine(ilevel)
   integer,dimension(ncpu)::sendbuf,recvbuf
   logical::ok_free
   integer::particle_data_width, particle_data_width_int
-  integer,dimension(1:nvector),save::ind_part,ind_list,ind_com
+  integer,dimension(1:nvector)::ind_part,ind_list,ind_com
 #endif
   ! MC tracer
   integer :: ipart2, jpart2
@@ -706,7 +706,7 @@ subroutine virtual_tree_fine(ilevel)
      do igrid=1,reception(icpu,ilevel)%ngrid
         reception(icpu,ilevel)%npart=reception(icpu,ilevel)%npart+&
              & numbp(reception(icpu,ilevel)%igrid(igrid))
-     end do
+  end do
      sendbuf(icpu)=reception(icpu,ilevel)%npart
   end do
 
@@ -756,9 +756,9 @@ subroutine virtual_tree_fine(ilevel)
         if(reception(icpu,ilevel)%npart>0)then
            ! Gather particles by vector sweeps
            ipcom=0
-		   ! This loop should be serial?
+           ! This loop should be serial?
            do jgrid=1,reception(icpu,ilevel)%ngrid
-			  igrid =reception(icpu,ilevel)%igrid(jgrid)
+              igrid =reception(icpu,ilevel)%igrid(jgrid)
               npart1=numbp(igrid)
               ipart =headp(igrid)
               ! Store index within communicator for stars
@@ -842,6 +842,7 @@ subroutine virtual_tree_fine(ilevel)
   ! End loop over threads
 
   ! Communicate virtual particle number to parent cpu
+  ! Main bottleneck
   call MPI_ALLTOALL(sendbuf,1,MPI_INTEGER,recvbuf,1,MPI_INTEGER,MPI_COMM_WORLD,info)
 
   ! Allocate communication buffer in reception
@@ -854,6 +855,7 @@ subroutine virtual_tree_fine(ilevel)
         allocate(emission(icpu,ilevel)%up(1:ncache,1:particle_data_width))
      end if
   end do
+  call MPI_WAITALL(ncpu,reqsend1,statuses,info)
 
   ! Receive particles
   countrecv=0
@@ -930,8 +932,6 @@ subroutine virtual_tree_fine(ilevel)
   end if
 
   ! Scatter new particles from communication buffer
-!!$omp parallel do private(icpu,ncache,ipart,npart1,ip,ind_com) &
-!!$omp & private(jpart,d2min,x1,ipart2,jpart2,x2,d2) schedule(static)
   do icpu=1,ncpu
      ! Loop over particles by vector sweeps
      ncache=emission(icpu,ilevel)%npart
@@ -950,6 +950,7 @@ subroutine virtual_tree_fine(ilevel)
      ! Loop on star tracers in the communicator
      if (MC_tracer) then
         do ipart = 1, ncache
+           ! At this moment fp(ipart,1) is overwritten with particle index
            jpart = emission(icpu,ilevel)%fp(ipart,1)
            ! Get index of star within current CPU
            if (is_star_tracer(typep(jpart))) then

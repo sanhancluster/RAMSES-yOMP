@@ -492,7 +492,7 @@ subroutine make_virtual_fine_dp(xx,ilevel)
   end do
 
   ! Gather emission array
-!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+!$omp parallel do private(step,iskip,icpu,i,j) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (emission(icpu,ilevel)%ngrid>0) then
@@ -520,7 +520,7 @@ subroutine make_virtual_fine_dp(xx,ilevel)
   call MPI_WAITALL(countrecv,reqrecv,statuses,info)
 
   ! Scatter reception array
-!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+!$omp parallel do private(step,iskip,icpu,i,j) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (reception(icpu,ilevel)%ngrid>0) then
@@ -580,7 +580,7 @@ subroutine make_virtual_fine_int(xx,ilevel)
   end do
 
   ! Gather emission array
-!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+!$omp parallel do private(step,iskip,icpu,i,j) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (emission(icpu,ilevel)%ngrid>0) then
@@ -608,7 +608,7 @@ subroutine make_virtual_fine_int(xx,ilevel)
   call MPI_WAITALL(countrecv,reqrecv,statuses,info)
 
   ! Scatter reception array
-!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+!$omp parallel do private(step,iskip,icpu,i,j) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (reception(icpu,ilevel)%ngrid>0) then
@@ -658,7 +658,7 @@ subroutine make_virtual_reverse_dp(xx,ilevel)
   if(ilevel.LE.switchlevel)then
 
  ! Gather emission array
-!$omp parallel do private(step,iskip,icpu,i,j,icell,ibuf) collapse(2) schedule(static,nchunk)
+!$omp parallel do private(step,iskip,icpu,i,j,icell,ibuf) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (reception(icpu,ilevel)%ngrid>0) then
@@ -714,7 +714,7 @@ subroutine make_virtual_reverse_dp(xx,ilevel)
   end do
 
   ! Scatter reception array
-!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+!$omp parallel do private(step,iskip,icpu,i,j) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (emission(icpu,ilevel)%ngrid>0) then
@@ -743,7 +743,7 @@ subroutine make_virtual_reverse_dp(xx,ilevel)
   end do
 
   ! Gather emission array
-!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+!$omp parallel do private(step,iskip,icpu,i,j) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (reception(icpu,ilevel)%ngrid>0) then
@@ -771,7 +771,7 @@ subroutine make_virtual_reverse_dp(xx,ilevel)
   call MPI_WAITALL(countrecv,reqrecv,statuses,info)
 
   ! Scatter reception array
-!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+!$omp parallel do private(step,iskip,icpu,i,j) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (emission(icpu,ilevel)%ngrid>0) then
@@ -827,7 +827,7 @@ subroutine make_virtual_reverse_int(xx,ilevel)
   if(ilevel.le.switchlevel) then
 
   ! Gather emission array
-!$omp parallel do private(step,iskip,icpu,i,j,icell,ibuf) collapse(2) schedule(static,nchunk)
+!$omp parallel do private(step,iskip,icpu,i,j,icell,ibuf) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (reception(icpu,ilevel)%ngrid>0) then
@@ -883,7 +883,7 @@ subroutine make_virtual_reverse_int(xx,ilevel)
   end do
 
   ! Scatter reception array
-!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+!$omp parallel do private(step,iskip,icpu,i,j) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (emission(icpu,ilevel)%ngrid>0) then
@@ -912,7 +912,7 @@ subroutine make_virtual_reverse_int(xx,ilevel)
   end do
 
   ! Gather emission array
-!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+!$omp parallel do private(step,iskip,icpu,i,j) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (reception(icpu,ilevel)%ngrid>0) then
@@ -940,7 +940,7 @@ subroutine make_virtual_reverse_int(xx,ilevel)
   call MPI_WAITALL(countrecv,reqrecv,statuses,info)
 
   ! Scatter reception array
-!$omp parallel do private(step,iskip,icpu,i,j) collapse(2) schedule(static,nchunk)
+!$omp parallel do private(step,iskip,icpu,i,j) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (emission(icpu,ilevel)%ngrid>0) then
