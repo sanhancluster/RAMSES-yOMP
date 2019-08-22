@@ -69,6 +69,7 @@ module pm_commons
   real(dp), allocatable, dimension(:)   :: zp       ! Birth metallicity
   real(dp), allocatable, dimension(:)   :: tmpp     ! Working array
   integer,  allocatable, dimension(:)   :: itmpp    ! Working array
+  integer,  allocatable, dimension(:)   :: itmpp2   ! Working array
   integer,  allocatable, dimension(:)   :: partp    ! Particle parent (for tracers only)
   integer, allocatable, dimension(:)  :: nextp     ! Next particle in list
   integer, allocatable, dimension(:)  :: prevp     ! Previous particle in list
@@ -82,6 +83,8 @@ module pm_commons
   integer, allocatable, dimension(:)   :: headp    ! Head particle in grid
   integer, allocatable, dimension(:)   :: tailp    ! Tail particle in grid
   integer, allocatable, dimension(:)   :: numbp    ! Number of particles in grid
+  integer, allocatable, dimension(:)   :: headp_old ! Head particle in grid
+  integer, allocatable, dimension(:)   :: numbp_old ! Number of particles in grid (for temporal use)
   ! Global particle linked lists
   integer :: headp_free, tailp_free, numbp_free = 0, numbp_free_tot = 0
   ! Local and current seed for random number generator

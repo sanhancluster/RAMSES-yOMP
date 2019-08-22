@@ -181,8 +181,8 @@ subroutine make_tree_fine(ilevel)
   real(dp),dimension(1:3)::xbound
   real(dp),dimension(1:3)::skip_loc
   integer::igrid,jgrid,ipart,jpart,next_part
-  integer::ig,ip,npart1,icpu
-  integer,dimension(1:nvector),save::ind_grid,ind_part,ind_grid_part
+  integer::ig,ip,npart1,icpu,ncache
+  integer,dimension(1:nvector)::ind_grid,ind_part,ind_grid_part
 
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
@@ -197,23 +197,45 @@ subroutine make_tree_fine(ilevel)
   if(ndim>2)skip_loc(3)=dble(kcoarse_min)
   scale=boxlen/dble(nx_loc)
 
+!$omp parallel private(icpu,ncache,ind_grid,ind_part,ind_grid_part,ig,ip)
+!$omp do
+  do ipart=1,npartmax
+     itmpp(ipart)=nextp(ipart)
+  end do
+!$omp end do nowait
+!$omp do
+  do igrid=1,ngridmax
+     headp_old(igrid)=headp(igrid)
+     numbp_old(igrid)=numbp(igrid)
+  end do
+
   ! Not compatible with OpenMP because tree structure changes during the loop (I think)
   ! Loop over cpus
   do icpu=1,ncpu
-     igrid=headl(icpu,ilevel)
      ig=0
      ip=0
      ! Loop over grids
-     do jgrid=1,numbl(icpu,ilevel)
-        npart1=numbp(igrid)  ! Number of particles in the grid
+     if(icpu==myid)then
+        ncache=active(ilevel)%ngrid
+     else
+        ncache=reception(icpu,ilevel)%ngrid
+     end if
+!$omp do private(igrid,npart1,ipart,next_part) schedule(dynamic,nvector)
+     do jgrid=1,ncache
+        if(icpu==myid)then
+           igrid=active(ilevel)%igrid(jgrid)
+        else
+           igrid=reception(icpu,ilevel)%igrid(jgrid)
+        end if
+        npart1=numbp_old(igrid)  ! Number of particles in the grid
         if(npart1>0)then
            ig=ig+1
            ind_grid(ig)=igrid
-           ipart=headp(igrid)
+           ipart=headp_old(igrid)
            ! Loop over particles
            do jpart=1,npart1
               ! Save next particle  <--- Very important !!!
-              next_part=nextp(ipart)
+              next_part=itmpp(ipart)
               if(ig==0)then
                  ig=1
                  ind_grid(ig)=igrid
@@ -233,6 +255,7 @@ subroutine make_tree_fine(ilevel)
         end if
         igrid=next(igrid)   ! Go to next grid
      end do
+!$omp end do nowait
      ! End loop over grids
      if(ip>0)call check_tree(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
   end do
@@ -240,15 +263,18 @@ subroutine make_tree_fine(ilevel)
 
   ! Periodic boundaries
   if(sink)then
-     do idim=1,ndim
-        do ipart=1,nsink
+!$omp do
+     do ipart=1,nsink
+        do idim=1,ndim
            if(xsink(ipart,idim)/scale+skip_loc(idim)<0.0d0) &
                 & xsink(ipart,idim)=xsink(ipart,idim)+(xbound(idim)-skip_loc(idim))*scale
            if(xsink(ipart,idim)/scale+skip_loc(idim)>=xbound(idim)) &
                 & xsink(ipart,idim)=xsink(ipart,idim)-(xbound(idim)-skip_loc(idim))*scale
         end do
      end do
+!$omp end do nowait
   endif
+!$omp end parallel
 
 111 format('   Entering make_tree_fine for level ',I2)
 
@@ -272,14 +298,14 @@ subroutine check_tree(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   real(dp)::dx,xxx,scale
   real(dp),dimension(1:3)::xbound
   ! Grid-based arrays
-  integer ,dimension(1:nvector,1:threetondim),save::nbors_father_cells
-  integer ,dimension(1:nvector,1:twotondim),save::nbors_father_grids
-  real(dp),dimension(1:nvector,1:ndim),save::x0
-  integer ,dimension(1:nvector),save::ind_father
+  integer ,dimension(1:nvector,1:threetondim)::nbors_father_cells
+  integer ,dimension(1:nvector,1:twotondim)::nbors_father_grids
+  real(dp),dimension(1:nvector,1:ndim)::x0
+  integer ,dimension(1:nvector)::ind_father
   ! Particle-based arrays
-  integer,dimension(1:nvector),save::ind_son,igrid_son
-  integer,dimension(1:nvector),save::list1,list2
-  logical,dimension(1:nvector),save::ok
+  integer,dimension(1:nvector)::ind_son,igrid_son
+  integer,dimension(1:nvector)::list1,list2
+  logical,dimension(1:nvector)::ok
   real(dp),dimension(1:3)::skip_loc
 
   ! Mesh spacing in that level
@@ -371,8 +397,10 @@ subroutine check_tree(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
         list2(j)=igrid_son(j)
      end if
   end do
+!$omp critical
   call remove_list(ind_part,list1,ok,np)
   call add_list(ind_part,list2,ok,np)
+!$omp end critical
 end subroutine check_tree
 !################################################################
 !################################################################

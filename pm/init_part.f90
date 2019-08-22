@@ -104,11 +104,11 @@
   allocate(mp    (npartmax))
   if (MC_tracer) then
      allocate(tmpp  (npartmax))
-     allocate(itmpp (npartmax))
      allocate(partp (npartmax))
      allocate(move_flag(npartmax))
      move_flag = 0
   end if
+  allocate(itmpp (npartmax))
   allocate(nextp (npartmax))
   allocate(prevp (npartmax))
   allocate(levelp(npartmax))
