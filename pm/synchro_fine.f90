@@ -94,6 +94,7 @@ subroutine synchro_fine(ilevel)
         vsink_all=vsink_new
 #endif
      endif
+!$omp parallel do
      do isink=1,nsink
         if(oksink_all(isink)==1d0.and.(.not.fix_smbh_position))then
            vsink(isink,1:ndim)=vsink_all(isink,1:ndim)

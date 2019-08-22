@@ -83,10 +83,11 @@ subroutine rho_fine(ilevel,icount)
   !--------------------------
   ! Initialize fields to zero
   !--------------------------
-!$omp parallel do private(ind,iskip,i) schedule(static,nvector)
-  do i=1,active(ilevel)%ngrid
-    do ind=1,twotondim
-       iskip=ncoarse+(ind-1)*ngridmax
+!$omp parallel private(d_scale,iskip)
+!$omp do
+  do ind=1,twotondim
+    iskip=ncoarse+(ind-1)*ngridmax
+    do i=1,active(ilevel)%ngrid
        phi(active(ilevel)%igrid(i)+iskip)=0.0D0
        if(ilevel==cic_levelmax)then
           rho_top(active(ilevel)%igrid(i)+iskip)=0.0D0
@@ -95,15 +96,16 @@ subroutine rho_fine(ilevel,icount)
   end do
 
   if(cic_levelmax>0.and.ilevel>cic_levelmax)then
-!$omp parallel do private(ind,iskip,i) schedule(static,nvector)
-     do i=1,active(ilevel)%ngrid
-        do ind=1,twotondim
-           iskip=ncoarse+(ind-1)*ngridmax
-              rho_top(active(ilevel)%igrid(i)+iskip)=rho_top(father(active(ilevel)%igrid(i)))
-              rho(active(ilevel)%igrid(i)+iskip)=rho(active(ilevel)%igrid(i)+iskip)+ &
-                   & rho_top(active(ilevel)%igrid(i)+iskip)
+!$omp do
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
+        do i=1,active(ilevel)%ngrid
+           rho_top(active(ilevel)%igrid(i)+iskip)=rho_top(father(active(ilevel)%igrid(i)))
+           rho(active(ilevel)%igrid(i)+iskip)=rho(active(ilevel)%igrid(i)+iskip)+ &
+                & rho_top(active(ilevel)%igrid(i)+iskip)
         end do
      end do
+!$omp end do nowait
   endif
 
   !-------------------------------------------------------------------------
@@ -112,10 +114,10 @@ subroutine rho_fine(ilevel,icount)
   if(hydro .and. m_refine(ilevel)>-1.0d0)then
      d_scale=max(mass_sph/dx_loc**ndim,smallr)
      if(ivar_refine>0)then
-!$omp parallel do private(ind,iskip,i,scalar) schedule(static,nvector)
-        do i=1,active(ilevel)%ngrid
-           do ind=1,twotondim
-              iskip=ncoarse+(ind-1)*ngridmax
+!$omp do private(scalar)
+        do ind=1,twotondim
+           iskip=ncoarse+(ind-1)*ngridmax
+           do i=1,active(ilevel)%ngrid
               scalar=uold(active(ilevel)%igrid(i)+iskip,ivar_refine) &
                    & /max(uold(active(ilevel)%igrid(i)+iskip,1),smallr)
               if(scalar>var_cut_refine)then
@@ -124,25 +126,27 @@ subroutine rho_fine(ilevel,icount)
               endif
            end do
         end do
+!$omp end do nowait
      else
-!$omp parallel do private(ind,iskip,i) schedule(static,nvector)
-        do i=1,active(ilevel)%ngrid
-           do ind=1,twotondim
-              iskip=ncoarse+(ind-1)*ngridmax
+!$omp do
+        do ind=1,twotondim
+           iskip=ncoarse+(ind-1)*ngridmax
+           do i=1,active(ilevel)%ngrid
               phi(active(ilevel)%igrid(i)+iskip)= &
                    & rho(active(ilevel)%igrid(i)+iskip)/d_scale
            end do
         end do
+!$omp end do nowait
      endif
   endif
 
   !-------------------------------------------------------
   ! Initialize rho and phi to zero in virtual boundaries
   !-------------------------------------------------------
-!$omp parallel do private(icpu,ind,iskip,i) collapse(2)
+!$omp do
   do ind=1,twotondim
+     iskip=ncoarse+(ind-1)*ngridmax
      do icpu=1,ncpu
-        iskip=ncoarse+(ind-1)*ngridmax
         do i=1,reception(icpu,ilevel)%ngrid
            rho(reception(icpu,ilevel)%igrid(i)+iskip)=0.0D0
            phi(reception(icpu,ilevel)%igrid(i)+iskip)=0.0D0
@@ -154,7 +158,8 @@ subroutine rho_fine(ilevel,icount)
         endif
      end do
   end do
-
+!$omp end do nowait
+!$omp end parallel
   !---------------------------------------------------------
   ! Compute particle contribution to density field
   !---------------------------------------------------------
@@ -210,10 +215,10 @@ subroutine rho_fine(ilevel,icount)
   ! Compute quasi Lagrangian refinement map
   !-----------------------------------------
   if(m_refine(ilevel)>-1.0d0)then
-!$omp parallel do private(ind,iskip,i) schedule(static,nvector)
-     do i=1,active(ilevel)%ngrid
-        do ind=1,twotondim
-           iskip=ncoarse+(ind-1)*ngridmax
+!$omp parallel do private(ind,iskip,i)
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
+        do i=1,active(ilevel)%ngrid
            if(phi(active(ilevel)%igrid(i)+iskip)>=m_refine(ilevel))then
               cpu_map2(active(ilevel)%igrid(i)+iskip)=1
            else
@@ -253,7 +258,7 @@ subroutine rho_from_current_level(ilevel)
   ! level ilevel (boundary particles).
   ! Arrays flag1 and flag2 are used as temporary work space.
   !------------------------------------------------------------------
-  integer::igrid,jgrid,ipart,jpart,idim,icpu
+  integer::igrid,jgrid,ipart,jpart,idim,icpu,ncache
   integer::i,ig,ip,npart1
   real(dp)::dx
 
@@ -271,122 +276,103 @@ subroutine rho_from_current_level(ilevel)
   dx=0.5D0**ilevel
 
 
-#ifdef _OPENMP
-  call cpu_parallel_link_notracer(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr)
-#else
-  head_thr(1)=headl(myid,ilevel)
-  ngrid_thr(1)=numbl(myid,ilevel)
-  npart_thr(1)=1
-  icpu_thr(1)=1
-  jgrid_thr(1)=1
-#endif
-!$omp parallel do private(ithr,icpu,igrid,jgrid,kgrid,npart1,ipart,jpart,ip,ig,ngrid1,ngrid2) &
-!$omp & private(ind_grid,ind_part,ind_grid_part,ind_cell,x0,counter)
-  do ithr=1,nthr
-     ngrid1=ngrid_thr(ithr)
-     if(ngrid1>0 .and. npart_thr(ithr)>0) then
-        ! Initialize some values
-        ig=0
-        ip=0
 
-        igrid=head_thr(ithr)
-        icpu=icpu_thr(ithr)
-        jgrid=jgrid_thr(ithr)
+  ! Loop over cpus
+!$omp parallel private(igrid,ig,ip,ncache,ind_grid,ind_part,ind_grid_part,ind_cell,x0)
+  do icpu=1,ncpu
+     ! Loop over grids
+     ig=0
+     ip=0
+     if(icpu==myid)then
+        ncache=active(ilevel)%ngrid
+     else
+        ncache=reception(icpu,ilevel)%ngrid
+     end if
+!$omp do private(npart1,ipart,counter) schedule(dynamic,nvector)
+     do jgrid=1,ncache
+        if(icpu==myid)then
+           igrid=active(ilevel)%igrid(jgrid)
+        else
+           igrid=reception(icpu,ilevel)%igrid(jgrid)
+        end if
+        npart1=numbp(igrid)  ! Number of particles in the grid
+        if(npart1>0)then
+           ig=ig+1
+           ind_grid(ig)=igrid
+           ipart=headp(igrid)
 
-        kgrid=1
-        ngrid2=numbl(icpu,ilevel)
-
-        do ! Loop over cpus,grids
-           if(kgrid>ngrid1)exit
-           if(jgrid>ngrid2) then
-              icpu=icpu+1
-              jgrid=1
-              ngrid2=numbl(icpu,ilevel)
-              igrid=headl(icpu,ilevel)
-              cycle
-           end if
-
-           ! Do something with igrid
-           npart1=numbp(igrid)  ! Number of particles in the grid
-           if(npart1>0)then
-              ig=ig+1
-              ind_grid(ig)=igrid
-              ipart=headp(igrid)
-
-              counter = 0
-              ! Loop over particles
-              do jpart=1,npart1
-                 if(ig==0)then
-                    ig=1
-                    ind_grid(ig)=igrid
-                 end if
-                 ! MC Tracer patch
-                 if (is_not_tracer(typep(ipart))) then
-                    ip=ip+1
-                    ind_part(ip)=ipart
-                    ind_grid_part(ip)=ig
-                    ! Count the number of non-tracers
-                    counter = counter + 1
-                 end if
-                 ! End MC Tracer patch
-
-                 if(ip==nvector)then
-                    ! Lower left corner of 3x3x3 grid-cube
-                    do idim=1,ndim
-                       do i=1,ig
-                          x0(i,idim)=xg(ind_grid(i),idim)-3.0D0*dx
-                       end do
-                    end do
-                    do i=1,ig
-                       ind_cell(i)=father(ind_grid(i))
-                    end do
-#ifdef TSC
-                    call tsc_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel)
-#else
-                    call cic_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel)
-#endif
-                    ip=0
-                    ig=0
-                    counter=0
-                 end if
-                 ipart=nextp(ipart)  ! Go to next particle
-              end do
-              ! End loop over particles
-
-              ! Only tracers, remove one cache line
-              if (counter == 0 .and. ig > 0) then
-                 ig = ig - 1
+           counter = 0
+           ! Loop over particles
+           do jpart=1,npart1
+              if(ig==0)then
+                 ig=1
+                 ind_grid(ig)=igrid
               end if
-           end if
+              ! MC Tracer patch
+              if (is_not_tracer(typep(ipart))) then
+                 ip=ip+1
+                 ind_part(ip)=ipart
+                 ind_grid_part(ip)=ig
+                 ! Count the number of non-tracers
+                 counter = counter + 1
+              end if
+              ! End MC Tracer patch
 
-           ! End igrid usage
-
-           kgrid=kgrid+1
-           jgrid=jgrid+1
-
-           igrid=next(igrid)
-        end do
-
-        ! Remainder
-        if(ip>0)then
-           ! Lower left corner of 3x3x3 grid-cube
-           do idim=1,ndim
-              do i=1,ig
-                 x0(i,idim)=xg(ind_grid(i),idim)-3.0D0*dx
-              end do
-           end do
-           do i=1,ig
-              ind_cell(i)=father(ind_grid(i))
-           end do
+              if(ip==nvector)then
+                 ! Lower left corner of 3x3x3 grid-cube
+                 do idim=1,ndim
+                    do i=1,ig
+                       x0(i,idim)=xg(ind_grid(i),idim)-3.0D0*dx
+                    end do
+                 end do
+                 do i=1,ig
+                    ind_cell(i)=father(ind_grid(i))
+                 end do
 #ifdef TSC
-           call tsc_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel)
+                 call tsc_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel)
 #else
-           call cic_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel)
+                 call cic_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel)
 #endif
+                 ip=0
+                 ig=0
+                 counter=0
+              end if
+              ipart=nextp(ipart)  ! Go to next particle
+           end do
+           ! End loop over particles
+
+           ! Only tracers, remove one cache line
+           if (counter == 0 .and. ig > 0) then
+              ig = ig - 1
+           end if
         end if
 
+        igrid=next(igrid)   ! Go to next grid
+     end do
+!$omp end do nowait
+     ! End loop over grids
+
+     if(ip>0)then
+        ! Lower left corner of 3x3x3 grid-cube
+        do idim=1,ndim
+           do i=1,ig
+              x0(i,idim)=xg(ind_grid(i),idim)-3.0D0*dx
+           end do
+        end do
+        do i=1,ig
+           ind_cell(i)=father(ind_grid(i))
+        end do
+#ifdef TSC
+        call tsc_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel)
+#else
+        call cic_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel)
+#endif
      end if
+
   end do
+!$omp end parallel
+  ! End loop over cpus
+
 
 end subroutine rho_from_current_level
 
@@ -987,28 +973,29 @@ subroutine multipole_fine(ilevel)
   end do
 
   ! Initialize fields to zero
-!$omp parallel do private(ind,iskip,i,idim) schedule(static,nvector)
-  do i=1,active(ilevel)%ngrid
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
+!$omp parallel private(iskip)
+!$omp do
+  do ind=1,twotondim
+     iskip=ncoarse+(ind-1)*ngridmax
+     do i=1,active(ilevel)%ngrid
         unew(active(ilevel)%igrid(i)+iskip,1)=0.0D0
         do idim=1,ndim
            unew(active(ilevel)%igrid(i)+iskip,idim+1)=0.0D0
         end do
      end do
   end do
-
   ! Compute mass multipoles in each cell
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
+!$omp do private(ngrid,ind_grid) schedule(static,nchunk)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
         ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
      end do
      call sub_multipole_fine(ind_grid,ngrid,ilevel,xc)
-  enddo
-
+  end do
+!$omp end do nowait
+!$omp end parallel
   ! Update boundaries
   do idim=1,ndim+1
      call make_virtual_fine_dp(unew(1,idim),ilevel)
@@ -1273,26 +1260,30 @@ subroutine cic_from_multipole(ilevel)
   if(verbose)write(*,111)ilevel
 
   ! Initialize density field to zero
-!$omp parallel do private(icpu,ind,iskip,i) collapse(2)
+!$omp parallel private(iskip,ncache)
+!$omp do
   do ind=1,twotondim
+     iskip=ncoarse+(ind-1)*ngridmax
      do icpu=1,ncpu
-        iskip=ncoarse+(ind-1)*ngridmax
         do i=1,reception(icpu,ilevel)%ngrid
            rho(reception(icpu,ilevel)%igrid(i)+iskip)=0.0D0
         end do
      end do
   end do
-!$omp parallel do private(ind,iskip,i) schedule(static,nvector)
-  do i=1,active(ilevel)%ngrid
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
-           rho(active(ilevel)%igrid(i)+iskip)=0.0D0
+!$omp end do nowait
+!$omp do
+  do ind=1,twotondim
+     iskip=ncoarse+(ind-1)*ngridmax
+     do i=1,active(ilevel)%ngrid
+        rho(active(ilevel)%igrid(i)+iskip)=0.0D0
      end do
   end do
+!$omp end do nowait
   ! Reset rho in physical boundaries
-  do ibound=1,nboundary
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
+!$omp do
+  do ind=1,twotondim
+     iskip=ncoarse+(ind-1)*ngridmax
+     do ibound=1,nboundary
         do i=1,boundary(ibound,ilevel)%ngrid
            rho(boundary(ibound,ilevel)%igrid(i)+iskip)=0.0
         end do
@@ -1302,7 +1293,7 @@ subroutine cic_from_multipole(ilevel)
   if(hydro)then
      ! Perform a restriction over split cells (ilevel+1)
      ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
+!$omp do private(ngrid,ind_grid) schedule(static,nchunk)
      do igrid=1,ncache,nvector
         ! Gather nvector grids
         ngrid=MIN(nvector,ncache-igrid+1)
@@ -1311,7 +1302,9 @@ subroutine cic_from_multipole(ilevel)
         end do
         call cic_cell(ind_grid,ngrid,ilevel)
      end do
+!$omp end do nowait
   end if
+!$omp end parallel
 
 111 format('   Entering cic_from_multipole for level',i2)
 
