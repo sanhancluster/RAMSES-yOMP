@@ -877,10 +877,6 @@ subroutine merge_sink(ilevel)
   ! MC Tracer
   integer :: isink_new, isink_old
 
-  ! OMP
-  integer :: ithr,ngrid1,ngrid2,kgrid
-  integer,dimension(1:nthr) :: head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr
-
   pi=twopi/2.0d0
   factG=1d0
   if(cosmo)factG=3d0/8d0/pi*omega_m*aexp
@@ -1277,8 +1273,9 @@ subroutine merge_sink(ilevel)
 #endif
   end do
   ! End loop over sinks
-
-!$omp parallel do private(isink) schedule(static,nchunk)
+  nsink=new_sink
+!$omp parallel
+!$omp do
   do isink=1,new_sink
      xsink_new(isink,1)=xsink_new(isink,1)/msink_new(isink)+xsink(int(oksink_new(isink)),1)
      vsink_new(isink,1)=vsink_new(isink,1)/msink_new(isink)
@@ -1291,9 +1288,7 @@ subroutine merge_sink(ilevel)
      vsink_new(isink,3)=vsink_new(isink,3)/msink_new(isink)
 #endif
   end do
-
-  nsink=new_sink
-!$omp parallel do private(isink) schedule(static,nchunk)
+!$omp do
   do isink=1,nsink
      msink (isink)=msink_new (isink)
      dMsmbh(isink)=dMsmbh_new(isink)
@@ -1314,9 +1309,8 @@ subroutine merge_sink(ilevel)
      end if
      !/Particles dynamical friction (HP)
   end do
-
   ! Periodic boundary conditions
-!$omp parallel do private(isink,xx,yy,zz) schedule(static,nchunk)
+!$omp do private(xx,yy,zz)
   do isink=1,nsink
      xx=xsink(isink,1)
      if(xx<-scale*skip_loc(1))then
@@ -1347,51 +1341,95 @@ subroutine merge_sink(ilevel)
      xsink(isink,3)=zz
 #endif
   enddo
-
+!$omp end parallel
   deallocate(rank_old,idsink_old,tsink_old)
 
   !-----------------------------------------------------
   ! Remove sink particles that are part of a FOF group.
   !-----------------------------------------------------
   ! Loop over cpus
+!$omp parallel private(ig,ip,ind_part,ind_grid_part)
+  do icpu=1,ncpu
+     ig=0
+     ip=0
+     ! Loop over grids
+!$omp do private(igrid,npart1,npart2,ipart,next_part,ind_grid) schedule(dynamic,nchunk)
+     do jgrid=1,numbl(icpu,ilevel)
+        if(icpu==myid)then
+           igrid=active(ilevel)%igrid(jgrid)
+        else
+           igrid=reception(icpu,ilevel)%igrid(jgrid)
+        end if
+        npart1=numbp(igrid)  ! Number of particles in the grid
+        npart2=0
 
-#ifdef _OPENMP
-  call cpu_parallel_link_cloud(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr)
-#else
-  head_thr(1)=headl(myid,ilevel)
-  ngrid_thr(1)=numbl(myid,ilevel)
-  npart_thr(1)=1
-  icpu_thr(1)=1
-  jgrid_thr(1)=1
-#endif
+        ! Count sink particles
+        if(npart1>0)then
+           ipart=headp(igrid)
+           ! Loop over particles
+           do jpart=1,npart1
+              ! Save next particle   <--- Very important !!!
+              next_part=nextp(ipart)
+              !if(idp(ipart).lt.0 .and. tp(ipart).eq.0.d0)then
+              if (is_cloud(typep(ipart))) then
+                 npart2=npart2+1
+              endif
+              ipart=next_part  ! Go to next particle
+           end do
+        endif
 
-!$omp parallel do private(ithr,icpu,igrid,jgrid,kgrid,npart1,npart2,ipart,jpart,ip,ig,ngrid1,ngrid2) &
-!$omp & private(next_part,ind_grid,ind_part,ind_grid_part)
-  do ithr=1,nthr
-     ngrid1=ngrid_thr(ithr)
-     if(ngrid1>0 .and. npart_thr(ithr)>0) then
-        ! Initialize index
-        ip=0
+        ! Gather sink particles
+        if(npart2>0)then
+           ig=ig+1
+           ind_grid(ig)=igrid
+           ipart=headp(igrid)
+           ! Loop over particles
+           do jpart=1,npart1
+              ! Save next particle   <--- Very important !!!
+              next_part=nextp(ipart)
+              ! Select only sink particles
+              !if(idp(ipart).lt.0 .and. tp(ipart).eq.0.d0)then
+              if (is_cloud(typep(ipart))) then
+                 if(ig==0)then
+                    ig=1
+                    ind_grid(ig)=igrid
+                 end if
+                 ip=ip+1
+                 ind_part(ip)=ipart
+                 ind_grid_part(ip)=ig
+              endif
+              if(ip==nvector)then
+                 call kill_sink(ind_part,ind_grid_part,ip)
+                 ip=0
+                 ig=0
+              end if
+              ipart=next_part  ! Go to next particle
+           end do
+           ! End loop over particles
+        end if
+     end do
+!$omp end do nowait
+     ! End loop over grids
+     if(ip>0)call kill_sink(ind_part,ind_grid_part,ip)
+  end do
+  ! End loop over cpus
+  !-----------------------------------------------------
+  ! Take care of the tracer particles
+  !-----------------------------------------------------
+
+
+  if (MC_tracer) then
+     do icpu=1,ncpu
         ig=0
-        ! End initialize index
-        igrid=head_thr(ithr)
-        icpu=icpu_thr(ithr)
-        jgrid=jgrid_thr(ithr)
-
-        kgrid=1
-        ngrid2=numbl(icpu,ilevel)
-
-        do ! Loop over cpus,grids
-           if(kgrid>ngrid1)exit
-           if(jgrid>ngrid2) then
-              icpu=icpu+1
-              jgrid=1
-              ngrid2=numbl(icpu,ilevel)
-              igrid=headl(icpu,ilevel)
-              cycle
+        ip=0
+        ! Loop over grids
+!$omp do private(igrid,npart1,npart2,ipart,next_part,isink_old,isink_new) schedule(dynamic,nchunk)
+        do jgrid=1,numbl(icpu,ilevel)
+           if(icpu==myid)then
+              igrid=active(ilevel)%igrid(jgrid)
+           else
+              igrid=reception(icpu,ilevel)%igrid(jgrid)
            end if
-
-           ! Do something with igrid
            npart1=numbp(igrid)  ! Number of particles in the grid
            npart2=0
 
@@ -1402,166 +1440,41 @@ subroutine merge_sink(ilevel)
               do jpart=1,npart1
                  ! Save next particle   <--- Very important !!!
                  next_part=nextp(ipart)
-                 !if(idp(ipart).lt.0 .and. tp(ipart).eq.0.d0)then
-                 if (is_cloud(typep(ipart))) then
+                 if (is_cloud_tracer(typep(ipart))) then
                     npart2=npart2+1
                  endif
                  ipart=next_part  ! Go to next particle
               end do
-           endif
+           end if
 
            ! Gather sink particles
-           if(npart2>0)then
-              ig=ig+1
-              ind_grid(ig)=igrid
-              ipart=headp(igrid)
+           if (npart2 > 0) then
+              ipart = headp(igrid)
               ! Loop over particles
-              do jpart=1,npart1
+              do jpart = 1, npart1
                  ! Save next particle   <--- Very important !!!
-                 next_part=nextp(ipart)
-                 ! Select only sink particles
-                 !if(idp(ipart).lt.0 .and. tp(ipart).eq.0.d0)then
-                 if (is_cloud(typep(ipart))) then
-                    if(ig==0)then
-                       ig=1
-                       ind_grid(ig)=igrid
-                    end if
-                    ip=ip+1
-                    ind_part(ip)=ipart
-                    ind_grid_part(ip)=ig
-                 endif
-                 if(ip==nvector)then
-                    call kill_sink(ind_part,ind_grid_part,ip)
-                    ip=0
-                    ig=0
+                 next_part = nextp(ipart)
+                 ! Select only tracer particles
+                 if (is_cloud_tracer(typep(ipart))) then
+                    ! Get old sink index
+                    isink_old = partp(ipart)
+                    ! Compute new sink index
+                    isink_new = gsink(psink_inv(isink_old))
+
+                    partp(ipart) = isink_new
+
                  end if
-                 ipart=next_part  ! Go to next particle
+
+                 ipart = next_part  ! Go to next particle
               end do
               ! End loop over particles
            end if
-           ! End igrid usage
-
-           kgrid=kgrid+1
-           jgrid=jgrid+1
-
-           igrid=next(igrid)
         end do
-        ! End loop over cpus, grids
-        ! Clean cache here
-        if(ip>0)call kill_sink(ind_part,ind_grid_part,ip)
-        ! End clean cache
-     end if
-  end do
-  ! End loop over threads
-
-  !-----------------------------------------------------
-  ! Take care of the tracer particles
-  !-----------------------------------------------------
-
-
-  if (MC_tracer) then
-#ifdef _OPENMP
-     call cpu_parallel_link_cloud_tracer(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr)
-#else
-     head_thr(1)=headl(myid,ilevel)
-     ngrid_thr(1)=numbl(myid,ilevel)
-     npart_thr(1)=1
-     icpu_thr(1)=1
-     jgrid_thr(1)=1
-#endif
-!$omp parallel do private(ithr,icpu,igrid,jgrid,kgrid,npart1,npart2,ipart,jpart,ip,ig,ngrid1,ngrid2) &
-!$omp & private(next_part,isink_old,isink_new)
-     do ithr=1,nthr
-        ngrid1=ngrid_thr(ithr)
-        if(ngrid1>0 .and. npart_thr(ithr)>0) then
-           ! Initialize index
-           ip=0
-           ig=0
-           ! End initialize index
-           igrid=head_thr(ithr)
-           icpu=icpu_thr(ithr)
-           jgrid=jgrid_thr(ithr)
-
-           kgrid=1
-           ngrid2=numbl(icpu,ilevel)
-
-           do ! Loop over cpus,grids
-              if(kgrid>ngrid1)exit
-              if(jgrid>ngrid2) then
-                 icpu=icpu+1
-                 jgrid=1
-                 ngrid2=numbl(icpu,ilevel)
-                 igrid=headl(icpu,ilevel)
-                 cycle
-              end if
-
-              ! Do something with igrid
-              npart1=numbp(igrid)  ! Number of particles in the grid
-              npart2=0
-
-              ! Count sink particles
-              if(npart1>0)then
-                 ipart=headp(igrid)
-                 ! Loop over particles
-                 do jpart=1,npart1
-                    ! Save next particle   <--- Very important !!!
-                    next_part=nextp(ipart)
-                    if (is_cloud_tracer(typep(ipart))) then
-                       npart2=npart2+1
-                    endif
-                    ipart=next_part  ! Go to next particle
-                 end do
-              end if
-
-              ! Gather sink particles
-              if (npart2 > 0) then
-                 ipart = headp(igrid)
-                 ! Loop over particles
-                 do jpart = 1, npart1
-                    ! Save next particle   <--- Very important !!!
-                    next_part = nextp(ipart)
-                    ! Select only tracer particles
-                    if (is_cloud_tracer(typep(ipart))) then
-                       ! Get old sink index
-                       isink_old = partp(ipart)
-                       ! Compute new sink index
-                       isink_new = gsink(psink_inv(isink_old))
-
-                       partp(ipart) = isink_new
-
-                    end if
-
-                    ipart = next_part  ! Go to next particle
-                 end do
-                 ! End loop over particles
-              end if
-              ! End igrid usage
-
-              kgrid=kgrid+1
-              jgrid=jgrid+1
-
-              igrid=next(igrid)
-           end do
-           ! End loop over cpus, grids
-           ! Clean cache here
-           ! End clean cache
-        end if
-     end do
-
-     ! Loop over cpus
-     do icpu=1,ncpu
-        igrid=headl(icpu,ilevel)
-        ig=0
-        ip=0
-        ! Loop over grids
-        do jgrid=1,numbl(icpu,ilevel)
-
-           igrid = next(igrid)   ! Go to next grid
-        end do
-
+!$omp end do nowait
      end do
      ! End loop over cpus
   end if
+!$omp end parallel
 
   deallocate(psink,gsink)
 
@@ -1737,7 +1650,7 @@ subroutine kill_entire_cloud(ilevel)
   ! This routine removes cloud particles (including the central one).
   !------------------------------------------------------------------------
   integer::igrid,jgrid,ipart,jpart,next_part
-  integer::ig,ip,npart1,npart2,icpu,ncache,istart
+  integer::ig,ip,npart1,npart2,icpu,ncache
   integer,dimension(1:nvector)::ind_grid,ind_part,ind_grid_part
   logical,dimension(1:nvector)::ok=.true.
 
@@ -1750,107 +1663,83 @@ subroutine kill_entire_cloud(ilevel)
 
   ! Gather sink and cloud particles.
   ! Loop over cpus
-
-  if(nboundary/=0)write(*,*)'Warning: nboundary>0 is not suppported in this OMP-implemented version'
-
-#ifdef _OPENMP
-  call cpu_parallel_link_cloud(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr)
-#else
-  head_thr(1)=headl(myid,ilevel)
-  ngrid_thr(1)=numbl(myid,ilevel)
-  npart_thr(1)=1
-  icpu_thr(1)=1
-  jgrid_thr(1)=1
-#endif
-!$omp parallel do private(ithr,icpu,igrid,jgrid,kgrid,npart1,npart2,ipart,jpart,ip,ig,ngrid1,ngrid2) &
-!$omp & private(next_part,ind_grid,ind_part,ind_grid_part)
-  do ithr=1,nthr
-     ngrid1=ngrid_thr(ithr)
-     if(ngrid1>0 .and. npart_thr(ithr)>0) then
-        ! Initialize index
-        ip=0
-        ig=0
-        ! End initialize index
-        igrid=head_thr(ithr)
-        icpu=icpu_thr(ithr)
-        jgrid=jgrid_thr(ithr)
-
-        kgrid=1
-        ngrid2=numbl(icpu,ilevel)
-
-        do ! Loop over cpus,grids
-           if(kgrid>ngrid1)exit
-           if(jgrid>ngrid2) then
-              icpu=icpu+1
-              jgrid=1
-              ngrid2=numbl(icpu,ilevel)
-              igrid=headl(icpu,ilevel)
-              cycle
-           end if
-
-           ! Do something with igrid
-           npart1=numbp(igrid)  ! Number of particles in the grid
-           npart2=0
-           ! Count sink and cloud particles
-           if(npart1>0)then
-              ipart=headp(igrid)
-              ! Loop over particles
-              do jpart=1,npart1
-                 ! Save next particle   <--- Very important !!!
-                 next_part=nextp(ipart)
-                 !if(idp(ipart).lt.0)then
-                 if (is_cloud(typep(ipart))) then
-                    npart2=npart2+1
-                 endif
-                 ipart=next_part  ! Go to next particle
-              end do
-           endif
-          ! Gather sink and cloud particles
-           if(npart2>0)then
-              ig=ig+1
-              ind_grid(ig)=igrid
-              ipart=headp(igrid)
-              ! Loop over particles
-              do jpart=1,npart1
-                 ! Save next particle   <--- Very important !!!
-                 next_part=nextp(ipart)
-                 ! Select only sink particles
-                 !if(idp(ipart).lt.0)then
-                 if (is_cloud(typep(ipart))) then
-                    if(ig==0)then
-                       ig=1
-                       ind_grid(ig)=igrid
-                    end if
-                    ip=ip+1
-                    ind_part(ip)=ipart
-                    ind_grid_part(ip)=ig
-                 endif
-                 if(ip==nvector)then
-                    call remove_list(ind_part,ind_grid_part,ok,ip)
-                    call add_free_cond(ind_part,ok,ip)
-                    ip=0
-                    ig=0
-                 end if
-                 ipart=next_part  ! Go to next particle
-              end do
-             ! End loop over particles
-           end if
-           ! End igrid usage
-
-           kgrid=kgrid+1
-           jgrid=jgrid+1
-
-           igrid=next(igrid)
-        end do
-        ! End loop over cpus, grids
-        ! Clean cache here
-        if(ip>0)then
-           call remove_list(ind_part,ind_grid_part,ok,ip)
-           call add_free_cond(ind_part,ok,ip)
+!$omp parallel private(ig,ip,ncache,ind_part,ind_grid_part)
+  do icpu=1,ncpu+nboundary
+     if(icpu<=ncpu)then
+        ncache=numbl(icpu,ilevel)
+     else
+        ncache=numbb(icpu-ncpu,ilevel)
+     end if
+     ig=0
+     ip=0
+     ! Loop over grids
+!$omp do private(igrid,npart1,npart2,ipart,next_part,ind_grid) schedule(dynamic,nchunk)
+     do jgrid=1,ncache
+        if(icpu==myid)then
+           igrid=active(ilevel)%igrid(jgrid)
+        elseif(icpu>ncpu)then
+           igrid=boundary(icpu-ncpu,ilevel)%igrid(jgrid)
+        else
+           igrid=reception(icpu,ilevel)%igrid(jgrid)
         end if
-        ! End clean cache
+
+        npart1=numbp(igrid)  ! Number of particles in the grid
+        npart2=0
+        ! Count sink and cloud particles
+        if(npart1>0)then
+           ipart=headp(igrid)
+           ! Loop over particles
+           do jpart=1,npart1
+              ! Save next particle   <--- Very important !!!
+              next_part=nextp(ipart)
+              !if(idp(ipart).lt.0)then
+              if (is_cloud(typep(ipart))) then
+                 npart2=npart2+1
+              endif
+              ipart=next_part  ! Go to next particle
+           end do
+        endif
+       ! Gather sink and cloud particles
+        if(npart2>0)then
+           ig=ig+1
+           ind_grid(ig)=igrid
+           ipart=headp(igrid)
+           ! Loop over particles
+           do jpart=1,npart1
+              ! Save next particle   <--- Very important !!!
+              next_part=nextp(ipart)
+              ! Select only sink particles
+              !if(idp(ipart).lt.0)then
+              if (is_cloud(typep(ipart))) then
+                 if(ig==0)then
+                    ig=1
+                    ind_grid(ig)=igrid
+                 end if
+                 ip=ip+1
+                 ind_part(ip)=ipart
+                 ind_grid_part(ip)=ig
+              endif
+              if(ip==nvector)then
+                 call remove_list(ind_part,ind_grid_part,ok,ip)
+                 call add_free_cond(ind_part,ok,ip)
+                 ip=0
+                 ig=0
+              end if
+              ipart=next_part  ! Go to next particle
+           end do
+          ! End loop over particles
+        end if
+     end do
+!$omp end do nowait
+     ! End loop over grids
+     if(ip>0)then
+        call remove_list(ind_part,ind_grid_part,ok,ip)
+        call add_free_cond(ind_part,ok,ip)
      end if
   end do
+  ! End loop over cpus
+!$omp end parallel
+
 111 format('   Entering kill_cloud for level ',I2)
 end subroutine kill_entire_cloud
 !################################################################
@@ -1879,8 +1768,6 @@ subroutine bondi_hoyle(ilevel)
   integer ,dimension(1:ncpu,1:IRandNumSize)::allseed
 
   ! OMP
-  integer :: ithr,ngrid1,ngrid2,kgrid
-  integer,dimension(1:nthr) :: head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr
   integer,dimension(1:IRandNumSize),save :: ompseed
   real(dp) :: rand
 !$omp threadprivate(ompseed)
@@ -1913,119 +1800,87 @@ subroutine bondi_hoyle(ilevel)
   ! Reset new sink variables
   v2sink_new=0d0; c2sink_new=0d0; oksink_new=0d0
 
-  ! Gather sink particles only.
-#ifdef _OPENMP
-  call cpu_parallel_link_cloud(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr)
-#else
-  head_thr(1)=headl(myid,ilevel)
-  ngrid_thr(1)=numbl(myid,ilevel)
-  npart_thr(1)=1
-  icpu_thr(1)=1
-  jgrid_thr(1)=1
-#endif
-!$omp parallel do private(ithr,icpu,igrid,jgrid,kgrid,npart1,npart2,ipart,jpart,ip,ig,ngrid1,ngrid2) &
-!$omp & private(next_part,ind_grid,ind_part,ind_grid_part,isink,r2)
-  do ithr=1,nthr
-     ngrid1=ngrid_thr(ithr)
-     if(ngrid1>0 .and. npart_thr(ithr)>0) then
-        ! Initialize index
-        ip=0
-        ig=0
-        ! End initialize index
-        igrid=head_thr(ithr)
-        icpu=icpu_thr(ithr)
-        jgrid=jgrid_thr(ithr)
+!$omp parallel private(ig,ip,ind_part,ind_grid,ind_grid_part)
+  do icpu=1,ncpu
+     ig=0
+     ip=0
+     ! Loop over grids
+!$omp do private(igrid,npart1,npart2,ipart,next_part,isink,r2) schedule(dynamic,nchunk)
+     do jgrid=1,numbl(icpu,ilevel)
+        if(icpu==myid)then
+           igrid=active(ilevel)%igrid(jgrid)
+        else
+           igrid=reception(icpu,ilevel)%igrid(jgrid)
+        end if
+        npart1=numbp(igrid)  ! Number of particles in the grid
+        npart2=0
 
-        kgrid=1
-        ngrid2=numbl(icpu,ilevel)
+        ! Count only sink particles
+        if(npart1>0)then
+           ipart=headp(igrid)
+           ! Loop over particles
+           do jpart=1,npart1
+              ! Save next particle   <--- Very important !!!
+              next_part=nextp(ipart)
+              !if(idp(ipart).lt.0 .and. tp(ipart).eq.0.d0)then
+              if (is_cloud(typep(ipart))) then
+                 isink=-idp(ipart)
 
-        do ! Loop over cpus,grids
-           if(kgrid>ngrid1)exit
-           if(jgrid>ngrid2) then
-              icpu=icpu+1
-              jgrid=1
-              ngrid2=numbl(icpu,ilevel)
-              igrid=headl(icpu,ilevel)
-              cycle
-           end if
-
-           ! Do something with igrid
-           npart1=numbp(igrid)  ! Number of particles in the grid
-           npart2=0
-
-           ! Count only sink particles
-           if(npart1>0)then
-              ipart=headp(igrid)
-              ! Loop over particles
-              do jpart=1,npart1
-                 ! Save next particle   <--- Very important !!!
-                 next_part=nextp(ipart)
-                 !if(idp(ipart).lt.0 .and. tp(ipart).eq.0.d0)then
-                 if (is_cloud(typep(ipart))) then
-                    isink=-idp(ipart)
-
-                    r2=0.0
-                    do idim=1,ndim
-                       r2=r2+(xp(ipart,idim)-xsink(isink,idim))**2
-                    end do
-                    if(r2==0.0)then
-                       npart2=npart2+1
-                    end if
-                 endif
-                 ipart=next_part  ! Go to next particle
-              end do
-           endif
-
-           ! Gather only sink particles
-           if(npart2>0)then
-              ig=ig+1
-              ind_grid(ig)=igrid
-              ipart=headp(igrid)
-              ! Loop over particles
-              do jpart=1,npart1
-                 ! Save next particle   <--- Very important !!!
-                 next_part=nextp(ipart)
-                 ! Select only sink particles
-                 !if(idp(ipart).lt.0 .and. tp(ipart).eq.0.d0)then
-                 if (is_cloud(typep(ipart))) then
-                    isink=-idp(ipart)
-                    r2=0.0
-                    do idim=1,ndim
-                       r2=r2+(xp(ipart,idim)-xsink(isink,idim))**2
-                    end do
-                    if(r2==0.0)then
-                       if(ig==0)then
-                          ig=1
-                          ind_grid(ig)=igrid
-                       end if
-                       ip=ip+1
-                       ind_part(ip)=ipart
-                       ind_grid_part(ip)=ig
-                    endif
-                 endif
-                 if(ip==nvector)then
-                    call bondi_velocity(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
-                    ip=0
-                    ig=0
+                 r2=0.0
+                 do idim=1,ndim
+                    r2=r2+(xp(ipart,idim)-xsink(isink,idim))**2
+                 end do
+                 if(r2==0.0)then
+                    npart2=npart2+1
                  end if
-                 ipart=next_part  ! Go to next particle
-              end do
-              ! End loop over particles
-           end if
-           ! End igrid usage
+              endif
+              ipart=next_part  ! Go to next particle
+           end do
+        endif
 
-           kgrid=kgrid+1
-           jgrid=jgrid+1
-
-           igrid=next(igrid)
-        end do
-        ! End loop over cpus, grids
-        ! Clean cache here
-        if(ip>0)call bondi_velocity(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
-        ! End clean cache
-     end if
+        ! Gather only sink particles
+        if(npart2>0)then
+           ig=ig+1
+           ind_grid(ig)=igrid
+           ipart=headp(igrid)
+           ! Loop over particles
+           do jpart=1,npart1
+              ! Save next particle   <--- Very important !!!
+              next_part=nextp(ipart)
+              ! Select only sink particles
+              !if(idp(ipart).lt.0 .and. tp(ipart).eq.0.d0)then
+              if (is_cloud(typep(ipart))) then
+                 isink=-idp(ipart)
+                 r2=0.0
+                 do idim=1,ndim
+                    r2=r2+(xp(ipart,idim)-xsink(isink,idim))**2
+                 end do
+                 if(r2==0.0)then
+                    if(ig==0)then
+                       ig=1
+                       ind_grid(ig)=igrid
+                    end if
+                    ip=ip+1
+                    ind_part(ip)=ipart
+                    ind_grid_part(ip)=ig
+                 endif
+              endif
+              if(ip==nvector)then
+                 call bondi_velocity(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+                 ip=0
+                 ig=0
+              end if
+              ipart=next_part  ! Go to next particle
+           end do
+           ! End loop over particles
+        end if
+     end do
+!$omp end do nowait
+     ! End loop over grids
+     if(ip>0)call bondi_velocity(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
   end do
-  ! End loop over threads
+  ! End loop over cpus
+!$omp end parallel
 
   if(nsink>0)then
 #ifndef WITHOUTMPI
@@ -2061,96 +1916,76 @@ subroutine bondi_hoyle(ilevel)
   ! Gather sink and cloud particles.
   wdens=0d0; wvol =0d0; wc2=0d0; wmom=0d0; jsink_new=0d0
 
-!$omp parallel do private(ithr,icpu,igrid,jgrid,kgrid,npart1,npart2,ipart,jpart,ip,ig,ngrid1,ngrid2) &
-!$omp & private(next_part,ind_grid,ind_part,ind_grid_part)
-  do ithr=1,nthr
-     ngrid1=ngrid_thr(ithr)
-     if(ngrid1>0 .and. npart_thr(ithr)>0) then
-        ! Initialize index
-        ip=0
-        ig=0
-        ! End initialize index
-        igrid=head_thr(ithr)
-        icpu=icpu_thr(ithr)
-        jgrid=jgrid_thr(ithr)
 
-        kgrid=1
-        ngrid2=numbl(icpu,ilevel)
+!$omp parallel private(ig,ip,ind_part,ind_grid,ind_grid_part)
+  do icpu=1,ncpu
+     ig=0
+     ip=0
+     ! Loop over grids
+!$omp do private(igrid,npart1,npart2,ipart,next_part) schedule(dynamic,nchunk)
+     do jgrid=1,numbl(icpu,ilevel)
+        if(icpu==myid)then
+           igrid=active(ilevel)%igrid(jgrid)
+        else
+           igrid=reception(icpu,ilevel)%igrid(jgrid)
+        end if
+        npart1=numbp(igrid)  ! Number of particles in the grid
+        npart2=0
 
-        do ! Loop over cpus,grids
-           if(kgrid>ngrid1)exit
-           if(jgrid>ngrid2) then
-              icpu=icpu+1
-              jgrid=1
-              ngrid2=numbl(icpu,ilevel)
-              igrid=headl(icpu,ilevel)
-              cycle
-           end if
+        ! Count sink and cloud particles
+        if(npart1>0)then
+           ipart=headp(igrid)
+           ! Loop over particles
+           do jpart=1,npart1
+              ! Save next particle   <--- Very important !!!
+              next_part=nextp(ipart)
+              !if(idp(ipart).lt.0 .and. tp(ipart).eq.0.d0)then
+              if (is_cloud(typep(ipart))) then
+                 npart2=npart2+1
+              endif
+              ipart=next_part  ! Go to next particle
+           end do
+        endif
 
-           ! Do something with igrid
-           npart1=numbp(igrid)  ! Number of particles in the grid
-           npart2=0
-
-           ! Count sink and cloud particles
-           if(npart1>0)then
-              ipart=headp(igrid)
-              ! Loop over particles
-              do jpart=1,npart1
-                 ! Save next particle   <--- Very important !!!
-                 next_part=nextp(ipart)
-                 !if(idp(ipart).lt.0 .and. tp(ipart).eq.0.d0)then
-                 if (is_cloud(typep(ipart))) then
-                    npart2=npart2+1
-                 endif
-                 ipart=next_part  ! Go to next particle
-              end do
-           endif
-
-           ! Gather sink and cloud particles
-           if(npart2>0)then
-              ig=ig+1
-              ind_grid(ig)=igrid
-              ipart=headp(igrid)
-              ! Loop over particles
-              do jpart=1,npart1
-                 ! Save next particle   <--- Very important !!!
-                 next_part=nextp(ipart)
-                 ! Select only sink particles
-                 !if(idp(ipart).lt.0 .and. tp(ipart).eq.0.d0)then
-                 if (is_cloud(typep(ipart))) then
-                    if(ig==0)then
-                       ig=1
-                       ind_grid(ig)=igrid
-                    end if
-                    ip=ip+1
-                    ind_part(ip)=ipart
-                    ind_grid_part(ip)=ig
-                 endif
-                 if(ip==nvector)then
-                    call average_density(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
-                    if((.not.random_jet)) call jet_AGN(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
-                    ip=0
-                    ig=0
+        ! Gather sink and cloud particles
+        if(npart2>0)then
+           ig=ig+1
+           ind_grid(ig)=igrid
+           ipart=headp(igrid)
+           ! Loop over particles
+           do jpart=1,npart1
+              ! Save next particle   <--- Very important !!!
+              next_part=nextp(ipart)
+              ! Select only sink particles
+              !if(idp(ipart).lt.0 .and. tp(ipart).eq.0.d0)then
+              if (is_cloud(typep(ipart))) then
+                 if(ig==0)then
+                    ig=1
+                    ind_grid(ig)=igrid
                  end if
-                 ipart=next_part  ! Go to next particle
-              end do
-              ! End loop over particles
-           end if
-           ! End igrid usage
+                 ip=ip+1
+                 ind_part(ip)=ipart
+                 ind_grid_part(ip)=ig
+              endif
+              if(ip==nvector)then
+                 call average_density(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+                 if((.not.random_jet)) call jet_AGN(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+                 ip=0
+                 ig=0
+              end if
+              ipart=next_part  ! Go to next particle
+           end do
+           ! End loop over particles
+        end if
 
-           kgrid=kgrid+1
-           jgrid=jgrid+1
-
-           igrid=next(igrid)
-        end do
-        ! End loop over cpus, grids
-        ! Clean cache here
-        if(ip>0)call average_density(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
-        if(ip>0 .and.(.not.random_jet)) call jet_AGN(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
-        ! End clean cache
-     end if
+     end do
+!$omp end do nowait
+     ! End loop over grids
+     if(ip>0)call average_density(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+     if(ip>0 .and.(.not.random_jet)) call jet_AGN(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
   end do
-  ! End loop over threads
+  ! End loop over cpus
+!$omp end parallel
 
   if(random_jet)then
      if(myid==1)then
@@ -2760,8 +2595,6 @@ subroutine grow_bondi(ilevel)
   real(dp)::r_bondi,r_acc
 
   ! OMP
-  integer :: ithr,ngrid1,ngrid2,kgrid
-  integer,dimension(1:nthr) :: head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr
   integer,dimension(1:IRandNumSize),save :: ompseed
   real(dp) :: rand
 !$omp threadprivate(ompseed)
@@ -2802,9 +2635,9 @@ subroutine grow_bondi(ilevel)
         iskip=ncoarse+(ind-1)*ngridmax
         do ivar=1,nvar
               unew(active(ilevel)%igrid(i)+iskip,ivar) = uold(active(ilevel)%igrid(i)+iskip,ivar)
-        enddo
-     enddo
-  enddo
+        end do
+     end do
+  end do
 
   d_star=0d0
   if (star)d_star=n_star/scale_nH
@@ -2891,105 +2724,73 @@ subroutine grow_bondi(ilevel)
      end if
   end do
 
-#ifdef _OPENMP
-  call cpu_parallel_link_cloud(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr)
-#else
-  head_thr(1)=headl(myid,ilevel)
-  ngrid_thr(1)=numbl(myid,ilevel)
-  npart_thr(1)=1
-  icpu_thr(1)=1
-  jgrid_thr(1)=1
-#endif
 
-!$omp parallel do private(ithr,icpu,igrid,jgrid,kgrid,npart1,npart2,ipart,jpart,ip,ig,ngrid1,ngrid2) &
-!$omp & private(next_part,ind_grid,ind_part,ind_grid_part)
-  do ithr=1,nthr
-     ngrid1=ngrid_thr(ithr)
-     if(ngrid1>0 .and. npart_thr(ithr)>0) then
-        ! Initialize index
-        ip=0
-        ig=0
-        ! End initialize index
-        igrid=head_thr(ithr)
-        icpu=icpu_thr(ithr)
-        jgrid=jgrid_thr(ithr)
+!$omp parallel private(ig,ip,ind_part,ind_grid,ind_grid_part)
+  do icpu=1,ncpu
+     ig=0
+     ip=0
+     ! Loop over grids
+!$omp do private(igrid,npart1,npart2,ipart,next_part) schedule(dynamic,nchunk)
+     do jgrid=1,numbl(icpu,ilevel)
+        if(icpu==myid)then
+           igrid=active(ilevel)%igrid(jgrid)
+        else
+           igrid=reception(icpu,ilevel)%igrid(jgrid)
+        end if
+        npart1=numbp(igrid)  ! Number of particles in the grid
+        npart2=0
 
-        kgrid=1
-        ngrid2=numbl(icpu,ilevel)
+        ! Count sink and cloud particles
+        if(npart1>0)then
+           ipart=headp(igrid)
+           ! Loop over particles
+           do jpart=1,npart1
+              ! Save next particle   <--- Very important !!!
+              next_part=nextp(ipart)
+              !if(idp(ipart).lt.0 .and. tp(ipart).eq.0.d0)then
+              if (is_cloud(typep(ipart))) then
+                 npart2=npart2+1
+              endif
+              ipart=next_part  ! Go to next particle
+           end do
+        endif
 
-        do ! Loop over cpus,grids
-           if(kgrid>ngrid1)exit
-           if(jgrid>ngrid2) then
-              icpu=icpu+1
-              jgrid=1
-              ngrid2=numbl(icpu,ilevel)
-              igrid=headl(icpu,ilevel)
-              cycle
-           end if
-
-           ! Do something with igrid
-           npart1=numbp(igrid)  ! Number of particles in the grid
-           npart2=0
-
-           ! Count sink and cloud particles
-           if(npart1>0)then
-              ipart=headp(igrid)
-              ! Loop over particles
-              do jpart=1,npart1
-                 ! Save next particle   <--- Very important !!!
-                 next_part=nextp(ipart)
-                 !if(idp(ipart).lt.0 .and. tp(ipart).eq.0.d0)then
-                 if (is_cloud(typep(ipart))) then
-                    npart2=npart2+1
-                 endif
-                 ipart=next_part  ! Go to next particle
-              end do
-           endif
-
-           ! Gather sink and cloud particles
-           if(npart2>0)then
-              ig=ig+1
-              ind_grid(ig)=igrid
-              ipart=headp(igrid)
-              ! Loop over particles
-              do jpart=1,npart1
-                 ! Save next particle   <--- Very important !!!
-                 next_part=nextp(ipart)
-                 ! Select only sink particles
-                 !if(idp(ipart).lt.0 .and. tp(ipart).eq.0.d0)then
-                 if (is_cloud(typep(ipart))) then
-                    if(ig==0)then
-                       ig=1
-                       ind_grid(ig)=igrid
-                    end if
-                    ip=ip+1
-                    ind_part(ip)=ipart
-                    ind_grid_part(ip)=ig
-                 endif
-                 if(ip==nvector)then
-                    call accrete_bondi(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,ompseed)
-                    ip=0
-                    ig=0
+        ! Gather sink and cloud particles
+        if(npart2>0)then
+           ig=ig+1
+           ind_grid(ig)=igrid
+           ipart=headp(igrid)
+           ! Loop over particles
+           do jpart=1,npart1
+              ! Save next particle   <--- Very important !!!
+              next_part=nextp(ipart)
+              ! Select only sink particles
+              !if(idp(ipart).lt.0 .and. tp(ipart).eq.0.d0)then
+              if (is_cloud(typep(ipart))) then
+                 if(ig==0)then
+                    ig=1
+                    ind_grid(ig)=igrid
                  end if
-                 ipart=next_part  ! Go to next particle
-              end do
-              ! End loop over particles
-           end if
-
-           ! End igrid usage
-
-           kgrid=kgrid+1
-           jgrid=jgrid+1
-
-           igrid=next(igrid)
-        end do
-        ! End loop over cpus, grids
-        ! Clean cache here
-        if(ip>0)call accrete_bondi(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,ompseed)
-        ! End clean cache
-     end if
+                 ip=ip+1
+                 ind_part(ip)=ipart
+                 ind_grid_part(ip)=ig
+              endif
+              if(ip==nvector)then
+                 call accrete_bondi(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,ompseed)
+                 ip=0
+                 ig=0
+              end if
+              ipart=next_part  ! Go to next particle
+           end do
+           ! End loop over particles
+        end if
+     end do
+!$omp end do nowait
+     ! End loop over grids
+     if(ip>0)call accrete_bondi(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,ompseed)
   end do
-  ! End loop over threads
+  ! End loop over cpus
+!$omp end parallel
 
   if(nsink>0)then
 #ifndef WITHOUTMPI
