@@ -15,17 +15,17 @@ SOLVER = hydro
 #############################################################################
 # Options
 GRACKLE = 0
-RT=0
-DICE=0
-REFMASK=0
-LONGINT=0
-QUADHILBERT=0
+RT = 0
+DICE = 0
+REFMASK = 0
+LONGINT = 0
+QUADHILBERT = 0
 # Set to 1 to use old MPI include statements instead of more recent `use mpi`.
 USE_OLD_MPI_INCLUDE = 0
 EXEC = ramses
 # Activate OpenMP
-OPENMP=1
-OMP_NCHUNK=1
+OPENMP = 1
+OMP_NCHUNK = 1
 #############################################################################
 # Patches to include (without DICE)
 #PATCH = ../patch/AGNSFSNpatch/AGNspinRT:../patch/AGNSFSNpatch/sfsn
@@ -129,11 +129,11 @@ FFLAGS = -x f95-cpp-input $(DEFINES)
 #FFLAGS = -Mpreprocess $(DEFINES)
 
 # --- MPI, ifort syntax ------------------------------
-#F90 = mpif90 -qopenmp
+#F90 = mpiifort $(OMPFLAG)
 #FFLAGS = -cpp -O3 -xAVX -fpp $(DEFINES) -DNOSYSTEM
 
 # --- MPI, ifort syntax, additional checks -----------
-#F90 = mpif90
+#F90 = mpiifort $(OMPFLAG)
 #FFLAGS = -warn all -O0 -g -traceback -fpe0 -ftrapuv -check bounds -cpp $(DEFINES) -DNOSYSTEM
 
 # --- MPI, ifort syntax for Xeon phi ------------------------------
