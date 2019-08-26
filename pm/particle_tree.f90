@@ -181,7 +181,7 @@ subroutine make_tree_fine(ilevel)
   real(dp),dimension(1:3)::xbound
   real(dp),dimension(1:3)::skip_loc
   integer::igrid,jgrid,ipart,jpart,next_part
-  integer::ig,ip,npart1,icpu,ncache
+  integer::ig,ip,npart1,icpu
   integer,dimension(1:nvector)::ind_grid,ind_part,ind_grid_part
 
   if(numbtot(1,ilevel)==0)return
@@ -197,7 +197,8 @@ subroutine make_tree_fine(ilevel)
   if(ndim>2)skip_loc(3)=dble(kcoarse_min)
   scale=boxlen/dble(nx_loc)
 
-!$omp parallel private(icpu,ncache,ind_grid,ind_part,ind_grid_part,ig,ip)
+  ! Particle tree structure changes while run, so we copy the current state and use them for indexing.
+!$omp parallel private(icpu,ind_grid,ind_part,ind_grid_part,ig,ip)
 !$omp do
   do ipart=1,npartmax
      itmpp(ipart)=nextp(ipart)
@@ -209,19 +210,13 @@ subroutine make_tree_fine(ilevel)
      numbp_old(igrid)=numbp(igrid)
   end do
 
-  ! Not compatible with OpenMP because tree structure changes during the loop (I think)
   ! Loop over cpus
   do icpu=1,ncpu
      ig=0
      ip=0
      ! Loop over grids
-     if(icpu==myid)then
-        ncache=active(ilevel)%ngrid
-     else
-        ncache=reception(icpu,ilevel)%ngrid
-     end if
-!$omp do private(igrid,npart1,ipart,next_part) schedule(dynamic,nvector)
-     do jgrid=1,ncache
+!$omp do private(igrid,npart1,ipart,next_part) schedule(dynamic,nchunk)
+     do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
         else
@@ -253,7 +248,6 @@ subroutine make_tree_fine(ilevel)
            end do
            ! End loop over particles
         end if
-        igrid=next(igrid)   ! Go to next grid
      end do
 !$omp end do nowait
      ! End loop over grids
@@ -431,21 +425,24 @@ subroutine kill_tree_fine(ilevel)
   if(numbtot(1,ilevel+1)==0)return
   if(verbose)write(*,111)ilevel
   ! Reset all linked lists at level ilevel+1
-!$omp parallel do private(i) schedule(static,nvector)
+!$omp parallel
+!$omp do
   do i=1,active(ilevel+1)%ngrid
      headp(active(ilevel+1)%igrid(i))=0
      tailp(active(ilevel+1)%igrid(i))=0
      numbp(active(ilevel+1)%igrid(i))=0
   end do
-!$omp parallel do private(icpu,i) schedule(static)
+!$omp end do nowait
   do icpu=1,ncpu
+!$omp do
      do i=1,reception(icpu,ilevel+1)%ngrid
         headp(reception(icpu,ilevel+1)%igrid(i))=0
         tailp(reception(icpu,ilevel+1)%igrid(i))=0
         numbp(reception(icpu,ilevel+1)%igrid(i))=0
      end do
+!$omp end do nowait
   end do
-
+!$omp end parallel
   ! Sort particles between ilevel and ilevel+1
 #ifdef _OPENMP
   call cpu_parallel_link_all(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr)
@@ -615,14 +612,15 @@ subroutine merge_tree_fine(ilevel)
   !---------------------------------------------------------------
   integer::igrid,iskip,icpu
   integer::i,ind,ncache,ngrid
-  integer,dimension(1:nvector),save::ind_grid,ind_cell,ind_grid_son
-  logical,dimension(1:nvector),save::ok
+  integer,dimension(1:nvector)::ind_grid,ind_cell,ind_grid_son
+  logical,dimension(1:nvector)::ok
 
   if(numbtot(1,ilevel)==0)return
   if(ilevel==nlevelmax)return
   if(verbose)write(*,111)ilevel
 
   ! Loop over cpus
+!$omp parallel private(icpu,ncache)
   do icpu=1,ncpu
      if(icpu==myid)then
         ncache=active(ilevel)%ngrid
@@ -630,6 +628,7 @@ subroutine merge_tree_fine(ilevel)
         ncache=reception(icpu,ilevel)%ngrid
      end if
      ! Loop over grids by vector sweeps
+!$omp do private(ngrid,ind_grid,iskip,ind_cell,ind_grid_son,ok)
      do igrid=1,ncache,nvector
         ngrid=MIN(nvector,ncache-igrid+1)
         if(icpu==myid)then
@@ -656,6 +655,7 @@ subroutine merge_tree_fine(ilevel)
            do i=1,ngrid
            if(ok(i))then
            if(numbp(ind_grid_son(i))>0)then
+!$omp critical
               if(numbp(ind_grid(i))>0)then
                  ! Connect son linked list at the tail of father linked list
                  nextp(tailp(ind_grid(i)))=headp(ind_grid_son(i))
@@ -668,17 +668,18 @@ subroutine merge_tree_fine(ilevel)
                  tailp(ind_grid(i))=tailp(ind_grid_son(i))
                  numbp(ind_grid(i))=numbp(ind_grid_son(i))
               end if
-
+!$omp end critical
            end if
            end if
            end do
         end do
         ! End loop over children
      end do
+!$omp end do nowait
      ! End loop over grids
   end do
   ! End loop over cpus
-
+!$omp end parallel
 111 format('   Entering merge_tree_fine for level ',I2)
 
 end subroutine merge_tree_fine
@@ -779,7 +780,7 @@ subroutine virtual_tree_fine(ilevel)
      ! Use itmpp to store the index within communicator
      ! Note: itmpp is also used in `sink_particle_tracer` for
      ! `gas_tracers`, so there is no interference here.
-!$omp parallel do private(icpu,ipcom,igrid,jgrid,npart1,ipart,jpart)
+!$omp parallel do private(icpu,ipcom,igrid,jgrid,npart1,ipart,jpart) schedule(dynamic)
      do icpu=1,ncpu
         if(reception(icpu,ilevel)%npart>0)then
            ! Gather particles by vector sweeps
@@ -959,9 +960,11 @@ subroutine virtual_tree_fine(ilevel)
   end if
 
   ! Scatter new particles from communication buffer
+!$omp parallel private(icpu,ncache)
   do icpu=1,ncpu
      ! Loop over particles by vector sweeps
      ncache=emission(icpu,ilevel)%npart
+!$omp do private(npart1,ind_com)
      do ipart=1,ncache,nvector
         npart1=min(nvector,ncache-ipart+1)
         do ip=1,npart1
@@ -973,9 +976,10 @@ subroutine virtual_tree_fine(ilevel)
         ! index in communicator -> index in cpu
         call empty_comm(ind_com,npart1,ilevel,icpu)
      end do
-
+!$omp end do
      ! Loop on star tracers in the communicator
      if (MC_tracer) then
+!$omp do private(jpart,d2min,jpart2,x1,x2,d2)
         do ipart = 1, ncache
            ! At this moment fp(ipart,1) is overwritten with particle index
            jpart = emission(icpu,ilevel)%fp(ipart,1)
@@ -1019,9 +1023,10 @@ subroutine virtual_tree_fine(ilevel)
               end if
            end if
         end do
+!$omp end do nowait
      end if
   end do
-
+!$omp end parallel
   ! Deallocate temporary communication buffers
   do icpu=1,ncpu
      ncache=emission(icpu,ilevel)%npart

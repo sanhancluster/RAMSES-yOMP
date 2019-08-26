@@ -46,7 +46,7 @@ subroutine move_fine(ilevel)
 !$omp parallel private(igrid,jgrid,npart1,ipart,next_part,jpart,ig,ip,ind_grid,ind_part,ind_grid_part,local_counter)
   ig=0
   ip=0
-!$omp do schedule(dynamic,nvector)
+!$omp do schedule(dynamic,nchunk)
   do jgrid=1,active(ilevel)%ngrid
      igrid=active(ilevel)%igrid(jgrid)
      npart1=numbp(igrid)  ! Number of particles in the grid
@@ -89,6 +89,7 @@ subroutine move_fine(ilevel)
         end if
      end if
   end do
+!$omp end do nowait
   ! End loop over grids
   if(ip>0)call move1(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
 !$omp end parallel
@@ -122,7 +123,7 @@ subroutine move_fine(ilevel)
 !$omp parallel private(igrid,jgrid,npart1,ipart,next_part,jpart,ip,ig,ind_grid,ind_part,ind_grid_part,local_counter,part_type)
      ig=0
      ip=0
-!$omp do schedule(dynamic,nvector)
+!$omp do schedule(dynamic,nchunk)
      do jgrid=1,active(ilevel)%ngrid
         igrid=active(ilevel)%igrid(jgrid)
         npart1=numbp(igrid)  ! Number of particles in the grid

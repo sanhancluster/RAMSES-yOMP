@@ -98,17 +98,28 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   ! MC Tracer =================================================
   ! Reset tmpp array that contains the probability to move away from cell
   if (MC_tracer) then
-     tmpp=0d0
+!$omp parallel do
+     do ipart=1,npartmax
+        if(tmpp(ipart)>0d0)tmpp(ipart) = 0d0
+     end do
   end if
   ! End MC Tracer
 
   ! Loop over cpus
+  ! OMPNOTE: not easy to avoid race condition
+!!$omp parallel private(icpu,ip,ind_grid,ind_pos_cell,,mSN,pSN,mZSN)
   do icpu=1,ncpu
-     igrid=headl(icpu,ilevel)
      ip=0
 
      ! Loop over grids
+!!$omp do private(igrid,npart1,npart2,ipart,next_part,x0,mw8,mzw8,pw8,ok,ind_son,ind,iskip,ind_cell,mejecta) &
+!!$omp& reduction(+:nSNc) schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
+        if(icpu==myid)then
+           igrid=active(ilevel)%igrid(jgrid)
+        else
+           igrid=reception(icpu,ilevel)%igrid(jgrid)
+        end if
         npart1=numbp(igrid)  ! Number of particles in the grid
         npart2=0
 
@@ -212,7 +223,6 @@ subroutine mechanical_feedback_fine(ilevel,icount)
 
 
         end if
-        igrid=next(igrid)   ! Go to next grid
      end do ! End loop over grids
 
      if (ip>0) then
@@ -270,7 +280,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
         ! End MC Tracer =============================================
      end if
   end do ! End loop over cpus
-
+!!$omp end parallel
 
 #ifndef WITHOUTMPI
   nSNc_mpi=0

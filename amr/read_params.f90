@@ -63,7 +63,11 @@ subroutine read_params
        tracer_first_balance_part_per_cell,tracer_first_balance_levelmin,tracer_per_cell,tracer_level
   ! MPI initialization
 #ifndef WITHOUTMPI
-  call MPI_INIT(ierr)
+  call MPI_INIT_THREAD(MPI_THREAD_SERIALIZED,info2,ierr)
+  if(info2<MPI_THREAD_SERIALIZED) then
+      write(*,*) 'Error: MPI_THREAD_SERIALIZED is not supported in current MPI library'
+      stop
+  end if
   call MPI_COMM_RANK(MPI_COMM_WORLD,myid,ierr)
   call MPI_COMM_SIZE(MPI_COMM_WORLD,ncpu,ierr)
   myid=myid+1 ! Careful with this...
@@ -89,6 +93,11 @@ subroutine read_params
   write(*,*)' '
   write(*,'(" Working with nproc = ",I4," for ndim = ",I1)')ncpu,ndim
   ! Check nvar is not too small
+#ifdef OMP_NCHUNK
+  write(*,'(" With nvector = ",I3," and nchunks = ",I3)')nvector,nchunk
+#else
+  write(*,'(" With nvector = ",I3)')nvector
+#endif
 #ifdef SOLVERhydro
   write(*,'(" Using solver = hydro with nvar = ",I2)')nvar
   if(nvar<ndim+2)then
@@ -97,6 +106,7 @@ subroutine read_params
      call clean_stop
   endif
 #endif
+
 #ifdef SOLVERmhd
   write(*,'(" Using solver = mhd with nvar = ",I2)')nvar
   if(nvar<8)then

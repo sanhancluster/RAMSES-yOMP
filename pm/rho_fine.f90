@@ -72,7 +72,6 @@ subroutine rho_fine(ilevel,icount)
           call cic_from_multipole(i)
 #endif
           ! Update boundaries
-          !! Main bottleneck
           call make_virtual_reverse_dp(rho(1),i)
           call make_virtual_fine_dp   (rho(1),i)
        end do
@@ -168,6 +167,7 @@ subroutine rho_fine(ilevel,icount)
      call rho_from_current_level(ilevel)
   end if
   ! Update boudaries
+  ! Main bottleneck
   call make_virtual_reverse_dp(rho(1),ilevel)
   call make_virtual_fine_dp   (rho(1),ilevel)
   if(ilevel==cic_levelmax)then
@@ -215,7 +215,7 @@ subroutine rho_fine(ilevel,icount)
   ! Compute quasi Lagrangian refinement map
   !-----------------------------------------
   if(m_refine(ilevel)>-1.0d0)then
-!$omp parallel do private(ind,iskip,i)
+!$omp parallel do private(iskip)
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
         do i=1,active(ilevel)%ngrid
@@ -229,14 +229,6 @@ subroutine rho_fine(ilevel,icount)
      ! Update boundaries
      call make_virtual_fine_int(cpu_map2(1),ilevel)
   end if
-
-!!$  do ind=1,twotondim
-!!$     iskip=ncoarse+(ind-1)*ngridmax
-!!$     do i=1,active(ilevel)%ngrid
-!!$        print*,rho(active(ilevel)%igrid(i)+iskip),rho_tot
-!!$     end do
-!!$  end do
-
 
 111 format('   Entering rho_fine for level ',I2)
 
@@ -258,7 +250,7 @@ subroutine rho_from_current_level(ilevel)
   ! level ilevel (boundary particles).
   ! Arrays flag1 and flag2 are used as temporary work space.
   !------------------------------------------------------------------
-  integer::igrid,jgrid,ipart,jpart,idim,icpu,ncache
+  integer::igrid,jgrid,ipart,jpart,idim,icpu
   integer::i,ig,ip,npart1
   real(dp)::dx
 
@@ -268,28 +260,19 @@ subroutine rho_from_current_level(ilevel)
 
   integer :: counter
 
-  ! OMP
-  integer :: ithr,ngrid1,ngrid2,kgrid
-  integer,dimension(1:nthr) :: head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr
-
   ! Mesh spacing in that level
   dx=0.5D0**ilevel
 
 
 
   ! Loop over cpus
-!$omp parallel private(icpu,ncache,ig,ip,ind_grid,ind_part,ind_grid_part,ind_cell,x0)
+!$omp parallel private(icpu,ig,ip,ind_grid,ind_part,ind_grid_part,ind_cell,x0)
   do icpu=1,ncpu
      ! Loop over grids
      ig=0
      ip=0
-     if(icpu==myid)then
-        ncache=active(ilevel)%ngrid
-     else
-        ncache=reception(icpu,ilevel)%ngrid
-     end if
-!$omp do private(igrid,npart1,ipart,counter) schedule(dynamic,nvector)
-     do jgrid=1,ncache
+!$omp do private(igrid,npart1,ipart,counter) schedule(dynamic,nchunk)
+     do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
         else
@@ -599,6 +582,7 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel)
   ! Particle-based arrays
   logical ,dimension(1:nvector)::ok
   real(dp),dimension(1:nvector)::mmm
+  real(dp),dimension(1:ndim+1)::multipole_tmp
   ! Save type
   type(part_t),dimension(1:nvector)::fam
   real(dp),dimension(1:nvector)::vol2
@@ -654,17 +638,20 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel)
   ! FIXME: should use mmm instead of mp, but gives different binary output
   !        for no reason that I can think of
   if(ilevel==levelmin)then
+     multipole_tmp=0d0
      do j=1,np
         ! multipole(1)=multipole(1)+mp(ind_part(j))
-!$omp atomic update
-        multipole(1)=multipole(1)+mmm(j)
+        multipole_tmp(1)=multipole_tmp(1)+mmm(j)
      end do
      do idim=1,ndim
         do j=1,np
            ! multipole(idim+1)=multipole(idim+1)+mp(ind_part(j))*xp(ind_part(j),idim)
-!$omp atomic update
-           multipole(idim+1)=multipole(idim+1)+mmm(j)*xp(ind_part(j),idim)
+           multipole_tmp(idim+1)=multipole_tmp(idim+1)+mmm(j)*xp(ind_part(j),idim)
         end do
+     end do
+     do idim=1,ndim+1
+!$omp atomic update
+        multipole(idim)=multipole(idim)+multipole_tmp(idim)
      end do
   end if
 
@@ -973,7 +960,7 @@ subroutine multipole_fine(ilevel)
   end do
 
   ! Initialize fields to zero
-!$omp parallel private(iskip)
+!$omp parallel private(iskip,ncache)
 !$omp do
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
@@ -986,7 +973,7 @@ subroutine multipole_fine(ilevel)
   end do
   ! Compute mass multipoles in each cell
   ncache=active(ilevel)%ngrid
-!$omp do private(ngrid,ind_grid) schedule(static,nchunk)
+!$omp do private(ngrid,ind_grid)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
