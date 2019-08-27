@@ -1552,13 +1552,12 @@ subroutine create_cloud_from_sink
   integer ::icpu,isink,indp,ii,jj,kk,nx_loc,idim
   real(dp),dimension(1:ndim)::xrel
   real(dp),dimension(1:nvector,1:ndim)::xtest
-  integer ,dimension(1:nvector)::ind_grid,cc
-  integer ,dimension(1:ncloud_sink)::ind_cloud
+  integer ,dimension(1:nvector)::ind_grid,cc,ind_cloud
   logical ,dimension(1:nvector)::ok_true
   logical,dimension(1:ndim)::period
   logical::in_box
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
-  integer::icloud
+  integer::cloud_counter
 
   ! Conversion factor from user units to cgs units
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
@@ -1589,49 +1588,52 @@ subroutine create_cloud_from_sink
   rmax=dble(ir_cloud)*dx_min
   rmass=dble(ir_cloud_massive)*dx_min
 
-  ! Create cloud
-!$omp parallel do private(kk,jj,ii,xrel,rr,isink,xtest,in_box,idim,ind_cloud,indp,cc,icloud)
-  do isink=1,nsink
-     xtest(1,1:3)=xsink(isink,1:3)
-     in_box=.true.
-     do idim=1,ndim
-        if (period(idim) .and. xtest(1,idim)>boxlen)xtest(1,idim)=xtest(1,idim)-boxlen
-        if (period(idim) .and. xtest(1,idim)<0.)xtest(1,idim)=xtest(1,idim)+boxlen
-        if (xtest(1,idim)<0.0 .or. xtest(1,idim)>boxlen)in_box=.false.
-     end do
-     cc(1)=0
-     if(in_box) call cmp_cpumap(xtest,cc,1)
-     if(cc(1).eq.myid)then
-        call add_list_single(ind_cloud,ind_grid(1),ncloud_sink)
-        icloud=0
-        do kk=-2*ir_cloud,2*ir_cloud
-        do jj=-2*ir_cloud,2*ir_cloud
+  cloud_counter=0
+
+!$omp parallel do private(kk,jj,ii,xrel,rr,isink,xtest,in_box,idim,cc,ind_cloud,indp) collapse(3)
+  do kk=-2*ir_cloud,2*ir_cloud
+     do jj=-2*ir_cloud,2*ir_cloud
         do ii=-2*ir_cloud,2*ir_cloud
            xrel(1)=dble(ii)*dx_min/2.0
            xrel(2)=dble(jj)*dx_min/2.0
            xrel(3)=dble(kk)*dx_min/2.0
            rr=sqrt(sum(xrel**2))
            if(rr<=rmax)then
-              xtest(1,1:3)=xsink(isink,1:3)+xrel(1:3)
-              icloud=icloud+1
-              indp=ind_cloud(icloud)
-              idp(indp)=-isink
-              levelp(indp)=nlevelmax_current
-              mp(indp)=msink(isink)/dble(ncloud_sink)
-              xp(indp,1:3)=xtest(1,1:3)
-              vp(indp,1:3)=vsink(isink,1:3)
-              tp(indp)=tsink(isink)     ! Birth epoch
-              typep(indp)%family = FAM_CLOUD
-              if((ii.eq.0).and.(jj.eq.0).and.(kk.eq.0))then
-                 typep(indp)%tag = TAG_CLOUD_CENTRAL  !Central cloud particle
-              else
-                 typep(indp)%tag = 0
-              endif
+              do isink=1,nsink
+                 xtest(1,1:3)=xsink(isink,1:3)+xrel(1:3)
+                 in_box=.true.
+                 do idim=1,ndim
+                    if (period(idim) .and. xtest(1,idim)>boxlen)xtest(1,idim)=xtest(1,idim)-boxlen
+                    if (period(idim) .and. xtest(1,idim)<0.)xtest(1,idim)=xtest(1,idim)+boxlen
+                    if (xtest(1,idim)<0.0 .or. xtest(1,idim)>boxlen)in_box=.false.
+                 end do
+                 cc(1)=0
+                 if(in_box)call cmp_cpumap(xtest,cc,1)
+                 if(cc(1).eq.myid)then
+                    call remove_free(ind_cloud,1)
+                    ! ind_grid is shared; -> should be critical
+!$omp critical(omp_particle_link)
+                    call add_list(ind_cloud,ind_grid,ok_true,1)
+!$omp end critical(omp_particle_link)
+                    cloud_counter=cloud_counter+1
+                    indp=ind_cloud(1)
+                    idp(indp)=-isink
+                    levelp(indp)=nlevelmax_current
+                    mp(indp)=msink(isink)/dble(ncloud_sink)
+                    xp(indp,1:3)=xtest(1,1:3)
+                    vp(indp,1:3)=vsink(isink,1:3)
+                    tp(indp)=tsink(isink)     ! Birth epoch
+                    typep(indp)%family = FAM_CLOUD
+                    if((ii.eq.0).and.(jj.eq.0).and.(kk.eq.0))then
+                       typep(indp)%tag = TAG_CLOUD_CENTRAL  !Central cloud particle
+                    else
+                       typep(indp)%tag = 0
+                    endif
+                 end if
+              end do
            end if
         end do
-        end do
-        end do
-     end if
+     end do
   end do
 
 #endif
