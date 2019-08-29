@@ -964,7 +964,7 @@ subroutine virtual_tree_fine(ilevel)
   do icpu=1,ncpu
      ! Loop over particles by vector sweeps
      ncache=emission(icpu,ilevel)%npart
-!$omp do private(npart1,ind_com)
+!$omp do private(npart1,ind_com) schedule(dynamic)
      do ipart=1,ncache,nvector
         npart1=min(nvector,ncache-ipart+1)
         do ip=1,npart1
@@ -979,7 +979,7 @@ subroutine virtual_tree_fine(ilevel)
 !$omp end do
      ! Loop on star tracers in the communicator
      if (MC_tracer) then
-!$omp do private(jpart,d2min,jpart2,x1,x2,d2)
+!$omp do private(jpart,d2min,jpart2,x1,x2,d2) schedule(dynamic,nchunk)
         do ipart = 1, ncache
            ! At this moment fp(ipart,1) is overwritten with particle index
            jpart = emission(icpu,ilevel)%fp(ipart,1)

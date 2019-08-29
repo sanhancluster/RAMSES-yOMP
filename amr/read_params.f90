@@ -94,7 +94,7 @@ subroutine read_params
   write(*,'(" Working with nproc = ",I4," for ndim = ",I1)')ncpu,ndim
   ! Check nvar is not too small
 #ifdef OMP_NCHUNK
-  write(*,'(" With nvector = ",I3," and nchunks = ",I3)')nvector,nchunk
+  write(*,'(" With nvector = ",I3," and nchunk = ",I3)')nvector,nchunk
 #else
   write(*,'(" With nvector = ",I3)')nvector
 #endif
