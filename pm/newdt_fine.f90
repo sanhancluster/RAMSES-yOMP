@@ -22,7 +22,7 @@ subroutine newdt_fine(ilevel)
   !-----------------------------------------------------------
   integer::igrid,jgrid,ipart,jpart
   integer::npart1,ip
-  integer,dimension(1:nvector),save::ind_part
+  integer,dimension(1:nvector)::ind_part
   real(kind=8)::dt_loc,dt_all,ekin_loc,ekin_all
   real(dp)::tff,fourpi,threepi2
 #ifdef ATON
@@ -32,9 +32,6 @@ subroutine newdt_fine(ilevel)
   real(dp)::dt_rt
 #endif
   logical :: ok
-
-  integer :: ithr
-  integer,dimension(1:nthr) :: head_thr,ngrid_thr
 
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
@@ -83,49 +80,44 @@ subroutine newdt_fine(ilevel)
 
      ! Compute maximum time step on active region
      if(numbl(myid,ilevel)>0)then
-#ifdef _OPENMP
-        call parallel_link_notracer(headl(myid,ilevel),numbl(myid,ilevel),head_thr,ngrid_thr)
-#else
-        head_thr(1)=headl(myid,ilevel)
-        ngrid_thr(1)=numbl(myid,ilevel)
-#endif
-!$omp parallel do private(ithr,igrid,jgrid,npart1,ipart,jpart,ip,ind_part,ok) reduction(MIN:dt_loc) reduction(+:ekin_loc)
-        do ithr=1,nthr
-           ip=0
-           ! Loop over grids
-           igrid = head_thr(ithr)
-              do jgrid = 1, ngrid_thr(ithr)
-              npart1=numbp(igrid)   ! Number of particles in the grid
-              if(npart1>0)then
-                 ! Loop over particles
-                 ipart=headp(igrid)
-                 do jpart=1,npart1
-                    ! MC_tracer ================
-                    ! skip tracer particles here
-                    if (tracer) then
-                       ok = is_not_tracer(typep(ipart))
-                    else
-                       ok = .true.
-                    end if
-                    ! End MC Tracer ============
+        ! Loop over grids
+!$omp parallel private(ip,ind_part) reduction(MIN:dt_loc) reduction(+:ekin_loc)
+        ip=0
+!$omp do private(igrid,npart1,ipart,ok)
+        do jgrid=1,numbl(myid,ilevel)
+           igrid=active(ilevel)%igrid(jgrid)
 
-                    if (ok) then
-                       ip=ip+1
-                       ind_part(ip)=ipart
-                       if(ip==nvector)then
-                          call newdt2(ind_part,dt_loc,ekin_loc,ip,ilevel)
-                          ip=0
-                       end if
+           npart1=numbp(igrid)   ! Number of particles in the grid
+           if(npart1>0)then
+              ! Loop over particles
+              ipart=headp(igrid)
+              do jpart=1,npart1
+                 ! MC_tracer ================
+                 ! skip tracer particles here
+                 if (tracer) then
+                    ok = is_not_tracer(typep(ipart))
+                 else
+                    ok = .true.
+                 end if
+                 ! End MC Tracer ============
+
+                 if (ok) then
+                    ip=ip+1
+                    ind_part(ip)=ipart
+                    if(ip==nvector)then
+                       call newdt2(ind_part,dt_loc,ekin_loc,ip,ilevel)
+                       ip=0
                     end if
-                    ipart=nextp(ipart)    ! Go to next particle
-                 end do
-                 ! End loop over particles
-              end if
-              igrid=next(igrid)   ! Go to next grid
-           end do
-           ! End loop over grids
-           if(ip>0)call newdt2(ind_part,dt_loc,ekin_loc,ip,ilevel)
+                 end if
+                 ipart=nextp(ipart)    ! Go to next particle
+              end do
+              ! End loop over particles
+           end if
         end do
+!$omp end do nowait
+        ! End loop over grids
+        if(ip>0)call newdt2(ind_part,dt_loc,ekin_loc,ip,ilevel)
+!$omp end parallel
      end if
 
      ! Minimize time step over all cpus

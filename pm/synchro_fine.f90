@@ -28,61 +28,55 @@ subroutine synchro_fine(ilevel)
   endif
 
   ! Synchronize velocity using CIC
-#ifdef _OPENMP
-  call parallel_link_notracer(headl(myid,ilevel),numbl(myid,ilevel),head_thr,ngrid_thr)
-#else
-  head_thr(1)=headl(myid,ilevel)
-  ngrid_thr(1)=numbl(myid,ilevel)
-#endif
-!$omp parallel do private(ithr,igrid,jgrid,npart1,ipart,jpart,ip,ig,ind_grid,ind_part,ind_grid_part,local_counter)
-  do ithr=1,nthr
-     ip=0
-     ig=0
-     ! Loop over grids
-     igrid = head_thr(ithr)
-     do jgrid = 1, ngrid_thr(ithr)
-        npart1=numbp(igrid)  ! Number of particles in the grid
-        if(npart1>0)then
-           ig=ig+1
-           ind_grid(ig)=igrid
-           ipart=headp(igrid)
-           local_counter = 0
-           ! Loop over particles
-           do jpart=1,npart1
-              if(ig==0)then
-                 ig=1
-                 ind_grid(ig)=igrid
-              end if
-              ! MC TRACER PATCH
-              if (is_not_tracer(typep(ipart))) then
-                 local_counter=local_counter+1
-                 ip=ip+1
-                 ind_part(ip)=ipart
-                 ind_grid_part(ip)=ig
-                 if(ip==nvector)then
-                    call sync(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
-                    local_counter=0
-                    ip=0
-                    ig=0
-                 end if
-              else
-                 ! Update level for tracer particles
-                 levelp(ipart) = ilevel
-              end if
-              ipart=nextp(ipart)  ! Go to next particle
-           end do
-           ! End loop over particles
-
-           ! If there was no particle in the grid, remove the grid from the buffer
-           if (local_counter == 0 .and. ig > 0) then
-              ig=ig-1
+!$omp parallel private(ig,ip,ind_grid,ind_part,ind_grid_part)
+  ig=0
+  ip=0
+  ! Loop over grids
+!$omp do private(igrid,npart1,ipart,local_counter) schedule(static)
+  do jgrid=1,numbl(myid,ilevel)
+     igrid=active(ilevel)%igrid(jgrid)
+     npart1=numbp(igrid)  ! Number of particles in the grid
+     if(npart1>0)then
+        ig=ig+1
+        ind_grid(ig)=igrid
+        ipart=headp(igrid)
+        local_counter = 0
+        ! Loop over particles
+        do jpart=1,npart1
+           if(ig==0)then
+              ig=1
+              ind_grid(ig)=igrid
            end if
+           ! MC TRACER PATCH
+           if (is_not_tracer(typep(ipart))) then
+              local_counter=local_counter+1
+              ip=ip+1
+              ind_part(ip)=ipart
+              ind_grid_part(ip)=ig
+              if(ip==nvector)then
+                 call sync(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+                 local_counter=0
+                 ip=0
+                 ig=0
+              end if
+           else
+              ! Update level for tracer particles
+              levelp(ipart) = ilevel
+           end if
+           ipart=nextp(ipart)  ! Go to next particle
+        end do
+        ! End loop over particles
+
+        ! If there was no particle in the grid, remove the grid from the buffer
+        if (local_counter == 0 .and. ig > 0) then
+           ig=ig-1
         end if
-        igrid=next(igrid)   ! Go to next grid
-     end do
-     ! End loop over grids
-     if(ip>0)call sync(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
-  end do ! End loop over threads
+     end if
+  end do
+!$omp end do nowait
+  ! End loop over grids
+  if(ip>0)call sync(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+!$omp end parallel
 
   if(sink)then
      if(nsink>0)then

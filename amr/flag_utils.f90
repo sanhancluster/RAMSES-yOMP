@@ -334,7 +334,7 @@ subroutine userflag_fine(ilevel)
   if(cosmo.and.cooling)then
      ! Finest cell size
      dx_min=(0.5D0**(nlevelmax-nlevelsheld))*scale
-     ! Test is designed so that nlevelmax is activated at aexp~0.8
+     ! Test is designed so that nlevelmax is activated at aexp ~ 0.8
      if(ilevel.gt.(nlevelmax_part+nlevel_collapse-1))then
         if(dx_loc<(4d0**(1d0/ndim))*(dx_min/aexp)) prevent_refine=.true.
      endif

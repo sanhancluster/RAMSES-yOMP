@@ -21,6 +21,7 @@ subroutine move_fine(ilevel)
   type(part_t) :: part_type
 
   !OMP
+  real, dimension(1:nsinkmax,1:ndim*2+1) :: sink_stat_local
   integer, dimension(1:IRandNumSize), save :: ompseed
 !$omp threadprivate(ompseed)
 
@@ -43,10 +44,10 @@ subroutine move_fine(ilevel)
      end do
   endif
 
-!$omp parallel private(igrid,jgrid,npart1,ipart,next_part,jpart,ig,ip,ind_grid,ind_part,ind_grid_part,local_counter)
+!$omp parallel private(ig,ip,ind_grid,ind_part,ind_grid_part) reduction(+:sink_stat_local)
   ig=0
   ip=0
-!$omp do schedule(dynamic,nchunk)
+!$omp do private(igrid,npart1,ipart,local_counter,next_part) schedule(static)
   do jgrid=1,active(ilevel)%ngrid
      igrid=active(ilevel)%igrid(jgrid)
      npart1=numbp(igrid)  ! Number of particles in the grid
@@ -71,7 +72,7 @@ subroutine move_fine(ilevel)
               ind_part(ip)=ipart
               ind_grid_part(ip)=ig
               if(ip==nvector)then
-                 call move1(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+                 call move1(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,sink_stat_local)
                  local_counter=0
                  ip=0
                  ig=0
@@ -91,7 +92,7 @@ subroutine move_fine(ilevel)
   end do
 !$omp end do nowait
   ! End loop over grids
-  if(ip>0)call move1(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+  if(ip>0)call move1(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,sink_stat_local)
 !$omp end parallel
 
   !--------------------------------------------------------------------------------
@@ -113,6 +114,7 @@ subroutine move_fine(ilevel)
            vsink(isink,1:ndim)=vsink_all(isink,1:ndim)
            xsink(isink,1:ndim)=xsink(isink,1:ndim)+vsink(isink,1:ndim)*dtnew(ilevel)
         endif
+		sink_stat(isink,ilevel,:)=sink_stat(isink,ilevel,:)+sink_stat_local(isink,:)
      end do
   endif
 
@@ -120,10 +122,10 @@ subroutine move_fine(ilevel)
   ! Moving tracers
   !--------------------------------------------------------------------------------
   if (MC_tracer) then  ! Loop over grids for MC tracers
-!$omp parallel private(igrid,jgrid,npart1,ipart,next_part,jpart,ip,ig,ind_grid,ind_part,ind_grid_part,local_counter,part_type)
+!$omp parallel private(ip,ig,ind_grid,ind_part,ind_grid_part)
      ig=0
      ip=0
-!$omp do schedule(dynamic,nchunk)
+!$omp do private(igrid,npart1,ipart,next_part,local_counter,part_type) schedule(static)
      do jgrid=1,active(ilevel)%ngrid
         igrid=active(ilevel)%igrid(jgrid)
         npart1=numbp(igrid)  ! Number of particles in the grid
@@ -171,10 +173,8 @@ subroutine move_fine(ilevel)
                  ig=ig-1
               end if
            end if
-
-
      end do
-
+!$omp end do nowait
      if(ip>0) call move_gas_tracer(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,ompseed) ! MC Tracer
 !$omp end parallel
   end if
@@ -246,6 +246,7 @@ subroutine move_fine_static(ilevel)
 #ifndef WITHOUTMPI
   integer::info
 #endif
+  real, dimension(1:nsinkmax,1:ndim*2+1) :: sink_stat_local
 
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
@@ -315,7 +316,7 @@ subroutine move_fine_static(ilevel)
                  ind_part(ip)=ipart
                  ind_grid_part(ip)=ig
                  if(ip==nvector) then
-                    call move1(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+                    call move1(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,sink_stat_local)
                     local_counter=0
                     ip=0
                     ig=0
@@ -332,7 +333,7 @@ subroutine move_fine_static(ilevel)
                  ind_part(ip)=ipart
                  ind_grid_part(ip)=ig
                  if(ip==nvector) then
-                    call move1(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+                    call move1(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,sink_stat_local)
                     local_counter=0
                     ip=0
                     ig=0
@@ -352,7 +353,7 @@ subroutine move_fine_static(ilevel)
      igrid=next(igrid)   ! Go to next grid
   end do
   ! End loop over grids
-  if(ip>0)call move1(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+  if(ip>0)call move1(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,sink_stat_local)
 
   if(sink)then
      if(nsink>0)then
@@ -369,6 +370,7 @@ subroutine move_fine_static(ilevel)
            vsink(isink,1:ndim)=vsink_all(isink,1:ndim)
            xsink(isink,1:ndim)=xsink(isink,1:ndim)+vsink(isink,1:ndim)*dtnew(ilevel)
         endif
+		sink_stat(isink,ilevel,:)=sink_stat(isink,ilevel,:)+sink_stat_local(isink,:)
      end do
   endif
 
@@ -379,7 +381,7 @@ end subroutine move_fine_static
 !#########################################################################
 !#########################################################################
 !#########################################################################
-subroutine move1(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
+subroutine move1(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,sink_stat_local)
   use amr_commons
   use pm_commons
   use poisson_commons
@@ -420,6 +422,8 @@ subroutine move1(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   ! Family
   logical,dimension(1:nvector) :: classical_tracer
 
+  real, dimension(1:nsinkmax,1:ndim*2+1) :: sink_stat_local
+
   ! Conversion factor from user units to cgs units
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
 
@@ -447,7 +451,7 @@ subroutine move1(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   mstar=MAX(del_star*omega_b*rhoc*XH/mH,n_star)/(scale_nH*aexp**3)*vol_min
   do i=1,nlevelmax
      dx_temp=scale*0.5D0**i
-     ! Test is designed so that nlevelmax is activated at aexp \simeq 0.8
+     ! Test is designed so that nlevelmax is activated at aexp ~ 0.8
      if(d0*(dx_temp/2.0)**ndim.ge.mstar/2d0)nlevelmax_loc=i+1
   enddo
   dx_min_loc=scale*0.5d0**nlevelmax_loc
@@ -759,8 +763,9 @@ subroutine move1(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
               vsink_new(isink,1:ndim)=vp(ind_part(j),1:ndim)
               oksink_new(isink)=1.0
            endif
-!$omp atomic update
-           sink_stat(isink,ilevel,ndim*2+1)=sink_stat(isink,ilevel,ndim*2+1)+1d0
+		   ! Main bottleneck: ATOMIC
+!!$omp atomic update
+           sink_stat_local(isink,ndim*2+1)=sink_stat_local(isink,ndim*2+1)+1d0
            do idim=1,ndim
               xx=xp(ind_part(j),idim)+vp(ind_part(j),idim)*dtnew(ilevel)-xsink(isink,idim)
               if(xx>scale*xbound(idim)/2.0)then
@@ -769,10 +774,10 @@ subroutine move1(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
               if(xx<-scale*xbound(idim)/2.0)then
                  xx=xx+scale*xbound(idim)
               endif
-!$omp atomic update
-              sink_stat(isink,ilevel,idim     )=sink_stat(isink,ilevel,idim     )+xsink(isink,idim)+xx
-!$omp atomic update
-              sink_stat(isink,ilevel,idim+ndim)=sink_stat(isink,ilevel,idim+ndim)+vp(ind_part(j),idim)
+!!$omp atomic update
+              sink_stat_local(isink,idim     )=sink_stat_local(isink,idim     )+xsink(isink,idim)+xx
+!!$omp atomic update
+              sink_stat_local(isink,idim+ndim)=sink_stat_local(isink,idim+ndim)+vp(ind_part(j),idim)
            enddo
        endif
      end do

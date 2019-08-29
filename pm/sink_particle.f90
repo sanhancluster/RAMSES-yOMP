@@ -1652,10 +1652,6 @@ subroutine kill_entire_cloud(ilevel)
   integer,dimension(1:nvector)::ind_grid,ind_part,ind_grid_part
   logical,dimension(1:nvector)::ok=.true.
 
-  ! OMP
-  integer :: ithr,ngrid1,ngrid2,kgrid
-  integer,dimension(1:nthr) :: head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr
-
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
 
@@ -3372,7 +3368,7 @@ subroutine grow_jeans(ilevel)
   mstar=MAX(del_star*omega_b*rhoc*XH/mH,n_star)/(scale_nH*aexp**3)*vol_min
   do i=1,nlevelmax
      dx_temp=scale*0.5D0**i
-     ! Test is designed so that nlevelmax is activated at aexp \simeq 0.8
+     ! Test is designed so that nlevelmax is activated at aexp ~ 0.8
      if(d0*(dx_temp/2.0)**ndim.ge.mstar/2d0)nlevelmax_loc=i+1
   enddo
 
@@ -4080,116 +4076,88 @@ subroutine rhostar_from_current_level(ilevel)
   integer,dimension(1:nvector)::ind_part,ind_grid_part
   real(dp),dimension(1:nvector,1:ndim)::x0
 
-  integer :: ithr,ngrid1,ngrid2,kgrid
-  integer,dimension(1:nthr) :: head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr
-
   ! Mesh spacing in that level
   dx=0.5D0**ilevel
 
-#ifdef _OPENMP
-  call cpu_parallel_link_star(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr)
-#else
-  head_thr(1)=headl(myid,ilevel)
-  ngrid_thr(1)=numbl(myid,ilevel)
-  npart_thr(1)=1
-  icpu_thr(1)=1
-  jgrid_thr(1)=1
-#endif
-
-!$omp parallel do private(ithr,icpu,igrid,jgrid,kgrid,npart1,ipart,jpart,ip,ig,ngrid1,ngrid2) &
-!$omp & private(idim,ind_grid,ind_part,ind_grid_part,ind_cell,x0,local_count)
-  do ithr=1,nthr
-     ngrid1=ngrid_thr(ithr)
-     if(ngrid1>0 .and. npart_thr(ithr)>0) then
-        ip=0
-        ig=0
-        igrid=head_thr(ithr)
-        icpu=icpu_thr(ithr)
-        jgrid=jgrid_thr(ithr)
-
-        kgrid=1
-        ngrid2=numbl(icpu,ilevel)
-
-        do ! Loop over cpus,grids
-           if(kgrid>ngrid1)exit
-           if(jgrid>ngrid2) then
-              icpu=icpu+1
-              jgrid=1
-              ngrid2=numbl(icpu,ilevel)
-              igrid=headl(icpu,ilevel)
-              cycle
-           end if
-
-           ! Do something with igrid
-           npart1=numbp(igrid)
-           if(npart1>0)then
-              ig=ig+1
-              ind_grid(ig)=igrid
-              ipart=headp(igrid)
-
-              local_count = 0
-              ! Loop over particles
-              do jpart=1,npart1
-                 if(ig==0)then
-                    ig=1
-                    ind_grid(ig)=igrid
-                 end if
-
-                 ! Select only stars
-                 if (is_star(typep(ipart))) then
-                    local_count = local_count + 1
-                    ip=ip+1
-                    ind_part(ip)=ipart
-                    ind_grid_part(ip)=ig
-                    if(ip==nvector)then
-                       ! Lower left corner of 3x3x3 grid-cube
-                       do idim=1,ndim
-                          do i=1,ig
-                             x0(i,idim)=xg(ind_grid(i),idim)-3.0D0*dx
-                          end do
-                       end do
-                       do i=1,ig
-                          ind_cell(i)=father(ind_grid(i))
-                       end do
-                       call cic_star(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel)
-                       ip=0
-                       ig=0
-                       local_count = 0
-                    end if
-                 end if
-
-                 ipart=nextp(ipart)  ! Go to next particle
-              end do
-              ! End loop over particles
-
-              ! Decrease grid counter for grids with no stars
-              if (local_count == 0 .and. ig>0) then
-                 ind_grid(ig) = 0
-                 ig = ig - 1
-              end if
-           end if
-           ! End igrid usage
-
-           kgrid=kgrid+1
-           jgrid=jgrid+1
-
-           igrid=next(igrid)
-        end do
-        if(ip>0)then
-           ! Lower left corner of 3x3x3 grid-cube
-           do idim=1,ndim
-              do i=1,ig
-                 x0(i,idim)=xg(ind_grid(i),idim)-3.0D0*dx
-              end do
-           end do
-           do i=1,ig
-              ind_cell(i)=father(ind_grid(i))
-           end do
-           call cic_star(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel)
+  ! Loop over cpus
+!$omp parallel private(ig,ip,ind_cell,ind_part,ind_grid,ind_grid_part,x0)
+  do icpu=1,ncpu
+     ! Loop over grids
+     ig=0
+     ip=0
+!$omp do private(igrid,npart1,ipart,local_count)
+     do jgrid=1,numbl(icpu,ilevel)
+        if(icpu==myid)then
+           igrid=active(ilevel)%igrid(jgrid)
+        else
+           igrid=reception(icpu,ilevel)%igrid(jgrid)
         end if
+        npart1=numbp(igrid)  ! Number of particles in the grid
+        if(npart1>0)then
+           ig=ig+1
+           ind_grid(ig)=igrid
+           ipart=headp(igrid)
+
+           local_count = 0
+           ! Loop over particles
+           do jpart=1,npart1
+              if(ig==0)then
+                 ig=1
+                 ind_grid(ig)=igrid
+              end if
+
+              ! Select only stars
+              if (is_star(typep(ipart))) then
+                 local_count = local_count + 1
+                 ip=ip+1
+                 ind_part(ip)=ipart
+                 ind_grid_part(ip)=ig
+                 if(ip==nvector)then
+                    ! Lower left corner of 3x3x3 grid-cube
+                    do idim=1,ndim
+                       do i=1,ig
+                          x0(i,idim)=xg(ind_grid(i),idim)-3.0D0*dx
+                       end do
+                    end do
+                    do i=1,ig
+                       ind_cell(i)=father(ind_grid(i))
+                    end do
+                    call cic_star(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel)
+                    ip=0
+                    ig=0
+                    local_count = 0
+                 end if
+              end if
+
+              ipart=nextp(ipart)  ! Go to next particle
+           end do
+           ! End loop over particles
+
+           ! Decrease grid counter for grids with no stars
+           if (local_count == 0 .and. ig>0) then
+              ind_grid(ig) = 0
+              ig = ig - 1
+           end if
+        end if
+     end do
+!$omp end do nowait
+     ! End loop over grids
+
+     if(ip>0)then
+        ! Lower left corner of 3x3x3 grid-cube
+        do idim=1,ndim
+           do i=1,ig
+              x0(i,idim)=xg(ind_grid(i),idim)-3.0D0*dx
+           end do
+        end do
+        do i=1,ig
+           ind_cell(i)=father(ind_grid(i))
+        end do
+        call cic_star(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel)
      end if
   end do
-
+!$omp end parallel
+  ! End loop over cpus
 
 end subroutine rhostar_from_current_level
 !##############################################################################
@@ -6465,10 +6433,6 @@ subroutine get_drag_part(ilevel)
   ! TODO: Moved to here to use as private param, could be slow for large nsinkmax
   integer, dimension(1:nsinkmax)::sink_cell
 
-  ! OMP
-  integer :: ithr,ngrid1,ngrid2,kgrid
-  integer,dimension(1:nthr) :: head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr
-
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,*) 'Entering get_drag_part for level', ilevel
 
@@ -6530,10 +6494,16 @@ subroutine get_drag_part(ilevel)
   end do
 !$omp end parallel
 
-!$omp parallel do private(isink)
+!$omp parallel do
   do isink = 1, nsink
      vrel_sink (isink, 1:ndim, 1:2) = 0d0
      vrel_sink_norm(isink, 1:2) = tiny(0d0)
+
+     v_DFnew(isink, 1:ndim, 1:2) = 0d0
+     mass_DFnew(isink, 1:2) = tiny(0d0)
+     mass_lowspeednew(isink, 1:2) = 0d0
+     fact_fastnew(isink, 1:2) = 0d0
+     n_partnew(isink, 1:2) = 0
   end do
 
 !$omp parallel do private(isink, itype, idim) collapse(2)
@@ -6552,180 +6522,144 @@ subroutine get_drag_part(ilevel)
   !mass_DF which will be used to compute DF at next timestep and higher levels
   !CARE: Here what we call v_DF is in fact the momentum to correctly
   !mass-weight between CPUS
-#ifdef _OPENMP
-  call cpu_parallel_link_stardm(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr)
-#else
-  head_thr(1)=headl(myid,ilevel)
-  ngrid_thr(1)=numbl(myid,ilevel)
-  npart_thr(1)=1
-  icpu_thr(1)=1
-  jgrid_thr(1)=1
-#endif
-!$omp parallel do private(isink)
-  do isink = 1, nsink
-     v_DFnew(isink, 1:ndim, 1:2) = 0d0
-     mass_DFnew(isink, 1:2) = tiny(0d0)
-     mass_lowspeednew(isink, 1:2) = 0d0
-     fact_fastnew(isink, 1:2) = 0d0
-     n_partnew(isink, 1:2) = 0
-  end do
 
-!$omp parallel do private(ithr,idim,icpu,igrid,jgrid,kgrid,ngrid1,ngrid2) &
-!$omp & private(npart1,ipart,jpart,next_part) &
-!$omp & private(xc,yc,zc,isink,dx,d2_sink_part,nsink_cell,sink_cell,vrel_part_norm) reduction(+:v_DFnew,mass_DFnew,mass_lowspeednew,fact_fastnew,n_partnew)
-  do ithr=1,nthr
-     ngrid1=ngrid_thr(ithr)
-     if(ngrid1>0 .and. npart_thr(ithr)>0) then
-        sink_cell = 0
+  ! Loop over cpus
+!$omp parallel reduction(+:v_DFnew,mass_DFnew,mass_lowspeednew,fact_fastnew,n_partnew)
+  do icpu=1, ncpu
+     ! Loop over grids
+!$omp do private(igrid,npart1,ipart,next_part,xc,yc,zc,isink,dx,d2_sink_part,nsink_cell,sink_cell,vrel_part_norm)
+     do jgrid=1,numbl(icpu,ilevel)
+        if(icpu==myid)then
+           igrid=active(ilevel)%igrid(jgrid)
+        else
+           igrid=reception(icpu,ilevel)%igrid(jgrid)
+        end if
 
-        igrid=head_thr(ithr)
-        icpu=icpu_thr(ithr)
-        jgrid=jgrid_thr(ithr)
+        npart1=numbp(igrid)  ! Number of particles in the grid
+        nsink_cell=0
 
-        kgrid=1
-        ngrid2=numbl(icpu,ilevel)
-
-        do ! Loop over cpus,grids
-           if(kgrid>ngrid1)exit
-           if(jgrid>ngrid2) then
-              icpu=icpu+1
-              jgrid=1
-              ngrid2=numbl(icpu,ilevel)
-              igrid=headl(icpu,ilevel)
-              cycle
-           end if
-
-           ! Do something with igrid
-           npart1=numbp(igrid)  ! Number of particles in the grid
-           nsink_cell=0
-           ! Loop over particles
-           if(npart1>0)then
-              !We check which sink might be close (speeds up calculation)
-              xc = (xg(igrid, 1) - skip_loc(1))*scale
-              yc = (xg(igrid, 2) - skip_loc(2))*scale
-              zc = (xg(igrid, 3) - skip_loc(3))*scale
-              do isink = 1, nsink
-                 dx = abs(xc-xsink(isink, 1))
+      ! Loop over particles
+      if(npart1>0)then
+         !We check which sink might be close (speeds up calculation)
+         xc = (xg(igrid, 1) - skip_loc(1))*scale
+         yc = (xg(igrid, 2) - skip_loc(2))*scale
+         zc = (xg(igrid, 3) - skip_loc(3))*scale
+         do isink = 1, nsink
+             dx = abs(xc-xsink(isink, 1))
+             if (dx.gt.0.5*scale) dx = scale - dx
+             d2_sink_part = dx**2
+             if (d2_sink_part.lt.dx2cell_sink) then
+                 dx = abs(yc-xsink(isink, 2))
                  if (dx.gt.0.5*scale) dx = scale - dx
-                 d2_sink_part = dx**2
+                 d2_sink_part = d2_sink_part+ dx**2
                  if (d2_sink_part.lt.dx2cell_sink) then
-                    dx = abs(yc-xsink(isink, 2))
-                    if (dx.gt.0.5*scale) dx = scale - dx
-                    d2_sink_part = d2_sink_part+ dx**2
-                    if (d2_sink_part.lt.dx2cell_sink) then
-                       dx = abs(zc-xsink(isink, 3))
-                       if (dx.gt.0.5*scale) dx = scale - dx
-                       d2_sink_part = d2_sink_part+ dx**2
-                       if (d2_sink_part.lt.dx2cell_sink) then
-                          nsink_cell = nsink_cell+1
-                          sink_cell(nsink_cell) = isink
-                       end if
-                    end if
+                     dx = abs(zc-xsink(isink, 3))
+                     if (dx.gt.0.5*scale) dx = scale - dx
+                     d2_sink_part = d2_sink_part+ dx**2
+                     if (d2_sink_part.lt.dx2cell_sink) then
+                         nsink_cell = nsink_cell+1
+                         sink_cell(nsink_cell) = isink
+                     end if
                  end if
-              end do
+             end if
+         end do
 
-              ipart=headp(igrid)
-              ! Loop over particles
-              do jpart=1, npart1
-                 ! Save next particle   <--- Very important !!!
-                 next_part=nextp(ipart)
-                 !Stellar case (1)
-                 !if (tp(ipart).ne.0.d0) then
-                 if (is_star(typep(ipart))) then
-                    do ii = 1, nsink_cell
-                       isink = sink_cell(ii)
-                       dx = abs(xp(ipart, 1)-xsink(isink, 1))
-                       if (dx.gt.0.5*scale) dx = scale - dx
-                       d2_sink_part = dx**2
+         ipart=headp(igrid)
+         ! Loop over particles
+         do jpart=1, npart1
+             ! Save next particle   <--- Very important !!!
+             next_part=nextp(ipart)
+             !Stellar case (1)
+             !if (tp(ipart).ne.0.d0) then
+             if (is_star(typep(ipart))) then
+                do ii = 1, nsink_cell
+                   isink = sink_cell(ii)
+                   dx = abs(xp(ipart, 1)-xsink(isink, 1))
+                   if (dx.gt.0.5*scale) dx = scale - dx
+                   d2_sink_part = dx**2
 
-                       if (d2_sink_part.lt.r2_cloud) then
-                          dx = abs(xp(ipart, 2)-xsink(isink, 2))
-                          if (dx.gt.0.5*scale) dx = scale - dx
-                          d2_sink_part = d2_sink_part+ dx**2
+                   if (d2_sink_part.lt.r2_cloud) then
+                      dx = abs(xp(ipart, 2)-xsink(isink, 2))
+                      if (dx.gt.0.5*scale) dx = scale - dx
+                      d2_sink_part = d2_sink_part+ dx**2
 
-                          if (d2_sink_part.lt.r2_cloud) then
-                             dx = abs(xp(ipart, 3)-xsink(isink, 3))
-                             if (dx.gt.0.5*scale) dx = scale - dx
-                             d2_sink_part = d2_sink_part+ dx**2
+                      if (d2_sink_part.lt.r2_cloud) then
+                         dx = abs(xp(ipart, 3)-xsink(isink, 3))
+                         if (dx.gt.0.5*scale) dx = scale - dx
+                         d2_sink_part = d2_sink_part+ dx**2
 
-                             if (d2_sink_part.lt.r2_cloud) then
-                                v_DFnew(isink, 1:ndim, 1) = v_DFnew(isink, 1:ndim, 1) + mp(ipart) * vp(ipart, 1:ndim)
-                                mass_DFnew(isink, 1)      = mass_DFnew(isink, 1)      + mp(ipart)
+                         if (d2_sink_part.lt.r2_cloud) then
+                            v_DFnew(isink, 1:ndim, 1) = v_DFnew(isink, 1:ndim, 1) + mp(ipart) * vp(ipart, 1:ndim)
+                            mass_DFnew(isink, 1)      = mass_DFnew(isink, 1)      + mp(ipart)
 
-                                vrel_part_norm = 0d0
-                                do idim = 1, ndim
-                                   vrel_part_norm = vrel_part_norm + (vp(ipart, idim) - v_background(isink, idim, 1))**2
-                                end do
-                                vrel_part_norm = max(tiny(0d0), sqrt(vrel_part_norm))
+                            vrel_part_norm = 0d0
+                            do idim = 1, ndim
+                               vrel_part_norm = vrel_part_norm + (vp(ipart, idim) - v_background(isink, idim, 1))**2
+                            end do
+                            vrel_part_norm = max(tiny(0d0), sqrt(vrel_part_norm))
 
-                                n_partnew(isink, 1) = n_partnew(isink, 1) +1
-                                if (vrel_part_norm.le.vrel_sink_norm(isink, 1)) then
-                                   mass_lowspeednew(isink, 1) = mass_lowspeednew(isink, 1) + mp(ipart)
-                                else
-                                   fact_fastnew(isink, 1) = fact_fastnew(isink, 1) + mp(ipart) *&
-                                         (log((vrel_part_norm + vrel_sink_norm(isink, 1))/(vrel_part_norm-vrel_sink_norm(isink,1))) - 2*vrel_sink_norm(isink, 1) / vrel_part_norm)
-                                end if
-                             end if
-                          end if
-                       end if
-                    end do
+                            n_partnew(isink, 1) = n_partnew(isink, 1) +1
+                            if (vrel_part_norm.le.vrel_sink_norm(isink, 1)) then
+                               mass_lowspeednew(isink, 1) = mass_lowspeednew(isink, 1) + mp(ipart)
+                            else
+                               fact_fastnew(isink, 1) = fact_fastnew(isink, 1) + mp(ipart) *&
+                                    (log((vrel_part_norm + vrel_sink_norm(isink, 1))/(vrel_part_norm-vrel_sink_norm(isink,1))) - 2*vrel_sink_norm(isink, 1) / vrel_part_norm)
+                            end if
+                         end if
+                      end if
+                   end if
+                end do
 
-                    !DM case (2)
-                    !else if (idp(ipart).gt.0 .and. tp(ipart).eq.0.d0) then
-                 else if (is_dm(typep(ipart))) then
-                    do ii = 1, nsink_cell
-                       isink = sink_cell(ii)
-                       dx = abs(xp(ipart, 1)-xsink(isink, 1))
-                       if (dx.gt.0.5*scale) dx = scale - dx
-                       d2_sink_part = dx**2
+             !DM case (2)
+             !else if (idp(ipart).gt.0 .and. tp(ipart).eq.0.d0) then
+             else if (is_dm(typep(ipart))) then
+                do ii = 1, nsink_cell
+                   isink = sink_cell(ii)
+                   dx = abs(xp(ipart, 1)-xsink(isink, 1))
+                   if (dx.gt.0.5*scale) dx = scale - dx
+                   d2_sink_part = dx**2
 
-                       if (d2_sink_part.lt.r2_dm) then
-                          dx = abs(xp(ipart, 2)-xsink(isink, 2))
-                          if (dx.gt.0.5*scale) dx = scale - dx
-                          d2_sink_part = d2_sink_part+ dx**2
+                   if (d2_sink_part.lt.r2_dm) then
+                      dx = abs(xp(ipart, 2)-xsink(isink, 2))
+                      if (dx.gt.0.5*scale) dx = scale - dx
+                      d2_sink_part = d2_sink_part+ dx**2
 
-                          if (d2_sink_part.lt.r2_dm) then
-                             dx = abs(xp(ipart, 3)-xsink(isink, 3))
-                             if (dx.gt.0.5*scale) dx = scale - dx
-                             d2_sink_part = d2_sink_part+ dx**2
+                      if (d2_sink_part.lt.r2_dm) then
+                         dx = abs(xp(ipart, 3)-xsink(isink, 3))
+                         if (dx.gt.0.5*scale) dx = scale - dx
+                         d2_sink_part = d2_sink_part+ dx**2
 
-                             if (d2_sink_part.lt.r2_dm) then
-                                v_DFnew(isink, 1:ndim, 2) = v_DFnew(isink, 1:ndim, 2) + mp(ipart) * vp(ipart, 1:ndim)
-                                mass_DFnew(isink, 2)      = mass_DFnew(isink, 2)      + mp(ipart)
+                         if (d2_sink_part.lt.r2_dm) then
+                            v_DFnew(isink, 1:ndim, 2) = v_DFnew(isink, 1:ndim, 2) + mp(ipart) * vp(ipart, 1:ndim)
+                            mass_DFnew(isink, 2)      = mass_DFnew(isink, 2)      + mp(ipart)
 
-                                vrel_part_norm = 0d0
-                                do idim = 1, ndim
-                                   vrel_part_norm = vrel_part_norm + (vp(ipart, idim) - v_background(isink, idim, 2))**2
-                                end do
-                                vrel_part_norm = max(tiny(0d0), sqrt(vrel_part_norm))
+                            vrel_part_norm = 0d0
+                            do idim = 1, ndim
+                               vrel_part_norm = vrel_part_norm + (vp(ipart, idim) - v_background(isink, idim, 2))**2
+                            end do
+                            vrel_part_norm = max(tiny(0d0), sqrt(vrel_part_norm))
 
-                                n_partnew(isink, 2) = n_partnew(isink, 2) +1
-                                if (vrel_part_norm.le.vrel_sink_norm(isink, 2)) then
-                                   mass_lowspeednew(isink, 2) = mass_lowspeednew(isink, 2) + mp(ipart)
-                                else
-                                   fact_fastnew(isink, 2) = fact_fastnew(isink, 2) + mp(ipart) *&
-                                         (log((vrel_part_norm + vrel_sink_norm(isink, 2))/(vrel_part_norm-vrel_sink_norm(isink,2))) - 2*vrel_sink_norm(isink, 2) / vrel_part_norm)
-                                end if
-                             end if
-                          end if
-                       end if
-                    end do
-                 end if
-                 ipart=next_part  ! Go to next particle
-              end do
-           endif
-           ! End igrid usage
-
-           kgrid=kgrid+1
-           jgrid=jgrid+1
-
-           igrid=next(igrid)
-        end do
-
-        ! Remainder
-     end if
+                            n_partnew(isink, 2) = n_partnew(isink, 2) +1
+                            if (vrel_part_norm.le.vrel_sink_norm(isink, 2)) then
+                               mass_lowspeednew(isink, 2) = mass_lowspeednew(isink, 2) + mp(ipart)
+                            else
+                               fact_fastnew(isink, 2) = fact_fastnew(isink, 2) + mp(ipart) *&
+                                    (log((vrel_part_norm + vrel_sink_norm(isink, 2))/(vrel_part_norm-vrel_sink_norm(isink,2))) - 2*vrel_sink_norm(isink, 2) / vrel_part_norm)
+                            end if
+                         end if
+                      end if
+                   end if
+                end do
+             end if
+             ipart=next_part  ! Go to next particle
+          end do
+       endif
+    end do
+!$omp end do nowait
+    ! End loop over grids
   end do
-
+  ! End loop over cpus
+!$omp end parallel
 
 
   !We gather all the quantities: mass, mass moving slow etc... from all CPUs
@@ -6794,102 +6728,71 @@ subroutine get_drag_part(ilevel)
   ! We remove momentum from cloud particles from this level
   ! Loop over cpus
 
-!$omp parallel do private(isink)
-  do isink = 1, nsink
-     v_DFnew(isink, 1:ndim, 1:2) = 0d0
-     mass_DFnew(isink, 1:2) = tiny(0d0)
-     mass_lowspeednew(isink, 1:2) = 0d0
-     fact_fastnew(isink, 1:2) = 0d0
-     n_partnew(isink, 1:2) = 0
-  end do
+!$omp parallel
+  do icpu=1, ncpu
+     ! Loop over grids
+!$omp do private(igrid,npart1,ipart,next_part,isink,b90,Rsh,bmin,CoulombLog,volume,factor)
+     do jgrid=1,numbl(icpu,ilevel)
+        if(icpu==myid)then
+           igrid=active(ilevel)%igrid(jgrid)
+        else
+           igrid=reception(icpu,ilevel)%igrid(jgrid)
+        end if
 
-!$omp parallel do private(ithr,idim,icpu,igrid,jgrid,kgrid,ngrid1,ngrid2) &
-!$omp & private(npart1,ipart,jpart,next_part) &
-!$omp & private(isink,b90,Rsh,bmin,CoulombLog,volume,factor)
-  do ithr=1,nthr
-     ngrid1=ngrid_thr(ithr)
-     if(ngrid1>0 .and. npart_thr(ithr)>0) then
-        sink_cell = 0
-
-        igrid=head_thr(ithr)
-        icpu=icpu_thr(ithr)
-        jgrid=jgrid_thr(ithr)
-
-        kgrid=1
-        ngrid2=numbl(icpu,ilevel)
-
-        do ! Loop over cpus,grids
-           if(kgrid>ngrid1)exit
-           if(jgrid>ngrid2) then
-              icpu=icpu+1
-              jgrid=1
-              ngrid2=numbl(icpu,ilevel)
-              igrid=headl(icpu,ilevel)
-              cycle
-           end if
-
-           ! Do something with igrid
-           npart1=numbp(igrid)  ! Number of particles in the grid
-
+        npart1=numbp(igrid)  ! Number of particles in the grid
+        ! Loop over particles
+        if(npart1>0)then
+           ipart=headp(igrid)
            ! Loop over particles
-           if(npart1>0)then
-              ipart=headp(igrid)
-              ! Loop over particles
-              do jpart=1, npart1
-                 ! Save next particle   <--- Very important !!!
-                 next_part=nextp(ipart)
-                 !if (tp(ipart).eq.0d0  .and. idp(ipart).lt.0) then
-                 if (is_cloud(typep(ipart))) then
-                    isink = -idp(ipart)
-                    do itype = 1, 2
-                       b90 = factG * msink(isink) / vrel_sink_norm(isink, itype)**2
-                       Rsh = factG * msink(isink) / c**2
-                       bmin = max(b90, Rsh)
-                       if (itype.eq.1) then
-                          CoulombLog = DF_ncells*dx_min / bmin
-                          volume = vol_cloud
-                       else
-                          CoulombLog = DF_ncells*dx_dm / bmin
-                          volume = vol_dm
-                       end if
-                       if (CoulombLog .gt. 1) then
-                          factor = 0d0
-                          do ii = levelmin, nlevelmax
-                             factor = factor + (&
-                                  &mass_lowspeed(isink, ii, itype)*log(CoulombLog)+&
-                                  &fact_fast(isink, ii, itype)) / volume
-                          end do
-                          factor = factor * 4*pi*factG**2*msink(isink)/vrel_sink_norm(isink, itype)**3
-                       else
-                          factor = 0
-                       end if
-                       if (dtnew(ilevel) > 0) then
-                          factor = min(1/dtnew(ilevel), factor)
-                       else
-                          factor = 0
-                       end if
-
-                       do idim = 1, ndim
-                          vp(ipart, idim) = vp(ipart,idim) - factor*dtnew(ilevel) * vrel_sink(isink, idim, itype)
+           do jpart=1, npart1
+              ! Save next particle   <--- Very important !!!
+              next_part=nextp(ipart)
+              !if (tp(ipart).eq.0d0  .and. idp(ipart).lt.0) then
+              if (is_cloud(typep(ipart))) then
+                 isink = -idp(ipart)
+                 do itype = 1, 2
+                    b90 = factG * msink(isink) / vrel_sink_norm(isink, itype)**2
+                    Rsh = factG * msink(isink) / c**2
+                    bmin = max(b90, Rsh)
+                    if (itype.eq.1) then
+                       CoulombLog = DF_ncells*dx_min / bmin
+                       volume = vol_cloud
+                    else
+                       CoulombLog = DF_ncells*dx_dm / bmin
+                       volume = vol_dm
+                    end if
+                    if (CoulombLog .gt. 1) then
+                       factor = 0d0
+                       do ii = levelmin, nlevelmax
+                          factor = factor + (&
+                               &mass_lowspeed(isink, ii, itype)*log(CoulombLog)+&
+                               &fact_fast(isink, ii, itype)) / volume
                        end do
+                       factor = factor * 4*pi*factG**2*msink(isink)/vrel_sink_norm(isink, itype)**3
+                    else
+                       factor = 0
+                    end if
+                    if (dtnew(ilevel) > 0) then
+                       factor = min(1/dtnew(ilevel), factor)
+                    else
+                       factor = 0
+                    end if
+
+                    do idim = 1, ndim
+                       vp(ipart, idim) = vp(ipart,idim) - factor*dtnew(ilevel) * vrel_sink(isink, idim, itype)
                     end do
-                 end if
+                 end do
+              end if
 
-                 ipart=next_part  ! Go to next particle
-              end do
-           endif
-
-           ! End igrid usage
-
-           kgrid=kgrid+1
-           jgrid=jgrid+1
-
-           igrid=next(igrid)
-        end do
-
-        ! Remainder
-     end if
+              ipart=next_part  ! Go to next particle
+           end do
+        endif
+     end do
+!$omp end do nowait
+     ! End loop over grids
   end do
+  ! End loop over cpus
+!$omp end parallel
 
 end subroutine get_drag_part
 
