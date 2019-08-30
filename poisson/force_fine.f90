@@ -60,7 +60,7 @@ subroutine force_fine(ilevel,icount)
 
      ! Loop over myid grids by vector sweeps
      ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid) schedule(static,nchunk)
+!$omp parallel do private(ngrid) schedule(static)
      do igrid=1,ncache,nvector
         ngrid=MIN(nvector,ncache-igrid+1)
         call forcefine1(ilevel, igrid,ngrid)
@@ -82,7 +82,7 @@ subroutine force_fine(ilevel,icount)
 
      ! Loop over myid grids by vector sweeps
      ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid) schedule(static,nchunk)
+!$omp parallel do private(ngrid) schedule(static)
      do igrid=1,ncache,nvector
         ngrid=MIN(nvector,ncache-igrid+1)
         call forcefine2(ilevel, igrid,ngrid,icount)
@@ -108,8 +108,7 @@ subroutine force_fine(ilevel,icount)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind,iskip,idim,i,indcell) reduction(+:epot_loc), reduction(MAX:rho_loc) &
-!$omp& schedule(static,nchunk)
+!$omp parallel do private(ngrid,iskip,indcell) reduction(+:epot_loc), reduction(MAX:rho_loc) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      ! Loop over cells

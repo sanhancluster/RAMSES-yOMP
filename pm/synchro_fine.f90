@@ -17,9 +17,6 @@ subroutine synchro_fine(ilevel)
   integer::ig,ip,npart1,isink,local_counter
   integer,dimension(1:nvector)::ind_grid,ind_part,ind_grid_part
 
-  integer :: ithr
-  integer,dimension(1:nthr) :: head_thr,ngrid_thr
-
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
 

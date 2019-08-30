@@ -361,8 +361,6 @@ subroutine refine_fine(ilevel)
 #endif
 
   ! OMP
-  integer :: ithr,ngrid_now
-  integer,dimension(1:nthr) :: icpu_thr,igrid_thr,ngrid_thr
   integer,dimension(1:IRandNumSize),save :: ompseed
   integer, dimension(1:ncpu,1:IRandNumSize)::allseed
   real(dp) :: rand

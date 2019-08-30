@@ -41,6 +41,7 @@ subroutine move_fine(ilevel)
         vsink_new(isink,:)=0d0
         oksink_new(isink)=0d0
         sink_stat(isink,ilevel,:)=0d0
+        sink_stat_local(isink,:)=0d0
      end do
   endif
 

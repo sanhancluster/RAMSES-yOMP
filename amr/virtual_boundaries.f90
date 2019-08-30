@@ -58,10 +58,6 @@ subroutine authorize_fine(ilevel)
   logical::test
   real(dp),dimension(1:ndim)::xmin,xmax
 
-  ! OMP
-  integer :: ithr,ngrid_now
-  integer,dimension(1:nthr) :: icpu_thr,igrid_thr,ngrid_thr
-
   if(ilevel==nlevelmax)return
   if(verbose)write(*,111)ilevel
 
@@ -112,33 +108,18 @@ subroutine authorize_fine(ilevel)
   end do
   ! End loop over grids
 
-  call cpu_parallel_reception(ilevel,icpu_thr,igrid_thr,ngrid_thr)
-  ! Loop over threads
-!$omp parallel do private(ithr,icpu,igrid,ncache,ngrid_now,ngrid,ind_grid) &
-!$omp & private(ind,iskip,ind_cell,idim,xx,order_min,order_max,isub,test,xmin,xmax)
-  do ithr=1,nthr
-     if(ngrid_thr(ithr)==0)cycle
-     icpu=icpu_thr(ithr)
-     igrid=igrid_thr(ithr)
+  ! Authorize virtual cells that contains myid children cells
+!$omp parallel private(ncache)
+  do icpu=1,ncpu
      ncache=reception(icpu,ilevel)%ngrid
-
-     ngrid_now=0
-     ! Loop over grids,cpus by vector sweeps
-     do
-        if(ngrid_now>=ngrid_thr(ithr))exit
-        if(igrid>ncache)then
-           icpu=icpu+1
-           igrid=1
-           ncache=reception(icpu,ilevel)%ngrid
-           cycle
-        end if
-
+     ! Loop over grids by vector sweeps
+!$omp do private(ngrid,ind_grid,iskip,ind_cell,xx,order_min,order_max,test,xmin,xmax)
+     do igrid=1,ncache,nvector
+        ! Gather nvector grids
         ngrid=MIN(nvector,ncache-igrid+1)
         do i=1,ngrid
            ind_grid(i)=reception(icpu,ilevel)%igrid(igrid+i-1)
         end do
-
-        ! Do something with ind_grid
         ! Loop over cells
         do ind=1,twotondim
            ! Gather cell indices
@@ -176,19 +157,19 @@ subroutine authorize_fine(ilevel)
                  end do
               end do
            else ! recursive bisection method
-              do i=1,ngrid
-                 ! Test if cell overlaps the cpu
-                 test=.true.
-                 xmin=xx(i,:)-0.5*dx_loc
-                 xmax=xx(i,:)+0.5*dx_loc
-                 do idim=1,ndim
-                    ! This needs to be a >=, not a >, to precisely match the
-                    ! ordering/=case for refinement flagging
-                    test=test .and. (bisec_cpubox_max(myid,idim).ge.xmin(idim) &
-                                         .and. bisec_cpubox_min(myid,idim).le.xmax(idim))
-                 end do
-                 if(test) flag2(ind_cell(i))=1
-              end do
+               do i=1,ngrid
+                  ! Test if cell overlaps the cpu
+                  test=.true.
+                  xmin=xx(i,:)-0.5*dx_loc
+                  xmax=xx(i,:)+0.5*dx_loc
+                  do idim=1,ndim
+                     ! This needs to be a >=, not a >, to precisely match the
+                     ! ordering/=case for refinement flagging
+                     test=test .and. (bisec_cpubox_max(myid,idim).ge.xmin(idim) &
+                                          .and. bisec_cpubox_min(myid,idim).le.xmax(idim))
+                  end do
+                  if(test) flag2(ind_cell(i))=1
+               end do
            endif
 
            ! For load balancing operations
@@ -225,14 +206,12 @@ subroutine authorize_fine(ilevel)
            end if
         end do
         ! End loop over cells
-        ! End ind_grid usage
-
-        ngrid_now=ngrid_now+ngrid
-        igrid=igrid+nvector
      end do
-     ! End loop over grids,cpus
+!$omp end do nowait
+     ! End loop over grids
   end do
-  ! End loop over threads
+!$omp end parallel
+  ! End loop over cpus
 
 
   ! Apply dilatation operator over flag2 cells on virtual cells only
@@ -248,37 +227,20 @@ subroutine authorize_fine(ilevel)
   end do
   end do
 
-  ! Loop over steps
-  do ibound=1,nexpand_bound
   n_nbor(1:3)=(/1,2,3/)
+  ! Loop over steps
+!$omp parallel private(ncache,ngrid,ind_grid)
+  do ibound=1,nexpand_bound
   do ismooth=1,ndim
      ! Initialize flag1 to 0 in virtual cells
-     call cpu_parallel_reception(ilevel,icpu_thr,igrid_thr,ngrid_thr)
-!$omp parallel do private(ithr,icpu,igrid,ncache,ngrid_now,ngrid,ind_grid) &
-!$omp & private(ind,iskip,i,ind_cell)
-     do ithr=1,nthr
-        if(ngrid_thr(ithr)==0)cycle
-        icpu=icpu_thr(ithr)
-        igrid=igrid_thr(ithr)
+     do icpu=1,ncpu
         ncache=reception(icpu,ilevel)%ngrid
-
-        ngrid_now=0
-        ! Loop over grids,cpus by vector sweeps
-        do
-           if(ngrid_now>=ngrid_thr(ithr))exit
-           if(igrid>ncache)then
-              icpu=icpu+1
-              igrid=1
-              ncache=reception(icpu,ilevel)%ngrid
-              cycle
-           end if
-
+!$omp do private(iskip,ind_cell)
+        do igrid=1,ncache,nvector
            ngrid=MIN(nvector,ncache-igrid+1)
            do i=1,ngrid
               ind_grid(i)=reception(icpu,ilevel)%igrid(igrid+i-1)
            end do
-
-           ! Do something with ind_grid
            do ind=1,twotondim
               iskip=ncoarse+(ind-1)*ngridmax
               do i=1,ngrid
@@ -288,81 +250,34 @@ subroutine authorize_fine(ilevel)
                  flag1(ind_cell(i))=0
               end do
            end do
-           ! End ind_grid usage
-
-           ngrid_now=ngrid_now+ngrid
-           igrid=igrid+nvector
         end do
-        ! End loop over grids,cpus
      end do
-     ! End loop over threads
 
      ! Count neighbors and set flag2 accordingly
-!$omp parallel do private(ithr,icpu,igrid,ncache,ngrid_now,ngrid,ind_grid) &
-!$omp & private(igridn,ind)
-     do ithr=1,nthr
-        if(ngrid_thr(ithr)==0)cycle
-        icpu=icpu_thr(ithr)
-        igrid=igrid_thr(ithr)
+     do icpu=1,ncpu
         ncache=reception(icpu,ilevel)%ngrid
-
-        ngrid_now=0
-        ! Loop over grids,cpus by vector sweeps
-        do
-           if(ngrid_now>=ngrid_thr(ithr))exit
-           if(igrid>ncache)then
-              icpu=icpu+1
-              igrid=1
-              ncache=reception(icpu,ilevel)%ngrid
-              cycle
-           end if
-
+!$omp do private(igridn)
+        do igrid=1,ncache,nvector
            ngrid=MIN(nvector,ncache-igrid+1)
            do i=1,ngrid
               ind_grid(i)=reception(icpu,ilevel)%igrid(igrid+i-1)
            end do
-
-           ! Do something with ind_grid
            call getnborgrids(ind_grid,igridn,ngrid)
            do ind=1,twotondim
               call count_nbors2(igridn,ind,n_nbor(ismooth),ngrid)
            end do
-           ! End ind_grid usage
-
-           ngrid_now=ngrid_now+ngrid
-           igrid=igrid+nvector
         end do
-        ! End loop over grids,cpus
      end do
-     ! End loop over threads
 
      ! Set flag2=1 for cells with flag1=1
-     ! Count neighbors and set flag2 accordingly
-!$omp parallel do private(ithr,icpu,igrid,ncache,ngrid_now,ngrid,ind_grid) &
-!$omp & private(ind,iskip,i,ind_cell)
-     do ithr=1,nthr
-        if(ngrid_thr(ithr)==0)cycle
-        icpu=icpu_thr(ithr)
-        igrid=igrid_thr(ithr)
+     do icpu=1,ncpu
         ncache=reception(icpu,ilevel)%ngrid
-
-        ngrid_now=0
-        ! Loop over grids,cpus by vector sweeps
-        do
-           if(ngrid_now>=ngrid_thr(ithr))exit
-           if(igrid>ncache)then
-              icpu=icpu+1
-              igrid=1
-              ncache=reception(icpu,ilevel)%ngrid
-              cycle
-           end if
-
+!$omp do private(iskip,ind_cell)
+        do igrid=1,ncache,nvector
            ngrid=MIN(nvector,ncache-igrid+1)
            do i=1,ngrid
               ind_grid(i)=reception(icpu,ilevel)%igrid(igrid+i-1)
            end do
-
-           ! Do something with ind_grid
            do ind=1,twotondim
               iskip=ncoarse+(ind-1)*ngridmax
               do i=1,ngrid
@@ -372,17 +287,12 @@ subroutine authorize_fine(ilevel)
                  if(flag1(ind_cell(i))==1)flag2(ind_cell(i))=1
               end do
            end do
-           ! End ind_grid usage
-
-           ngrid_now=ngrid_now+ngrid
-           igrid=igrid+nvector
         end do
-        ! End loop over grids,cpus
      end do
-     ! End loop over threads
   end do
   ! End loop over steps
   end do
+!$omp end parallel
 
   ! Compute authorization map for physical boundaries
   if(simple_boundary)call init_boundary_fine(ilevel)
@@ -496,7 +406,7 @@ subroutine make_virtual_fine_dp(xx,ilevel)
 !$omp end single nowait
 
   ! Gather emission array
-!$omp do schedule(dynamic)
+!$omp do schedule(static)
   do j=1,twotondim
      iskip=ncoarse+(j-1)*ngridmax
      do icpu=1,ncpu
@@ -525,7 +435,7 @@ subroutine make_virtual_fine_dp(xx,ilevel)
 !$omp end single
 
   ! Scatter reception array
-!$omp do schedule(dynamic)
+!$omp do schedule(static)
   do j=1,twotondim
      iskip=ncoarse+(j-1)*ngridmax
      do icpu=1,ncpu
@@ -588,7 +498,7 @@ subroutine make_virtual_fine_int(xx,ilevel)
 !$omp end single nowait
 
   ! Gather emission array
-!$omp do schedule(dynamic)
+!$omp do schedule(static)
   do j=1,twotondim
      iskip=ncoarse+(j-1)*ngridmax
      do icpu=1,ncpu
@@ -618,7 +528,7 @@ subroutine make_virtual_fine_int(xx,ilevel)
 !$omp end single
 
   ! Scatter reception array
-!$omp do schedule(dynamic)
+!$omp do schedule(static)
   do j=1,twotondim
      iskip=ncoarse+(j-1)*ngridmax
      do icpu=1,ncpu
@@ -756,7 +666,7 @@ subroutine make_virtual_reverse_dp(xx,ilevel)
 !$omp end single nowait
 
   ! Gather emission array
-!$omp do schedule(dynamic)
+!$omp do schedule(static)
   do j=1,twotondim
      iskip=ncoarse+(j-1)*ngridmax
      do icpu=1,ncpu
@@ -786,7 +696,7 @@ subroutine make_virtual_reverse_dp(xx,ilevel)
 !$omp end single
 
   ! Scatter reception array
-!$omp do schedule(dynamic)
+!$omp do schedule(static)
   do j=1,twotondim
      iskip=ncoarse+(j-1)*ngridmax
      do icpu=1,ncpu
@@ -928,7 +838,7 @@ subroutine make_virtual_reverse_int(xx,ilevel)
 !$omp end single nowait
 
   ! Gather emission array
-!$omp do schedule(dynamic)
+!$omp do schedule(static)
   do j=1,twotondim
      iskip=ncoarse+(j-1)*ngridmax
      do icpu=1,ncpu
@@ -958,7 +868,7 @@ subroutine make_virtual_reverse_int(xx,ilevel)
 !$omp end single
 
   ! Scatter reception array
-!$omp do schedule(dynamic)
+!$omp do schedule(static)
   do j=1,twotondim
      iskip=ncoarse+(j-1)*ngridmax
      do icpu=1,ncpu
@@ -1010,10 +920,6 @@ subroutine build_comm(ilevel)
 #endif
   integer,dimension(1:nvector),save::ind_grid,ind_cell
 
-  ! OMP
-  integer :: ithr,ngrid_now
-  integer,dimension(1:nthr) :: icpu_thr,igrid_thr,ngrid_thr
-
   if(verbose)write(*,111)ilevel
   nxny=nx*ny
 
@@ -1037,54 +943,25 @@ subroutine build_comm(ilevel)
      call make_virtual_coarse_int(flag2(1))
   else
      ! Initialize flag2 to local adress for cpu map = myid cells
-     ncache=active(ilevel-1)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid,iskip,ind_cell) schedule(static)
-     do igrid=1,ncache,nvector
-        ngrid=MIN(nvector,ncache-igrid+1)
-        do i=1,ngrid
-           ind_grid(i)=active(ilevel-1)%igrid(igrid+i-1)
-        end do
-        do ind=1,twotondim
-           iskip=ncoarse+(ind-1)*ngridmax
-           do i=1,ngrid
-              ind_cell(i)=iskip+ind_grid(i)
-           end do
-           do i=1,ngrid
-              if(cpu_map(ind_cell(i))==myid)then
-                 flag2(ind_cell(i))=son(ind_cell(i))
-              else
-                 flag2(ind_cell(i))=0
-              end if
-           end do
-        end do
-     end do
-
-     call cpu_parallel_reception(ilevel-1,icpu_thr,igrid_thr,ngrid_thr)
-!$omp parallel do private(ithr,icpu,igrid,ncache,ngrid_now,ngrid,ind_grid) &
-!$omp & private(ind,iskip,i,ind_cell)
-     do ithr=1,nthr
-        if(ngrid_thr(ithr)==0)cycle
-        icpu=icpu_thr(ithr)
-        igrid=igrid_thr(ithr)
-        ncache=reception(icpu,ilevel-1)%ngrid
-
-        ngrid_now=0
-        ! Loop over grids,cpus by vector sweeps
-        do
-           if(ngrid_now>=ngrid_thr(ithr))exit
-           if(igrid>ncache)then
-              icpu=icpu+1
-              igrid=1
-              ncache=reception(icpu,ilevel-1)%ngrid
-              cycle
-           end if
-
+!$omp parallel private(ncache)
+     do icpu=1,ncpu
+        if(icpu==myid) then
+           ncache=active(ilevel-1)%ngrid
+        else
+           ncache=reception(icpu,ilevel-1)%ngrid
+        end if
+!$omp do private(ngrid,ind_grid,iskip,ind_cell)
+        do igrid=1,ncache,nvector
            ngrid=MIN(nvector,ncache-igrid+1)
-           do i=1,ngrid
-              ind_grid(i)=reception(icpu,ilevel-1)%igrid(igrid+i-1)
-           end do
-
-           ! Do something with ind_grid
+           if(icpu==myid) then
+              do i=1,ngrid
+                 ind_grid(i)=active(ilevel-1)%igrid(igrid+i-1)
+              end do
+           else
+              do i=1,ngrid
+                 ind_grid(i)=reception(icpu,ilevel-1)%igrid(igrid+i-1)
+              end do
+           end if
            do ind=1,twotondim
               iskip=ncoarse+(ind-1)*ngridmax
               do i=1,ngrid
@@ -1098,16 +975,10 @@ subroutine build_comm(ilevel)
                  end if
               end do
            end do
-
-           ! End ind_grid usage
-
-           ngrid_now=ngrid_now+ngrid
-           igrid=igrid+nvector
         end do
-        ! End loop over grids,cpus
+!$omp end do nowait
      end do
-     ! End loop over threads
-
+!$omp end parallel
      call make_virtual_reverse_int(flag2(1),ilevel-1)
      call make_virtual_fine_int   (flag2(1),ilevel-1)
   end if

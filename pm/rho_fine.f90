@@ -607,6 +607,7 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
   dx_loc=dx*scale
   vol_loc=dx_loc**ndim
 
+
   ! Gather neighboring father cells (should be present anytime !)
   call get3cubefather(ind_cell,nbors_father_cells,nbors_father_grids,ng,ilevel)
 
@@ -1237,7 +1238,7 @@ subroutine cic_from_multipole(ilevel)
   ! routine only set rho to zero. On the other hand, for the Multigrid
   ! solver, the restriction is necessary in any case.
   !-------------------------------------------------------------------
-  integer::ind,i,icpu,ncache,ngrid,iskip,ibound,igrid
+  integer::ind,i,icpu,ncache,ngrid,iskip,ibound,igrid,idim
   integer,dimension(1:nvector)::ind_grid
   real(kind=8),dimension(1:ndim+1)::multipole_tmp
 
@@ -1306,6 +1307,7 @@ subroutine cic_cell(ind_grid,ngrid,ilevel,multipole_tmp)
   use amr_commons
   use poisson_commons
   use hydro_commons, ONLY: unew
+  use omp_lib
   implicit none
   integer::ngrid,ilevel
   integer,dimension(1:nvector)::ind_grid
