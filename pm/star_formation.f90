@@ -228,7 +228,7 @@ subroutine star_formation(ilevel)
   ! Convert hydro variables to primitive variables
   !------------------------------------------------
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -251,7 +251,7 @@ subroutine star_formation(ilevel)
   ndebris_tot=0
   ! Loop over grids
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) reduction(+:ntot) schedule(static,nchunk)
+!$omp parallel do private(igrid,ngrid,ind_grid) reduction(+:ntot) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -332,7 +332,7 @@ subroutine star_formation(ilevel)
 !$omp & n,d,u,v,w,x,y,z,tg,zg,Randnum,v_kick,v_kick_mag,mdebris, &
 !$omp & delta_m_over_m,ipart,ip,move_tracer,itracer,proba,xstar,istar_tracer,nattach)
   nattach = 0
-!$omp do schedule(static,nchunk)
+!$omp do schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -568,7 +568,7 @@ subroutine star_formation(ilevel)
   ! Convert hydro variables back to conservative variables
   !---------------------------------------------------------
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,i,ind_grid) schedule(static,nchunk)
+!$omp parallel do private(igrid,ngrid,i,ind_grid) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid

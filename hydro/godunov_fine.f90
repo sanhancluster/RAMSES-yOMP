@@ -88,7 +88,7 @@ subroutine set_unew(ilevel)
   end do
 
   ! Set unew to 0 for virtual boundary cells
-!$omp parallel do private(ind,iskip,ivar,i,d,u,v,w,e,icpu) collapse(2) schedule(static,nchunk)
+!$omp parallel do private(ind,iskip,ivar,i,d,u,v,w,e,icpu) collapse(2) schedule(static)
   do ind=1,twotondim
      do icpu=1,ncpu
         iskip=ncoarse+(ind-1)*ngridmax
@@ -279,7 +279,7 @@ subroutine add_pdv_source_terms(ilevel)
   iii(3,2,1:8)=(/0,0,0,0,6,6,6,6/); jjj(3,2,1:8)=(/5,6,7,8,1,2,3,4/)
 
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static)
   do igrid=1,ncache,nvector
      ngrid = MIN(nvector,ncache-igrid+1)
      do i=1,ngrid

@@ -390,7 +390,7 @@ subroutine gauss_seidel(ilevel,redstep)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static)
   do igrid=1,ncache,nvector
      ! Gather nvector grids
      ngrid=MIN(nvector,ncache-igrid+1)
@@ -528,7 +528,7 @@ subroutine cmp_residual_mg(ilevel)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static,nchunk)
+!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static)
   do igrid=1,ncache,nvector
 
      ! Gather nvector grids
@@ -653,7 +653,7 @@ subroutine restriction_fine(ilevel,multigrid)
   vol_loc=dx_loc**ndim
 
   ! Initialize density field to zero
-!$omp parallel do private(icpu,ind,iskip,i) collapse(2) schedule(static,nchunk)
+!$omp parallel do private(icpu,ind,iskip,i) collapse(2) schedule(static)
   do ind=1,twotondim
      do icpu=1,ncpu
         iskip=ncoarse+(ind-1)*ngridmax
@@ -682,7 +682,7 @@ subroutine restriction_fine(ilevel,multigrid)
   ! Perform a restriction over split cells (ilevel+1)
   if(ilevel<nlevelmax)then
      ncache=active(ilevel+1)%ngrid
-!$omp parallel do private(igrid,ngrid,i,ind_grid) schedule(static,nchunk)
+!$omp parallel do private(igrid,ngrid,i,ind_grid) schedule(static)
      do igrid=1,ncache,nvector
         ! Gather nvector grids
         ngrid=MIN(nvector,ncache-igrid+1)
@@ -828,7 +828,7 @@ subroutine prolong(ilevel)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,i,ind,iskip, ind_average, ind_father, coeff) schedule(static,nchunk)
+!$omp parallel do private(igrid,ngrid,i,ind,iskip, ind_average, ind_father, coeff) schedule(static)
   do igrid=1,ncache,nvector
 
      ! Gather nvector grids

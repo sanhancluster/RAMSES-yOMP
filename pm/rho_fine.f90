@@ -272,6 +272,7 @@ subroutine rho_from_current_level(ilevel)
      ! Loop over grids
      ig=0
      ip=0
+     ! Dynamic is faster
 !$omp do private(igrid,npart1,ipart,counter) schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
@@ -1280,7 +1281,7 @@ subroutine cic_from_multipole(ilevel)
      multipole_tmp=0d0
      ! Perform a restriction over split cells (ilevel+1)
      ncache=active(ilevel)%ngrid
-!$omp do private(ngrid,ind_grid) reduction(+:multipole_tmp) schedule(static,nchunk)
+!$omp do private(ngrid,ind_grid) reduction(+:multipole_tmp) schedule(static)
      do igrid=1,ncache,nvector
         ! Gather nvector grids
         ngrid=MIN(nvector,ncache-igrid+1)

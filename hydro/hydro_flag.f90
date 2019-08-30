@@ -78,7 +78,7 @@ subroutine hydro_flag(ilevel)
 
   ! Loop over active grids
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,i,ind_grid,igridn,ind,iskip,ind_cell,ok,indn,j,idim,uug,uum,uud,xx,nok) reduction(+:nflag) schedule(static,nchunk)
+!$omp parallel do private(igrid,ngrid,i,ind_grid,igridn,ind,iskip,ind_cell,ok,indn,j,idim,uug,uum,uud,xx,nok) reduction(+:nflag) schedule(static)
   do igrid=1,ncache,nvector
 
      ! Gather nvector grids
