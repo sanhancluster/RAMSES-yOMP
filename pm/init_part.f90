@@ -393,10 +393,12 @@
               read(10) ! ntot
               read(10) tracer_mass
               close(10)
-            else if (trim(tracer_feed_fmt) == 'inplace' .and. tracer_mass < 0) then
-
-              if(tracer_per_cell<0 .and. tracer_level<0)then
-                 write(*,*) 'no tracer mass or tracer_per_cell and tracer_level specified.'
+           else if (trim(tracer_feed_fmt) == 'inplace' .and. tracer_mass < 0) then
+              if(tracer_level<0)then
+                 tracer_level=nlevelmax_part
+              end if
+              if(tracer_per_cell<0)then
+                 write(*,*) 'no tracer mass or tracer_per_cell specified.'
                  stop
               end if
               tracer_mass = omega_b / omega_m * 0.5_dp**(tracer_level*ndim) / tracer_per_cell
@@ -1881,8 +1883,11 @@ contains
 
     ! Calcuate the mass of tracer particles
     if(tracer_mass<0)then
-       if(tracer_per_cell<0 .and. tracer_level<0)then
-          write(*,*) 'no tracer mass or tracer_per_cell and tracer_level specified.'
+       if(tracer_level<0)then
+          tracer_level=nlevelmax_part
+       end if
+       if(tracer_per_cell<0)then
+          write(*,*) 'no tracer mass or tracer_per_cell specified.'
           stop
        end if
        tracer_mass = omega_b / omega_m * 0.5_dp**(tracer_level*ndim) / tracer_per_cell

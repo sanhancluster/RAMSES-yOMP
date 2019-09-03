@@ -260,14 +260,11 @@ subroutine rho_from_current_level(ilevel)
 
   integer :: counter
 
-  real(dp),dimension(1:ndim+1)::multipole_tmp
-
   ! Mesh spacing in that level
   dx=0.5D0**ilevel
-  multipole_tmp=0d0
 
   ! Loop over cpus
-!$omp parallel private(icpu,ig,ip,ind_grid,ind_part,ind_grid_part,ind_cell,x0) reduction(+:multipole_tmp)
+!$omp parallel private(icpu,ig,ip,ind_grid,ind_part,ind_grid_part,ind_cell,x0) reduction(+:multipole)
   do icpu=1,ncpu
      ! Loop over grids
      ig=0
@@ -316,7 +313,7 @@ subroutine rho_from_current_level(ilevel)
 #ifdef TSC
                  call tsc_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel)
 #else
-                 call cic_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel,multipole_tmp)
+                 call cic_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel,multipole)
 #endif
                  ip=0
                  ig=0
@@ -348,17 +345,13 @@ subroutine rho_from_current_level(ilevel)
 #ifdef TSC
         call tsc_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel)
 #else
-        call cic_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel,multipole_tmp)
+        call cic_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel,multipole)
 #endif
      end if
 
   end do
 !$omp end parallel
   ! End loop over cpus
-  do idim=1,ndim+1
-     multipole(idim)=multipole(idim)+multipole_tmp(idim)
-  end do
-
 
 end subroutine rho_from_current_level
 
@@ -607,7 +600,6 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
   scale=boxlen/dble(nx_loc)
   dx_loc=dx*scale
   vol_loc=dx_loc**ndim
-
 
   ! Gather neighboring father cells (should be present anytime !)
   call get3cubefather(ind_cell,nbors_father_cells,nbors_father_grids,ng,ilevel)
@@ -1239,9 +1231,8 @@ subroutine cic_from_multipole(ilevel)
   ! routine only set rho to zero. On the other hand, for the Multigrid
   ! solver, the restriction is necessary in any case.
   !-------------------------------------------------------------------
-  integer::ind,i,icpu,ncache,ngrid,iskip,ibound,igrid,idim
+  integer::ind,i,icpu,ncache,ngrid,iskip,ibound,igrid
   integer,dimension(1:nvector)::ind_grid
-  real(kind=8),dimension(1:ndim+1)::multipole_tmp
 
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
@@ -1278,22 +1269,18 @@ subroutine cic_from_multipole(ilevel)
   end do
 
   if(hydro)then
-     multipole_tmp=0d0
      ! Perform a restriction over split cells (ilevel+1)
      ncache=active(ilevel)%ngrid
-!$omp do private(ngrid,ind_grid) reduction(+:multipole_tmp) schedule(static)
+!$omp do private(ngrid,ind_grid) reduction(+:multipole) schedule(static,nchunk)
      do igrid=1,ncache,nvector
         ! Gather nvector grids
         ngrid=MIN(nvector,ncache-igrid+1)
         do i=1,ngrid
            ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
         end do
-        call cic_cell(ind_grid,ngrid,ilevel,multipole_tmp)
+        call cic_cell(ind_grid,ngrid,ilevel,multipole)
      end do
 !$omp end do nowait
-     do idim=1,ndim+1
-        multipole(idim)=multipole(idim)+multipole_tmp(idim)
-     end do
   end if
 !$omp end parallel
 
@@ -1308,7 +1295,6 @@ subroutine cic_cell(ind_grid,ngrid,ilevel,multipole_tmp)
   use amr_commons
   use poisson_commons
   use hydro_commons, ONLY: unew
-  use omp_lib
   implicit none
   integer::ngrid,ilevel
   integer,dimension(1:nvector)::ind_grid
