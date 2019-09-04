@@ -5,7 +5,6 @@
 subroutine godunov_fine(ilevel)
   use amr_commons
   use hydro_commons
-  use omp_lib
   implicit none
   integer::ilevel
   !--------------------------------------------------------------------------
@@ -23,7 +22,7 @@ subroutine godunov_fine(ilevel)
 
   ! Loop over active grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,i,ind_grid)
+!$omp parallel do private(ngrid,ind_grid)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -58,10 +57,11 @@ subroutine set_unew(ilevel)
   if(verbose)write(*,111)ilevel
 
   ! Set unew to uold for myid cells
-!$omp parallel do private(ind,iskip,ivar,i,d,u,v,w,e) schedule(static,nvector)
-  do i=1,active(ilevel)%ngrid
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
+!$omp parallel private(iskip)
+  do ind=1,twotondim
+	 iskip=ncoarse+(ind-1)*ngridmax
+!$omp do private(d,u,v,w,e) schedule(static)
+     do i=1,active(ilevel)%ngrid
         do ivar=1,nvar
            unew(active(ilevel)%igrid(i)+iskip,ivar) = uold(active(ilevel)%igrid(i)+iskip,ivar)
         end do
@@ -85,10 +85,11 @@ subroutine set_unew(ilevel)
            enew(active(ilevel)%igrid(i)+iskip)=e
         end if
      end do
+!$omp end do nowait
   end do
-
+!$omp end parallel
   ! Set unew to 0 for virtual boundary cells
-!$omp parallel do private(ind,iskip,ivar,i,d,u,v,w,e,icpu) collapse(2) schedule(static)
+!$omp parallel do private(iskip,d,u,v,w,e) schedule(static)
   do ind=1,twotondim
      do icpu=1,ncpu
         iskip=ncoarse+(ind-1)*ngridmax
@@ -154,10 +155,11 @@ subroutine set_uold(ilevel)
   endif
 
   ! Set uold to unew for myid cells
-!$omp parallel do private(ind,iskip,ivar,i,ind_cell,d,u,v,w,e_kin,e_cons,e_prim,div,e_trunc) schedule(static,nvector)
-  do i=1,active(ilevel)%ngrid
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
+!$omp parallel private(iskip)
+  do ind=1,twotondim
+     iskip=ncoarse+(ind-1)*ngridmax
+!$omp do private(ind_cell,d,u,v,w,e_kin,e_cons,e_prim,div,e_trunc) schedule(static,nvector)
+     do i=1,active(ilevel)%ngrid
         do ivar=1,nvar
               uold(active(ilevel)%igrid(i)+iskip,ivar) = unew(active(ilevel)%igrid(i)+iskip,ivar)
         end do
@@ -188,7 +190,9 @@ subroutine set_uold(ilevel)
            end if
         end if
      end do
+!$omp end do nowait
   end do
+!$omp end parallel
 
 111 format('   Entering set_uold for level ',i2)
 
@@ -215,10 +219,11 @@ subroutine add_gravity_source_terms(ilevel)
   if(verbose)write(*,111)ilevel
 
   ! Add gravity source term at time t with half time step
-!$omp parallel do private(ind,iskip,i,ind_cell,d,u,v,w,e_kin,d_old,e_prim,fact) schedule(static,nvector)
-  do i=1,active(ilevel)%ngrid
-     do ind=1,twotondim
-        iskip=ncoarse+(ind-1)*ngridmax
+!$omp parallel private(iskip)
+  do ind=1,twotondim
+     iskip=ncoarse+(ind-1)*ngridmax
+!$omp do private(ind_cell,d,u,v,w,e_kin,d_old,e_prim,fact) schedule(static)
+     do i=1,active(ilevel)%ngrid
         ind_cell=active(ilevel)%igrid(i)+iskip
         d=max(unew(ind_cell,1),smallr)
         u=0.0; v=0.0; w=0.0
@@ -244,7 +249,9 @@ subroutine add_gravity_source_terms(ilevel)
         e_kin=0.5*d*(u**2+v**2+w**2)
         unew(ind_cell,ndim+2)=e_prim+e_kin
      end do
+!$omp end do nowait
   end do
+!$omp end parallel
 
 111 format('   Entering add_gravity_source_terms for level ',i2)
 
@@ -279,7 +286,7 @@ subroutine add_pdv_source_terms(ilevel)
   iii(3,2,1:8)=(/0,0,0,0,6,6,6,6/); jjj(3,2,1:8)=(/5,6,7,8,1,2,3,4/)
 
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static)
+!$omp parallel do private(ngrid,ind_grid) schedule(static)
   do igrid=1,ncache,nvector
      ngrid = MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -419,7 +426,6 @@ end subroutine addpdv1
 !###########################################################
 subroutine godfine1(ind_grid,ncache,ilevel)
   use hydro_parameters
-
   use amr_commons
   use hydro_commons
   use poisson_commons
