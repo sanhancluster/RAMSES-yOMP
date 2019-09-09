@@ -12,6 +12,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   use hydro_commons,only:uold
   use random
   use mpi_mod
+  use omp_lib
   implicit none
   !------------------------------------------------------------------------
   ! This routine computes the energy liberated from stellar winds
@@ -48,6 +49,9 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   integer :: irand
   ! End MC Tracer =============================================
 
+  integer,dimension(1:IRandNumSize),save :: ompseed
+!$omp threadprivate(ompseed)
+
   if(icount==2) return
   if(.not.hydro) return
   if(ndim.ne.3)  return
@@ -65,6 +69,11 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   !!!
   trelSN=(sn_trelax)*1d6*(365.*24.*3600.)/scale_t
   !!!
+!$omp parallel
+  ! Give slight offsets for each OMP threads
+  ompseed=MOD(tracer_seed+omp_get_thread_num(),4096)
+!$omp end parallel
+  call ranf(tracer_seed,rand)
 
 
   ! Mesh spacing in that level
@@ -106,14 +115,14 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   ! End MC Tracer
 
   ! Loop over cpus
-  ! OMPNOTE: not easy to avoid race condition
-!!$omp parallel private(icpu,ip,ind_grid,ind_pos_cell,,mSN,pSN,mZSN)
+  ! OMPNOTE: mech_fine is not thread-safe
+!$omp parallel private(ip,ind_grid,ind_pos_cell,mSN,pSN,mZSN)
   do icpu=1,ncpu
      ip=0
 
      ! Loop over grids
-!!$omp do private(igrid,npart1,npart2,ipart,next_part,x0,mw8,mzw8,pw8,ok,ind_son,ind,iskip,ind_cell,mejecta) &
-!!$omp& reduction(+:nSNc) schedule(dynamic,nchunk)
+!$omp do private(igrid,npart1,npart2,ipart,next_part,x0,mw8,mzw8,pw8,ok,ind_son,ind,iskip,ind_cell,mejecta) &
+!$omp& reduction(+:nSNc) schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -215,27 +224,33 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                  pSN(ip,3)=pw8(ind,3)
 
                  if(ip==nvector)then
+!$omp critical
                     call mech_fine(ind_grid,ind_pos_cell,ip,ilevel,mSN,pSN,mZSN,dteff)
+!$omp end critical
                     ip=0
                  endif
               endif
            enddo
-
-
         end if
      end do ! End loop over grids
-
+!$omp end do nowait
      if (ip>0) then
+!$omp critical
         call mech_fine(ind_grid,ind_pos_cell,ip,ilevel,mSN,pSN,mZSN,dteff)
+!$omp end critical
         ip=0
      endif
-
 
      if (MC_tracer) then
         ! MC Tracer =================================================
         ! Loop over grids
-        igrid = headl(icpu, ilevel)
+!$omp do private(igrid,npart1,ipart,next_part,rand,irand,new_xp)
         do jgrid = 1, numbl(icpu, ilevel)
+           if(icpu==myid)then
+              igrid=active(ilevel)%igrid(jgrid)
+           else
+              igrid=reception(icpu,ilevel)%igrid(jgrid)
+           end if
            npart1 = numbp(igrid)  ! Number of particles in the grid
            ipart = headp(igrid)
 
@@ -245,7 +260,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
 
               if (is_star_tracer(typep(ipart))) then
                  ! Detach particle if required
-                 call ranf(tracer_seed, rand)
+                 call ranf(ompseed, rand)
 
                  ! Detach particles
                  if (rand < tmpp(partp(ipart))) then
@@ -257,7 +272,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                     move_flag(ipart) = 1
 
                     ! Detached, now decide where to move it
-                    call ranf(tracer_seed, rand)
+                    call ranf(ompseed, rand)
 
                     do idim = 1, ndim
                        ! Draw number between 1 and nSNnei
@@ -270,17 +285,14 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                     end do
                  end if
               end if
-
               ipart = next_part ! Go to next particle
            end do ! End loop over particles
-
-           igrid=next(igrid)   ! Go to next grid
         end do ! End loop over grids
-
+!$omp end do nowait
         ! End MC Tracer =============================================
      end if
   end do ! End loop over cpus
-!!$omp end parallel
+!$omp end parallel
 
 #ifndef WITHOUTMPI
   nSNc_mpi=0
