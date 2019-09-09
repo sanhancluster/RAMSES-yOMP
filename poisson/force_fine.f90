@@ -23,7 +23,6 @@ subroutine force_fine(ilevel,icount)
   real(dp),dimension(1:twotondim,1:3)::xc
   real(dp),dimension(1:3)::skip_loc
 
-  integer::indcell,indgrid
   integer ,dimension(1:nvector)::ind_grid,ind_cell
   real(dp),dimension(1:nvector,1:ndim)::xx,ff
   common /omp_force_fine/skip_loc,scale,dx_loc
@@ -108,24 +107,30 @@ subroutine force_fine(ilevel,icount)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(ngrid,iskip,indcell) reduction(+:epot_loc), reduction(MAX:rho_loc) schedule(static)
+!$omp parallel do private(ngrid,iskip,ind_grid,ind_cell) reduction(+:epot_loc), reduction(MAX:rho_loc) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
+     do i=1,ngrid
+        ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
+     end do
      ! Loop over cells
      do ind=1,twotondim
+        ! Gather cell indices
         iskip=ncoarse+(ind-1)*ngridmax
+        do i=1,ngrid
+           ind_cell(i)=iskip+ind_grid(i)
+        end do
         ! Loop over dimensions
         do idim=1,ndim
            do i=1,ngrid
-              indcell = iskip + active(ilevel)%igrid(igrid+i-1)
-              if(son(indcell)==0)then
-                 epot_loc=epot_loc+fact*f(indcell,idim)**2
+              if(son(ind_cell(i))==0)then
+                 epot_loc=epot_loc+fact*f(ind_cell(i),idim)**2
               end if
            end do
         end do
         ! End loop over dimensions
         do i=1,ngrid
-           rho_loc=MAX(rho_loc,dble(abs(rho(indcell))))
+           rho_loc=MAX(rho_loc,dble(abs(rho(ind_cell(i)))))
         end do
      end do
      ! End loop over cells

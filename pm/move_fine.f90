@@ -45,10 +45,10 @@ subroutine move_fine(ilevel)
      end do
   endif
 
-!$omp parallel private(ig,ip,ind_grid,ind_part,ind_grid_part) reduction(+:sink_stat_local)
+!$omp parallel private(ig,ip,ind_grid,ind_part,ind_grid_part,igrid,npart1,ipart,local_counter,next_part) reduction(+:sink_stat_local)
   ig=0
   ip=0
-!$omp do private(igrid,npart1,ipart,local_counter,next_part) schedule(static)
+!$omp do
   do jgrid=1,active(ilevel)%ngrid
      igrid=active(ilevel)%igrid(jgrid)
      npart1=numbp(igrid)  ! Number of particles in the grid

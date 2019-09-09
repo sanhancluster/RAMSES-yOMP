@@ -374,9 +374,9 @@ subroutine build_parent_comms_mg(active_f_comm, ifinelevel)
    integer :: ngrids, cur_grid, cur_cpu, cur_cell
    integer :: i, nbatch, ind, istart
 
-   integer, dimension(1:nvector), save :: ind_cell_father
-   integer, dimension(1:nvector,1:twotondim),   save :: nbors_father_grids
-   integer, dimension(1:nvector,1:threetondim), save :: nbors_father_cells
+   integer, dimension(1:nvector) :: ind_cell_father
+   integer, dimension(1:nvector,1:twotondim)   :: nbors_father_grids
+   integer, dimension(1:nvector,1:threetondim) :: nbors_father_cells
    integer, dimension(1:ncpu) :: indx
    integer, dimension(1:ncpu) :: nreq, nreq2
    integer :: nact_tot, nreq_tot, nreq_tot2
@@ -839,8 +839,10 @@ subroutine make_fine_mask(ilevel)
    integer  :: igrid_amr, icell_amr, iskip_amr
 
    ngrid=active(ilevel)%ngrid
+!$omp parallel private(iskip_amr,igrid_amr,icell_amr)
    do ind=1,twotondim
       iskip_amr = ncoarse+(ind-1)*ngridmax
+!$omp do
       do igrid_mg=1,ngrid
          igrid_amr = active(ilevel)%igrid(igrid_mg)
          icell_amr = iskip_amr + igrid_amr
@@ -853,6 +855,7 @@ subroutine make_fine_mask(ilevel)
       ngrid=reception(icpu,ilevel)%ngrid
       do ind=1,twotondim
          iskip_amr = ncoarse+(ind-1)*ngridmax
+!$omp do
          do igrid_mg=1,ngrid
             igrid_amr = reception(icpu,ilevel)%igrid(igrid_mg)
             icell_amr = iskip_amr + igrid_amr
@@ -866,6 +869,7 @@ subroutine make_fine_mask(ilevel)
       ngrid=boundary(ibound,ilevel)%ngrid
       do ind=1,twotondim
          iskip_amr=ncoarse+(ind-1)*ngridmax
+!$omp do
          do igrid_mg=1,ngrid
             igrid_amr = boundary(ibound,ilevel)%igrid(igrid_mg)
             icell_amr = iskip_amr + igrid_amr
@@ -874,7 +878,7 @@ subroutine make_fine_mask(ilevel)
          end do
       end do
    end do
-
+!$omp end parallel
 end subroutine make_fine_mask
 
 ! ########################################################################
@@ -942,10 +946,12 @@ subroutine make_fine_bc_rhs(ilevel,icount)
    ngrid=active(ilevel)%ngrid
 
    ! Loop over cells
+!$omp parallel private(iskip_amr,igrid_amr,icell_amr,igshift,igrid_nbor_amr,ifathercell_nbor_amr,nb_mask,ind_cell,nb_phi,icell_nbor_amr,w,phi_b)
    do ind=1,twotondim
       iskip_amr = ncoarse+(ind-1)*ngridmax
 
       ! Loop over active grids
+!$omp do
       do igrid_mg=1,ngrid
          igrid_amr = active(ilevel)%igrid(igrid_mg)
          icell_amr = iskip_amr + igrid_amr
@@ -996,8 +1002,9 @@ subroutine make_fine_bc_rhs(ilevel,icount)
             end do
          end do
       end do
+!$omp end do nowait
    end do
-
+!$omp end parallel
 end subroutine make_fine_bc_rhs
 
 
