@@ -109,7 +109,7 @@ subroutine output_timer(write_file, filename)
   end do
   if (ncpu==1) then
      do i = 1,ntimer
-        if (id_is_one .and. time(i)/total > 0.001) write (ilun,'(f12.3,4x,f6.1,4x,a24)') &
+        if (id_is_one .and. time(i)/total > 0.0) write (ilun,'(f12.3,4x,f6.1,4x,a24)') &
           time(i), 100.*time(i)/total,labels(i)
      end do
      if (id_is_one) write (ilun,'(f12.3,4x,f6.1,4x,a)') total, 100., 'TOTAL'
@@ -162,7 +162,7 @@ subroutine output_timer(write_file, filename)
      do i = 1,ntimer
         call MPI_GATHER(real(time(i),kind=8),1,MPI_REAL8,vtime,1,MPI_REAL8,0,MPI_COMM_WORLD,mpi_err)
         if (id_is_one) then
-           if (maxval(vtime)/gtotal > 0.0001) then
+           if (maxval(vtime)/gtotal > 0.0) then
               avtime  = sum(vtime) / ncpu ! average time used
               imn     = minloc(vtime,1)
               imx     = maxloc(vtime,1)
