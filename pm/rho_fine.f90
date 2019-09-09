@@ -104,7 +104,6 @@ subroutine rho_fine(ilevel,icount)
                 & rho_top(active(ilevel)%igrid(i)+iskip)
         end do
      end do
-!$omp end do nowait
   endif
 
   !-------------------------------------------------------------------------
@@ -350,9 +349,8 @@ subroutine rho_from_current_level(ilevel)
      end if
 
   end do
-!$omp end parallel
   ! End loop over cpus
-
+!$omp end parallel
 end subroutine rho_from_current_level
 
 #ifdef DICE
