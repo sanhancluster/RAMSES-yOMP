@@ -61,7 +61,7 @@ subroutine phi_fine_cg(ilevel,icount)
   ! Compute right-hand side norm
   !===============================
   rhs_norm=0.d0
-!$omp parallel private(ind,iskip,i,idx) reduction(+:rhs_norm)
+!$omp parallel private(iskip,idx) reduction(+:rhs_norm)
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
 !$omp do schedule(static)
@@ -100,10 +100,10 @@ subroutine phi_fine_cg(ilevel,icount)
      ! Compute residual norm
      !====================================
      r2=0.0d0
-!$omp parallel private(ind,iskip,i,idx) reduction(+:r2)
+!$omp parallel private(iskip,idx) reduction(+:r2)
       do ind=1,twotondim
 		  iskip=ncoarse+(ind-1)*ngridmax
-!$omp do schedule(static)
+!$omp do
 	      do i=1,active(ilevel)%ngrid
 			  idx=active(ilevel)%igrid(i)+iskip
 			  r2=r2+f(idx,1)*f(idx,1)
@@ -131,10 +131,10 @@ subroutine phi_fine_cg(ilevel,icount)
 	  !====================================
 	  ! Recurrence on p
 	  !====================================
-!$omp parallel private(ind,iskip,i,idx)
+!$omp parallel private(iskip,idx)
 	  do ind=1,twotondim
 		  iskip=ncoarse+(ind-1)*ngridmax
-!$omp do schedule(static)
+!$omp do
           do i=1,active(ilevel)%ngrid
 			  idx=active(ilevel)%igrid(i)+iskip
 			  f(idx,2)=f(idx,1)+beta_cg*f(idx,2)
@@ -154,10 +154,10 @@ subroutine phi_fine_cg(ilevel,icount)
 	  ! Compute p.Ap scalar product
 	  !====================================
 	  pAp=0.0d0
-!$omp parallel private(ind,iskip,i,idx) reduction(+:pAp)
+!$omp parallel private(iskip,idx) reduction(+:pAp)
 	  do ind=1,twotondim
 		  iskip=ncoarse+(ind-1)*ngridmax
-!$omp do schedule(static)
+!$omp do
 	      do i=1,active(ilevel)%ngrid
 			  idx=active(ilevel)%igrid(i)+iskip
 			  pAp=pAp+f(idx,2)*f(idx,3)
@@ -180,10 +180,10 @@ subroutine phi_fine_cg(ilevel,icount)
 	  !====================================
 	  ! Recurrence on x and r
 	  !====================================
-!$omp parallel private(ind,iskip,i,idx)
+!$omp parallel private(iskip,idx)
 	  do ind=1,twotondim
 		  iskip=ncoarse+(ind-1)*ngridmax
-!$omp do schedule(static)
+!$omp do
 	      do i=1,active(ilevel)%ngrid
 			  idx=active(ilevel)%igrid(i)+iskip
 

@@ -48,6 +48,7 @@ subroutine refine_coarse
 
   ! Gather coarse cells for refinement
   ncreate=0
+!$omp parallel do private(ind) reduction(+:ncreate) collapse(3)
   do k=0,nz-1
   do j=0,ny-1
   do i=0,nx-1
@@ -178,8 +179,8 @@ subroutine make_grid_coarse(ind_cell,ibound,boundary_region)
 
   real(dp)::dx_loc,scale
   real(dp),dimension(1:3)::xc,skip_loc
-  real(dp),dimension(1:nvector,1:ndim),save::xx
-  integer ,dimension(1:nvector),save::cc
+  real(dp),dimension(1:nvector,1:ndim)::xx
+  integer ,dimension(1:nvector)::cc
 
   ! Local constants
   nxny=nx*ny
