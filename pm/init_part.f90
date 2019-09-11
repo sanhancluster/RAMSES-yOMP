@@ -1880,7 +1880,7 @@ contains
     ipart = npart
 
     npart_loc_real = 0
-
+    ntracer_cpu = 0
     ! Calcuate the mass of tracer particles
     if(tracer_mass<0)then
        if(tracer_level<0)then
