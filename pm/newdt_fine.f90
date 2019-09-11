@@ -25,6 +25,7 @@ subroutine newdt_fine(ilevel)
   integer,dimension(1:nvector)::ind_part
   real(kind=8)::dt_loc,dt_all,ekin_loc,ekin_all
   real(dp)::tff,fourpi,threepi2
+
 #ifdef ATON
   real(dp)::aton_time_step,dt_aton
 #endif
@@ -36,6 +37,7 @@ subroutine newdt_fine(ilevel)
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
 
+  call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
   threepi2=3.0d0*ACOS(-1.0d0)**2
 
   ! Save old time step
@@ -46,7 +48,7 @@ subroutine newdt_fine(ilevel)
   if(poisson.and.gravity_type<=0)then
      fourpi=4.0d0*ACOS(-1.0d0)
      if(cosmo)fourpi=1.5d0*omega_m*aexp
-     tff=sqrt(threepi2/8./fourpi/rho_max(ilevel))
+     tff=sqrt(threepi2/8./fourpi/rho_max(ilevel)/(6.67d-8*scale_d*scale_t**2))
      dtnew(ilevel)=MIN(dtnew(ilevel),courant_factor*tff)
   end if
   if(cosmo)then
