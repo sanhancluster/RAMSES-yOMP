@@ -751,13 +751,12 @@ subroutine virtual_tree_fine(ilevel)
      ! Use itmpp to store the index within communicator
      ! Note: itmpp is also used in `sink_particle_tracer` for
      ! `gas_tracers`, so there is no interference here.
-!$omp parallel private(ipcom,igrid,npart1,ipart)
+!$omp parallel do private(ipcom,igrid,npart1,ipart)
      do icpu=1,ncpu
         if(reception(icpu,ilevel)%npart>0)then
            ! Gather particles by vector sweeps
            ipcom=0
-           ! This loop should be serial?
-!$omp do
+           ! OMPNOTE: This loop should be serial
            do jgrid=1,reception(icpu,ilevel)%ngrid
               igrid =reception(icpu,ilevel)%igrid(jgrid)
               npart1=numbp(igrid)
@@ -771,10 +770,8 @@ subroutine virtual_tree_fine(ilevel)
                  ipart = nextp(ipart)
               end do
            end do
-!$omp end do nowait
         end if
      end do
-!$omp end parallel
   end if
 
   ! Gather particle in communication buffer
