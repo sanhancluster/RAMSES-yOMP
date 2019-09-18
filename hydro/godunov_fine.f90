@@ -859,7 +859,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
         do j3=j3min,j3max-j0
         do i3=i3min,i3max-i0
            do i=1,nb_noneigh
-              eflow(i)=eflow(i)-tmp(ind_cell(i),i3,j3,k3,2,idim)*oneontwotondim
+              eflow(i)=eflow(i)-tmp(ind_cell(i),i3,j3,k3,2,idim)
            end do
         end do
         end do
@@ -892,7 +892,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
         do j3=j3min+j0,j3max
         do i3=i3min+i0,i3max
            do i=1,nb_noneigh
-              dflow(i)=dflow(i)+tmp(ind_cell(i),i3+i0,j3+j0,k3+k0,1,idim)*oneontwotondim
+              dflow(i)=dflow(i)+tmp(ind_cell(i),i3+i0,j3+j0,k3+k0,1,idim)
            end do
         end do
         end do
@@ -902,7 +902,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
         do j3=j3min+j0,j3max
         do i3=i3min+i0,i3max
            do i=1,nb_noneigh
-              eflow(i)=eflow(i)+tmp(ind_cell(i),i3+i0,j3+j0,k3+k0,2,idim)*oneontwotondim
+              eflow(i)=eflow(i)+tmp(ind_cell(i),i3+i0,j3+j0,k3+k0,2,idim)
            end do
         end do
         end do
