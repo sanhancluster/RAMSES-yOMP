@@ -28,11 +28,15 @@ subroutine move_fine(ilevel)
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
 
+#ifdef _OPENMP
 !$omp parallel
-  ! Give slight offsets for each OMP threads
-  ompseed=MOD(tracer_seed+omp_get_thread_num(),4096)
+    ! Give slight offsets for each OMP threads
+    ompseed=MOD(tracer_seed+omp_get_thread_num(),4096)
 !$omp end parallel
-  call ranf(tracer_seed,rand)
+#else
+    ompseed=tracer_seed
+#endif
+    call ranf(tracer_seed,rand)
 
   ! Set new sink variables to old ones
   if(sink)then
@@ -807,7 +811,7 @@ end subroutine move1
 !#########################################################################
 !#########################################################################
 !#########################################################################
-subroutine move_gas_tracer(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,ompseed)
+subroutine move_gas_tracer(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed)
   use amr_commons
   use pm_commons
   use poisson_commons
@@ -861,7 +865,7 @@ subroutine move_gas_tracer(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,ompseed)
 
   integer :: ix, iy, iz
 
-  integer, dimension(1:IRandNumSize) :: ompseed
+  integer, dimension(1:IRandNumSize) :: seed
 
 
   ! Mesh spacing in that level
@@ -933,9 +937,9 @@ subroutine move_gas_tracer(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,ompseed)
 
   ! Generate random numbers for each particle
   do ipart = 1, np
-     call ranf(ompseed, rand1(ipart))
-     call ranf(ompseed, rand2(ipart))
-     call ranf(ompseed, rand3(ipart))
+     call ranf(seed, rand1(ipart))
+     call ranf(seed, rand2(ipart))
+     call ranf(seed, rand3(ipart))
   end do
 
   ! Movable particles have a flag == 0
@@ -972,7 +976,7 @@ subroutine move_gas_tracer(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,ompseed)
      do ipart = 1, np
         ! Particle in the center of the grid
         if (x(ipart, idim) == 0.0D0) then
-           call ranf(ompseed, rand)
+           call ranf(seed, rand)
 
            ! Project the particle either to the right or the left
            if (rand < 0.5) then

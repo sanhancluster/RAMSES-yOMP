@@ -194,11 +194,15 @@ subroutine make_sink(ilevel)
      xc(ind,3)=(dble(iz)-0.5D0)*dx
   end do
 
+#ifdef _OPENMP
 !$omp parallel
-  ! Give slight offsets for each OMP threads
-  ompseed=MOD(tracer_seed+omp_get_thread_num(),4096)
+    ! Give slight offsets for each OMP threads
+    ompseed=MOD(tracer_seed+omp_get_thread_num(),4096)
 !$omp end parallel
-  call ranf(tracer_seed,rand)
+#else
+    ompseed=tracer_seed
+#endif
+    call ranf(tracer_seed,rand)
 
   ! Set new sink variables to old ones
 !$omp parallel do private(isink)
@@ -1774,12 +1778,16 @@ subroutine bondi_hoyle(ilevel)
      call rans(ncpu,iseed,allseed)
      localseed=allseed(myid,1:IRandNumSize)
   end if
+
+#ifdef _OPENMP
 !$omp parallel
   ! Give slight offsets for each OMP threads
   ompseed=MOD(localseed+omp_get_thread_num(),4096)
 !$omp end parallel
+#else
+    ompseed=localseed
+#endif
   call ranf(localseed,rand)
-
 
   ! Mesh spacing in that level
   dx_loc=0.5D0**ilevel
@@ -2608,11 +2616,15 @@ subroutine grow_bondi(ilevel)
   if(cosmo)factG=3d0/8d0/pi*omega_m*aexp
   prefact=fourpi*6.67d-8*scale_m*1.66d-24/(6.652d-25*3d10)/(scale_m/scale_t)
 
+#ifdef _OPENMP
 !$omp parallel
-  ! Give slight offsets for each OMP threads
-  ompseed=MOD(tracer_seed+omp_get_thread_num(),4096)
+    ! Give slight offsets for each OMP threads
+    ompseed=MOD(tracer_seed+omp_get_thread_num(),4096)
 !$omp end parallel
-  call ranf(tracer_seed,rand)
+#else
+    ompseed=tracer_seed
+#endif
+    call ranf(tracer_seed,rand)
 
   ! Reset new sink variables
   msink_new=0d0; vsink_new=0d0; dMBH_coarse_new=0d0; dMEd_coarse_new=0d0; dMsmbh_new=0d0
@@ -2838,7 +2850,7 @@ end subroutine grow_bondi
 !################################################################
 !################################################################
 !################################################################
-subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,ompseed)
+subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed)
   use amr_commons
   use pm_commons
   use hydro_commons
@@ -2901,7 +2913,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,ompseed)
   real(dp) :: proba
   integer :: itracer, ii
 
-  integer,dimension(1:IRandNumSize) :: ompseed
+  integer,dimension(1:IRandNumSize) :: seed
 
   ! Conversion factor from user units to cgs units
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
@@ -3188,7 +3200,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,ompseed)
 
                  if (ii == nvector) then
                     call tracer2sink(ind_tracer, proba_tracer, &
-                         xsink_loc, ind_sink, ii, dx_loc, ompseed)
+                         xsink_loc, ind_sink, ii, dx_loc, seed)
                     ii = 0
                  end if
               end if
@@ -3313,7 +3325,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,ompseed)
 
   if (MC_tracer .and. ii > 0) then
      call tracer2sink(ind_tracer, proba_tracer, &
-          xsink_loc, ind_sink, ii, dx_loc, ompseed)
+          xsink_loc, ind_sink, ii, dx_loc, seed)
   end if
 
 

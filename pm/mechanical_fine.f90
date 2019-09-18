@@ -69,11 +69,16 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   !!!
   trelSN=(sn_trelax)*1d6*(365.*24.*3600.)/scale_t
   !!!
+
+#ifdef _OPENMP
 !$omp parallel
-  ! Give slight offsets for each OMP threads
-  ompseed=MOD(tracer_seed+omp_get_thread_num(),4096)
+    ! Give slight offsets for each OMP threads
+    ompseed=MOD(tracer_seed+omp_get_thread_num(),4096)
 !$omp end parallel
-  call ranf(tracer_seed,rand)
+#else
+    ompseed=tracer_seed
+#endif
+    call ranf(tracer_seed,rand)
 
 
   ! Mesh spacing in that level

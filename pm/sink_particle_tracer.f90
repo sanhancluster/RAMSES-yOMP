@@ -111,10 +111,14 @@ contains
     rmax = max(dx_min * scale_l, rAGN * cgs%kpc)
     rmax = rmax/scale_l
 
+#ifdef _OPENMP
 !$omp parallel
     ! Give slight offsets for each OMP threads
     ompseed=MOD(tracer_seed+omp_get_thread_num(),4096)
 !$omp end parallel
+#else
+    ompseed=tracer_seed
+#endif
     call ranf(tracer_seed,rand)
 
     !----------------------------------------
@@ -217,7 +221,7 @@ contains
 
   end subroutine MC_tracer_to_jet
 
-  subroutine tracer2jet(ind_AGN, ind_part, AGN_pos, AGN_j, npart, rmax, ompseed)
+  subroutine tracer2jet(ind_AGN, ind_part, AGN_pos, AGN_j, npart, rmax, seed)
     use random, ONLY:IRandNumSize
     ! Compute the position of the particle within the jet
     ! On exit, the array itmpp contains the target CPU
@@ -232,7 +236,7 @@ contains
     integer :: i
     logical :: ok
 
-    integer,dimension(1:IRandNumSize) :: ompseed
+    integer,dimension(1:IRandNumSize) :: seed
 
     rmax2 = rmax**2
     !----------------------------------------
@@ -241,13 +245,13 @@ contains
     do i = 1, npart
        ok = .false.
        do while (.not. ok)
-          call ranf(ompseed, hh)
+          call ranf(seed, hh)
           ! Draw a position following a normal law between -1 and 1 (in rmax unit)
           xx = 2
           yy = 2
           do while (norm2([xx, yy]) > 1)
-             call gaussdev(ompseed, xx)
-             call gaussdev(ompseed, yy)
+             call gaussdev(seed, xx)
+             call gaussdev(seed, yy)
           end do
 
           hh = (hh - 0.5_dp) * 4 * rmax ! *4 to include the spherical caps
@@ -781,7 +785,7 @@ subroutine tracer2othersink(ind_tracer, isink_new_part, xsink_loc, np)
 
 end subroutine tracer2othersink
 
-subroutine tracer2sink(ind_tracer, proba, xsink_loc, isink, nattach, dx_loc, ompseed)
+subroutine tracer2sink(ind_tracer, proba, xsink_loc, isink, nattach, dx_loc, seed)
   ! Attach tracers to a sink (accretion onto the BH)
   use amr_commons
   use random, only : ranf
@@ -798,14 +802,14 @@ subroutine tracer2sink(ind_tracer, proba, xsink_loc, isink, nattach, dx_loc, omp
   logical, dimension(1:nvector) :: attach
   integer :: i
 
-  integer,dimension(1:IRandNumSize) :: ompseed
+  integer,dimension(1:IRandNumSize) :: seed
 
   real(dp) :: r
 
   attach = .false.
 
   do i = 1, nattach
-     call ranf(ompseed, r)
+     call ranf(seed, r)
      attach(i) = r < proba(i)
   end do
 

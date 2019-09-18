@@ -91,7 +91,11 @@ subroutine read_params
   write(*,*)'       written by Romain Teyssier (University of Zurich)       '
   write(*,*)'               (c) CEA 1999-2007, UZH 2008-2014                '
   write(*,*)' '
+#ifdef _OPENMP
   write(*,'(" Working with nproc = ",I4," and nthread = ",I3," for ndim = ",I1)')ncpu,nthr,ndim
+#else
+  write(*,'(" Working with nproc = ",I4," for ndim = ",I1)')ncpu,ndim
+#endif
   ! Check nvar is not too small
 #ifdef OMP_NCHUNK
   write(*,'(" With nvector = ",I3," and nchunk = ",I3)')nvector,nchunk

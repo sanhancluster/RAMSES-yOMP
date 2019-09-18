@@ -217,11 +217,17 @@ subroutine star_formation(ilevel)
      call rans(ncpu,iseed,allseed)
      localseed=allseed(myid,1:IRandNumSize)
   end if
+
+#ifdef _OPENMP
 !$omp parallel
   ! Give slight offsets for each OMP threads
   ompseed=MOD(localseed+omp_get_thread_num(),4096)
   ompseed_tracer=MOD(tracer_seed+omp_get_thread_num(),4096)
 !$omp end parallel
+#else
+  ompseed=localseed
+  ompseed_tracer=tracer_seed
+#endif
   call ranf(localseed,RandNum)
   call ranf(tracer_seed,RandNum)
   !------------------------------------------------
@@ -638,7 +644,7 @@ end subroutine starform1
 !################################################################
 !################################################################
 !################################################################
-subroutine starform2(ind_grid,ngrid,ilevel,ntot,ompseed)
+subroutine starform2(ind_grid,ngrid,ilevel,ntot,seed)
   use amr_commons
   use pm_commons
   use hydro_commons
@@ -679,7 +685,7 @@ subroutine starform2(ind_grid,ngrid,ilevel,ntot,ompseed)
   ! the f2008 intrinsic erfc() function:
   real(dp) :: erfc_pre_f08
 
-  integer,dimension(1:IRandNumSize)::ompseed
+  integer,dimension(1:IRandNumSize)::seed
 
   common /omp_star_formation/ xc,skip_loc,scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,d0,mstar,dstar,nISM,trel, &
         & birth_epoch,factG,dx_loc,scale,vol_loc
@@ -1028,7 +1034,7 @@ subroutine starform2(ind_grid,ngrid,ilevel,ntot,ompseed)
            PoissMean=mgas/mstar
            if((trel>0.).and.(.not.cosmo)) PoissMean = PoissMean*min((t/trel),1._dp)
            ! Compute Poisson realisation
-           call poissdev(ompseed,PoissMean,nstar(i))
+           call poissdev(seed,PoissMean,nstar(i))
            ! Compute depleted gas mass
            mgas=nstar(i)*mstar
            ! Security to prevent more than 90% of gas depletion
@@ -1108,7 +1114,7 @@ end subroutine starform4
 !################################################################
 !################################################################
 !################################################################
-subroutine tracer2star(ind_tracer, proba, xstar, istar, nattach, ompseed)
+subroutine tracer2star(ind_tracer, proba, xstar, istar, nattach, seed)
   use amr_commons
   use random
   use pm_commons
@@ -1123,13 +1129,13 @@ subroutine tracer2star(ind_tracer, proba, xstar, istar, nattach, ompseed)
   integer :: i, idim, n
   real(dp) :: r
 
-  integer,dimension(1:IRandNumSize) :: ompseed
+  integer,dimension(1:IRandNumSize) :: seed
 
   attach = .false.
 
   n = 0
   do i = 1, nattach
-     call ranf(ompseed, r)
+     call ranf(seed, r)
      attach(i) = r < proba(i)
   end do
 
