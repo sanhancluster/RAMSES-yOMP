@@ -25,7 +25,7 @@ USE_OLD_MPI_INCLUDE = 0
 EXEC = ramses
 # Activate OpenMP
 OPENMP = 1
-OMP_NCHUNK = 1
+OMP_NCHUNK = 16
 #############################################################################
 # Patches to include (without DICE)
 #PATCH = ../patch/AGNSFSNpatch/AGNspinRT:../patch/AGNSFSNpatch/sfsn
@@ -129,8 +129,8 @@ FFLAGS = -x f95-cpp-input $(DEFINES)
 #FFLAGS = -Mpreprocess $(DEFINES)
 
 # --- MPI, ifort syntax ------------------------------
-#F90 = mpiifort $(OMPFLAG)
-#FFLAGS = -cpp -O3 -xAVX -fpp $(DEFINES) -DNOSYSTEM
+F90 = mpiifort $(OMPFLAG)
+FFLAGS = -cpp -O3 -xAVX -fpp $(DEFINES) -DNOSYSTEM
 
 # --- MPI, ifort syntax, additional checks -----------
 #F90 = mpiifort $(OMPFLAG)
@@ -186,9 +186,6 @@ MODOBJ += poisson_commons.o hydro_parameters.o hydro_commons.o cooling_module.o 
 ifeq ($(RT),1)
 MODOBJ += rt_parameters.o rt_hydro_commons.o coolrates_module.o \
          rt_spectra.o rt_cooling_module.o rt_flux_module.o
-endif
-ifeq ($(OPENMP),1)
-MODOBJ += omp_utils.o
 endif
 ifeq ($(DICE),1)
 AMROBJ = dice_commons.o
