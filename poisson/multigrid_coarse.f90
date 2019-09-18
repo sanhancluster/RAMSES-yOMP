@@ -684,36 +684,41 @@ subroutine restriction_fine(ilevel,multigrid)
   vol_loc=dx_loc**ndim
 
   ! Initialize density field to zero
-!$omp parallel do private(icpu,ind,iskip,i) collapse(2)
+!$omp parallel private(iskip)
   do ind=1,twotondim
      do icpu=1,ncpu
         iskip=ncoarse+(ind-1)*ngridmax
+!$omp do
         do i=1,reception(icpu,ilevel)%ngrid
            rho(reception(icpu,ilevel)%igrid(i)+iskip)=0.0D0
         end do
+!$omp end do nowait
      end do
   end do
-!$omp parallel do private(iskip)
   do ind=1,twotondim
 	 iskip=ncoarse+(ind-1)*ngridmax
+!$omp do
      do i=1,active(ilevel)%ngrid
         rho(active(ilevel)%igrid(i)+iskip)=0.0D0
      end do
+!$omp end do nowait
   end do
-!$omp parallel do private(iskip)
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
 	 do ibound=1,nboundary
+!$omp do
 		do i=1,boundary(ibound,ilevel)%ngrid
            rho(boundary(ibound,ilevel)%igrid(i)+iskip)=0.0D0
         end do
+!$omp end do nowait
      end do
   end do
+!$omp end parallel
 
   ! Perform a restriction over split cells (ilevel+1)
   if(ilevel<nlevelmax)then
      ncache=active(ilevel+1)%ngrid
-!$omp parallel do private(igrid,ngrid,i,ind_grid)
+!$omp parallel do private(ngrid,ind_grid)
      do igrid=1,ncache,nvector
         ! Gather nvector grids
         ngrid=MIN(nvector,ncache-igrid+1)

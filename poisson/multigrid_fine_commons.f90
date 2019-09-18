@@ -786,7 +786,9 @@ subroutine cleanup_mg_level(ilevel)
    ! ---------------------------------------------------------------------
    ! Cleanup lookup table
    ! ---------------------------------------------------------------------
+!$omp parallel
    do icpu=1,ncpu
+!$omp do private(cur_grid,cur_cpu)
       do igrid=1,active_mg(icpu,ilevel)%ngrid
          cur_grid=active_mg(icpu,ilevel)%igrid(igrid)
          cur_cpu=cpu_map(father(cur_grid))
@@ -796,8 +798,9 @@ subroutine cleanup_mg_level(ilevel)
             lookup_mg(cur_grid)=-mod(flag2(cur_grid),ngridmax)
          end if
       end do
+!$omp end do nowait
    end do
-
+!$omp end parallel
    ! ---------------------------------------------------------------------
    ! Deallocate communicators
    ! ---------------------------------------------------------------------

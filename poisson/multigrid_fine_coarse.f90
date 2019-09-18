@@ -607,7 +607,7 @@ subroutine restrict_residual_coarse_reverse(ifinelevel)
          active_mg(cpu_amr,icoarselevel)%u(icell_c_mg,2)=&
             active_mg(cpu_amr,icoarselevel)%u(icell_c_mg,2)+res
       end do
-!$omp end do
+!$omp end do nowait
    end do
 !$omp end parallel
 
