@@ -82,8 +82,6 @@ subroutine rho_fine(ilevel,icount)
   !--------------------------
   ! Initialize fields to zero
   !--------------------------
-!$omp parallel private(d_scale,iskip)
-!$omp do
   do ind=1,twotondim
     iskip=ncoarse+(ind-1)*ngridmax
     do i=1,active(ilevel)%ngrid
@@ -94,27 +92,29 @@ subroutine rho_fine(ilevel,icount)
     end do
   end do
 
+!$omp parallel private(d_scale,iskip)
   if(cic_levelmax>0.and.ilevel>cic_levelmax)then
-!$omp do
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
+!$omp do
         do i=1,active(ilevel)%ngrid
            rho_top(active(ilevel)%igrid(i)+iskip)=rho_top(father(active(ilevel)%igrid(i)))
            rho(active(ilevel)%igrid(i)+iskip)=rho(active(ilevel)%igrid(i)+iskip)+ &
                 & rho_top(active(ilevel)%igrid(i)+iskip)
         end do
+!$omp end do nowait
      end do
   endif
-
+!$omp barrier
   !-------------------------------------------------------------------------
   ! Initialize "number density" field to baryon number density in array phi.
   !-------------------------------------------------------------------------
   if(hydro .and. m_refine(ilevel)>-1.0d0)then
      d_scale=max(mass_sph/dx_loc**ndim,smallr)
      if(ivar_refine>0)then
-!$omp do private(scalar)
         do ind=1,twotondim
            iskip=ncoarse+(ind-1)*ngridmax
+!$omp do private(scalar)
            do i=1,active(ilevel)%ngrid
               scalar=uold(active(ilevel)%igrid(i)+iskip,ivar_refine) &
                    & /max(uold(active(ilevel)%igrid(i)+iskip,1),smallr)
@@ -123,40 +123,42 @@ subroutine rho_fine(ilevel,icount)
                       & rho(active(ilevel)%igrid(i)+iskip)/d_scale
               endif
            end do
-        end do
 !$omp end do nowait
+        end do
      else
-!$omp do
         do ind=1,twotondim
            iskip=ncoarse+(ind-1)*ngridmax
+!$omp do
            do i=1,active(ilevel)%ngrid
               phi(active(ilevel)%igrid(i)+iskip)= &
                    & rho(active(ilevel)%igrid(i)+iskip)/d_scale
            end do
-        end do
 !$omp end do nowait
+        end do
      endif
   endif
-
+!$omp barrier
   !-------------------------------------------------------
   ! Initialize rho and phi to zero in virtual boundaries
   !-------------------------------------------------------
-!$omp do
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
      do icpu=1,ncpu
+!$omp do
         do i=1,reception(icpu,ilevel)%ngrid
            rho(reception(icpu,ilevel)%igrid(i)+iskip)=0.0D0
            phi(reception(icpu,ilevel)%igrid(i)+iskip)=0.0D0
         end do
+!$omp end do nowait
         if(ilevel==cic_levelmax)then
+!$omp do
            do i=1,reception(icpu,ilevel)%ngrid
               rho_top(reception(icpu,ilevel)%igrid(i)+iskip)=0.0D0
            end do
+!$omp end do nowait
         endif
      end do
   end do
-!$omp end do nowait
 !$omp end parallel
   !---------------------------------------------------------
   ! Compute particle contribution to density field
@@ -214,9 +216,10 @@ subroutine rho_fine(ilevel,icount)
   ! Compute quasi Lagrangian refinement map
   !-----------------------------------------
   if(m_refine(ilevel)>-1.0d0)then
-!$omp parallel do private(iskip)
+!$omp parallel private(iskip)
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
+!$omp do
         do i=1,active(ilevel)%ngrid
            if(phi(active(ilevel)%igrid(i)+iskip)>=m_refine(ilevel))then
               cpu_map2(active(ilevel)%igrid(i)+iskip)=1
@@ -224,7 +227,9 @@ subroutine rho_fine(ilevel,icount)
               cpu_map2(active(ilevel)%igrid(i)+iskip)=0
            end if
         end do
+!$omp end do nowait
      end do
+!$omp end parallel
      ! Update boundaries
      call make_virtual_fine_int(cpu_map2(1),ilevel)
   end if
@@ -950,16 +955,18 @@ subroutine multipole_fine(ilevel)
 
   ! Initialize fields to zero
 !$omp parallel private(iskip,ncache)
-!$omp do
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
+!$omp do
      do i=1,active(ilevel)%ngrid
         unew(active(ilevel)%igrid(i)+iskip,1)=0.0D0
         do idim=1,ndim
            unew(active(ilevel)%igrid(i)+iskip,idim+1)=0.0D0
         end do
      end do
+!$omp end do nowait
   end do
+!$omp barrier
   ! Compute mass multipoles in each cell
   ncache=active(ilevel)%ngrid
 !$omp do private(ngrid,ind_grid)
@@ -1237,35 +1244,36 @@ subroutine cic_from_multipole(ilevel)
 
   ! Initialize density field to zero
 !$omp parallel private(iskip,ncache)
-!$omp do
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
      do icpu=1,ncpu
+!$omp do
         do i=1,reception(icpu,ilevel)%ngrid
            rho(reception(icpu,ilevel)%igrid(i)+iskip)=0.0D0
         end do
+!$omp end do nowait
      end do
   end do
-!$omp end do nowait
-!$omp do
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
+!$omp do
      do i=1,active(ilevel)%ngrid
         rho(active(ilevel)%igrid(i)+iskip)=0.0D0
      end do
-  end do
 !$omp end do nowait
+  end do
   ! Reset rho in physical boundaries
-!$omp do
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
      do ibound=1,nboundary
+!$omp do
         do i=1,boundary(ibound,ilevel)%ngrid
            rho(boundary(ibound,ilevel)%igrid(i)+iskip)=0.0
         end do
+!$omp end do nowait
      end do
   end do
-
+!$omp barrier
   if(hydro)then
      ! Perform a restriction over split cells (ilevel+1)
      ncache=active(ilevel)%ngrid

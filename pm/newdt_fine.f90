@@ -25,6 +25,7 @@ subroutine newdt_fine(ilevel)
   integer,dimension(1:nvector)::ind_part
   real(kind=8)::dt_loc,dt_all,ekin_loc,ekin_all
   real(dp)::tff,fourpi,threepi2
+  real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
 
 #ifdef ATON
   real(dp)::aton_time_step,dt_aton

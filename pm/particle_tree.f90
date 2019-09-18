@@ -751,7 +751,7 @@ subroutine virtual_tree_fine(ilevel)
      ! Use itmpp to store the index within communicator
      ! Note: itmpp is also used in `sink_particle_tracer` for
      ! `gas_tracers`, so there is no interference here.
-!$omp parallel do private(icpu,ipcom,igrid,jgrid,npart1,ipart,jpart) schedule(dynamic)
+!$omp parallel private(ipcom,igrid,npart1,ipart) schedule(dynamic)
      do icpu=1,ncpu
         if(reception(icpu,ilevel)%npart>0)then
            ! Gather particles by vector sweeps
@@ -912,7 +912,12 @@ subroutine virtual_tree_fine(ilevel)
         ! index in communicator -> index in cpu
         call empty_comm(ind_com,npart1,ilevel,icpu)
      end do
-!$omp end do
+!$omp end do nowait
+  end do
+!$omp barrier
+  do icpu=1,ncpu
+     ! Loop over particles by vector sweeps
+     ncache=emission(icpu,ilevel)%npart
      ! Loop on star tracers in the communicator
      if (MC_tracer) then
 !$omp do private(jpart,d2min,jpart2,x1,x2,d2)
