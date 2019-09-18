@@ -254,7 +254,7 @@ subroutine make_tree_fine(ilevel)
      if(ip>0)call check_tree(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
   end do
   ! End loop over cpus
-
+!$omp barrier
   ! Periodic boundaries
   if(sink)then
 !$omp do

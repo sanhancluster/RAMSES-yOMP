@@ -240,7 +240,9 @@ subroutine mechanical_feedback_fine(ilevel,icount)
 !$omp end critical
         ip=0
      endif
-
+  end do
+!$omp barrier
+  do icpu=1,ncpu
      if (MC_tracer) then
         ! MC Tracer =================================================
         ! Loop over grids

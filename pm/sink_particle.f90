@@ -572,7 +572,7 @@ subroutine make_sink(ilevel)
 
   ! Loop over grids
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid,ind,iskip,i,ind_cell,nnew,ind_grid_new,ind_cell_new,ind_grid_cloud,ind_part_cloud,ind_cloud,itracer,np,ip,ind_tracer,proba_part,ind_sink,xsink_loc) &
+!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell,nnew,ind_grid_new,ind_cell_new,ind_grid_cloud,ind_part_cloud,ind_cloud,itracer,np,ind_tracer,proba_part,ind_sink,xsink_loc) &
 !$omp & private(d,u,v,w,e,x,y,z,temp,d_jeans,d_thres,proba,index_sink_omp,index_sink_tot_omp) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
@@ -1416,7 +1416,7 @@ subroutine merge_sink(ilevel)
   !-----------------------------------------------------
   ! Take care of the tracer particles
   !-----------------------------------------------------
-
+!$omp barrier
 
   if (MC_tracer) then
      do icpu=1,ncpu
