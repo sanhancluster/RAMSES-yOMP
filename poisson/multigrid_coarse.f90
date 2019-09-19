@@ -842,8 +842,6 @@ subroutine prolong(ilevel)
   integer ,dimension(1:nvector,1:threetondim)::nbors_father_cells
   integer ,dimension(1:nvector,1:twotondim)::nbors_father_grids
   real(dp),dimension(1:nvector)::new_rho
-  common /prolong_1/ind_grid,ind_cell, nbors_father_cells, nbors_father_grids, new_rho
-!$omp threadprivate(/prolong_1/)
 
   ! Local constants
   a = 1.0D0/4.0D0**ndim
@@ -864,7 +862,7 @@ subroutine prolong(ilevel)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,i,ind,iskip,ind_average,ind_father,coeff) schedule(static)
+!$omp parallel do private(ngrid,ind_grid,ind_cell,nbors_father_cells,nbors_father_grids,iskip,ind_average,ind_father,coeff,new_rho) schedule(static)
   do igrid=1,ncache,nvector
 
      ! Gather nvector grids
