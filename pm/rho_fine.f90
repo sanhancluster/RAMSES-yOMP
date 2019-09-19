@@ -268,13 +268,13 @@ subroutine rho_from_current_level(ilevel)
   dx=0.5D0**ilevel
 
   ! Loop over cpus
-!$omp parallel private(icpu,ig,ip,ind_grid,ind_part,ind_grid_part,ind_cell,x0) reduction(+:multipole)
+!$omp parallel private(ig,ip,ind_grid,ind_part,ind_grid_part,ind_cell,x0) reduction(+:multipole)
   do icpu=1,ncpu
      ! Loop over grids
      ig=0
      ip=0
      ! Dynamic is faster
-!$omp do private(igrid,npart1,ipart,counter) schedule(dynamic,nchunk)
+!$omp do private(igrid,npart1,ipart,counter) schedule(static,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -1254,6 +1254,7 @@ subroutine cic_from_multipole(ilevel)
 !$omp end do nowait
      end do
   end do
+!$omp barrier
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
 !$omp do
@@ -1262,6 +1263,7 @@ subroutine cic_from_multipole(ilevel)
      end do
 !$omp end do nowait
   end do
+!$omp barrier
   ! Reset rho in physical boundaries
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
