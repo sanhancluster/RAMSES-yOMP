@@ -841,8 +841,8 @@ subroutine make_fine_mask(ilevel)
    integer  :: ind, igrid_mg, icpu, ibound
    integer  :: igrid_amr, icell_amr, iskip_amr
 
+!$omp parallel private(ngrid,iskip_amr,igrid_amr,icell_amr)
    ngrid=active(ilevel)%ngrid
-!$omp parallel private(iskip_amr,igrid_amr,icell_amr)
    do ind=1,twotondim
       iskip_amr = ncoarse+(ind-1)*ngridmax
 !$omp do
