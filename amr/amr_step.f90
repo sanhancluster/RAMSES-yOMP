@@ -156,7 +156,7 @@ recursive subroutine amr_step(ilevel,icount)
 
         if (output_now_all.EQV..true.) then
            output_now=.false.
-           if (wall_stop) then
+           if (dump_stop) then
               call clean_stop
            endif
         endif

@@ -231,16 +231,21 @@ subroutine adaptive_loop
            call writemem(real_mem_tot)
            write(*,*)'Total running time:', NINT((tt2-tstart)*100.0)*0.01,'s'
         endif
-        if(walltime_hrs.gt.0d0) then
+        if(walltime_hrs>0d0) then
            wallsec = walltime_hrs*3600.     ! Convert from hours to seconds
            dumpsec = minutes_dump*60.       ! Convert minutes before end to seconds
-           if(wallsec-dumpsec.lt.tt2-tstart) then
+           if(wallsec-dumpsec<tt2-tstart) then
               output_now=.true.
               if(myid==1) write(*,*) 'Dumping snapshot before walltime runs out'
               ! Now set walltime to a negative number so we don't keep printing outputs
               walltime_hrs = -1d0
            endif
         endif
+        if(wallstep>0 .and. nstep_coarse-nstep_coarse_start>=wallstep) then
+           output_now=.true.
+           if(myid==1) write(*,*) 'Dumping snapshot at wallstep'
+           wallstep=-1
+        end if
      endif
 #endif
 

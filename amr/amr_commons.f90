@@ -8,6 +8,7 @@ module amr_commons
   integer::nstep=0                              ! Time step
   integer::nstep_coarse=0                       ! Coarse step
   integer::nstep_coarse_old=0                   ! Old coarse step
+  integer::nstep_coarse_start=0                 ! Starting coarse step
   integer::nflag,ncreate,nkill                  ! Refinements
   integer::ncoarse                              ! nx.ny.nz
   integer::ngrid_current                        ! Actual number of octs

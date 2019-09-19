@@ -335,6 +335,7 @@ subroutine init_amr
      read(ilun)dtnew(1:nlevelmax2)
      read(ilun)nstep,nstep_coarse
      nstep_coarse_old=nstep_coarse
+     nstep_coarse_start=nstep_coarse
      read(ilun)einit,mass_tot_0,rho_tot
      read(ilun)omega_m,omega_l,omega_k,omega_b,h0,aexp_ini,boxlen_ini
      read(ilun)aexp,hexp,aexp_old,epot_tot_int,epot_tot_old
