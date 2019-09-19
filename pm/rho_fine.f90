@@ -1277,7 +1277,7 @@ subroutine cic_from_multipole(ilevel)
   if(hydro)then
      ! Perform a restriction over split cells (ilevel+1)
      ncache=active(ilevel)%ngrid
-!$omp do private(ngrid,ind_grid) reduction(+:multipole) schedule(static,nchunk)
+!$omp do private(ngrid,ind_grid) reduction(+:multipole) schedule(static)
      do igrid=1,ncache,nvector
         ! Gather nvector grids
         ngrid=MIN(nvector,ncache-igrid+1)

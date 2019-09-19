@@ -1357,7 +1357,7 @@ subroutine merge_sink(ilevel)
      ig=0
      ip=0
      ! Loop over grids
-!$omp do private(igrid,npart1,npart2,ipart,next_part,ind_grid) schedule(static,nchunk)
+!$omp do private(igrid,npart1,npart2,ipart,next_part,ind_grid) schedule(static)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -1427,7 +1427,7 @@ subroutine merge_sink(ilevel)
         ig=0
         ip=0
         ! Loop over grids
-!$omp do private(igrid,npart1,npart2,ipart,next_part,isink_old,isink_new) schedule(static,nchunk)
+!$omp do private(igrid,npart1,npart2,ipart,next_part,isink_old,isink_new) schedule(static)
         do jgrid=1,numbl(icpu,ilevel)
            if(icpu==myid)then
               igrid=active(ilevel)%igrid(jgrid)
@@ -1671,7 +1671,7 @@ subroutine kill_entire_cloud(ilevel)
      ig=0
      ip=0
      ! Loop over grids
-!$omp do private(igrid,npart1,npart2,ipart,next_part,ind_grid) schedule(static,nchunk)
+!$omp do private(igrid,npart1,npart2,ipart,next_part,ind_grid) schedule(static)
      do jgrid=1,ncache
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -2635,7 +2635,7 @@ subroutine grow_bondi(ilevel)
 
   ! Set unew to uold for myid cells
   ! Need unew to get initial density before Bondi accreting mass
-!$omp parallel do private(i,ind,iskip,ivar) schedule(static,nvector)
+!$omp parallel do private(i,ind,iskip,ivar) schedule(static)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
@@ -4020,7 +4020,7 @@ subroutine get_rho_star(ilevel)
   !--------------------------
   ! Initialize rho_star to zero
   !--------------------------
-!$omp parallel do private(i,ind,iskip) schedule(static,nvector)
+!$omp parallel do private(i,ind,iskip) schedule(static)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
