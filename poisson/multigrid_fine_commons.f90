@@ -949,7 +949,7 @@ subroutine make_fine_bc_rhs(ilevel,icount)
    ngrid=active(ilevel)%ngrid
 
    ! Loop over cells
-!$omp parallel private(iskip_amr,igrid_amr,icell_amr,igshift,igrid_nbor_amr,ifathercell_nbor_amr,nb_mask,ind_cell,nb_phi,icell_nbor_amr,w,phi_b)
+!$omp parallel private(iskip_amr,igrid_amr,icell_amr,igshift,igrid_nbor_amr,ifathercell_nbor_amr,nb_mask,ind_cell,phi_int,nb_phi,icell_nbor_amr,w,phi_b)
    do ind=1,twotondim
       iskip_amr = ncoarse+(ind-1)*ngridmax
 
