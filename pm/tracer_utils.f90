@@ -13,17 +13,19 @@ module tracer_utils
   real(kind=dp), dimension(1:3) :: skip_loc
   real(kind=dp) :: scale
   integer :: nx_loc
+  logical :: fc1 = .true., fc2 = .true.
 
   logical :: ddebug = .false.
   ! logical :: ddebug = .true.
   integer :: dbpart = -1 !105
 
+  integer, dimension(1:6, 1:4) :: mapping
+  integer :: twotondimo2 = twotondim/2
+
 contains
 
   subroutine initialize_skip_loc
-    logical, save :: firstCall = .true.
-
-    if (firstCall) then
+    if (fc1) then
 !$omp critical
        skip_loc=(/0.0d0, 0.0d0, 0.0d0/)
        if(ndim>0) skip_loc(1) = dble(icoarse_min)
@@ -33,7 +35,7 @@ contains
        nx_loc=(icoarse_max-icoarse_min+1)
        scale = boxlen/dble(nx_loc)
 
-       firstCall = .false.
+       fc1 = .false.
 !$omp end critical
     end if
 
@@ -284,14 +286,8 @@ contains
     integer, intent(in) :: direction
     integer, dimension(1:twotondim/2), intent(out) :: locs
 
-    integer, save, dimension(1:6, 1:4) :: mapping
-    logical, save:: firstCall = .true.
-
-    integer,save :: twotondimo2
-
-    if (firstCall) then
+    if (fc2) then
 !$omp critical
-	   twotondimo2 = twotondim/2
        mapping(1, 1:4) = (/1, 3, 5, 7/) ! left cells
        mapping(2, 1:4) = (/2, 4, 6, 8/) ! right cells
        mapping(3, 1:4) = (/1, 2, 5, 6/) ! top cells
@@ -299,7 +295,7 @@ contains
        mapping(5, 1:4) = (/1, 2, 3, 4/) ! front cells
        mapping(6, 1:4) = (/5, 6, 7, 8/) ! back cells
 
-       firstCall = .false.
+       fc2 = .false.
 !$omp end critical
     end if
 
@@ -314,14 +310,9 @@ contains
     integer, intent(in) :: direction
     integer, dimension(1:twotondim/2) :: locs
 
-    integer, save, dimension(1:6, 1:4) :: mapping
-    logical, save :: firstCall = .true.
 
-    integer, save :: twotondimo2
-
-    if (firstCall) then
+    if (fc2) then
 !$omp critical
-	   twotondimo2 = twotondim/2
        mapping(1, 1:4) = (/1, 3, 5, 7/) ! left cells
        mapping(2, 1:4) = (/2, 4, 6, 8/) ! right cells
        mapping(3, 1:4) = (/1, 2, 5, 6/) ! top cells
@@ -329,7 +320,7 @@ contains
        mapping(5, 1:4) = (/1, 2, 3, 4/) ! front cells
        mapping(6, 1:4) = (/5, 6, 7, 8/) ! back cells
 
-       firstCall = .false.
+       fc2 = .false.
 !$omp end critical
     end if
 
