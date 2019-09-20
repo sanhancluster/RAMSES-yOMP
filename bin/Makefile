@@ -25,7 +25,7 @@ USE_OLD_MPI_INCLUDE = 0
 EXEC = ramses
 # Activate OpenMP
 OPENMP = 1
-OMP_NCHUNK = 16
+OMP_NCHUNK = 8
 #############################################################################
 # Patches to include (without DICE)
 #PATCH = ../patch/AGNSFSNpatch/AGNspinRT:../patch/AGNSFSNpatch/sfsn
