@@ -561,6 +561,7 @@ subroutine sync(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   ! Update sink particle velocity using closest cloud particle
   if(sink)then
      do j=1,np
+        !OMPNOTE: just once for isink, no need to be atomic
         if ( is_central_cloud(typep(ind_part(j))))then
            isink=-idp(ind_part(j))
            vsink_new(isink,1:ndim)=vp(ind_part(j),1:ndim)

@@ -292,6 +292,7 @@ subroutine make_grid_coarse(ind_cell,ibound,boundary_region)
   end if
 
   ! Connect new grid to level 1 grids linked list
+!$omp critical
   if(boundary_region)then
      igrid=ind_grid_son
      if(numbb(ibound,1)>0)then
@@ -324,7 +325,7 @@ subroutine make_grid_coarse(ind_cell,ibound,boundary_region)
         numbl(icpu,1)=1
      end if
   end if
-
+!$omp end critical
 end subroutine make_grid_coarse
 !###############################################################
 !###############################################################
@@ -987,8 +988,8 @@ subroutine kill_grid(ind_cell,ilevel,nn,ibound,boundary_region)
   end do
 
   ! Disconnect son grids from level ilevel linked list
-!$omp critical
   if(boundary_region)then
+!$omp critical
      do i=1,nn
         igrid=ind_grid_son(i)
         if(prev(igrid).ne.0) then
@@ -1010,7 +1011,9 @@ subroutine kill_grid(ind_cell,ilevel,nn,ibound,boundary_region)
         end if
         numbb(ibound,ilevel)=numbb(ibound,ilevel)-1
      end do
+!$omp end critical
   else
+!$omp critical
      do i=1,nn
         igrid=ind_grid_son(i)
         icpu=cpu_map(ind_cell(i))
@@ -1033,8 +1036,8 @@ subroutine kill_grid(ind_cell,ilevel,nn,ibound,boundary_region)
         end if
         numbl(icpu,ilevel)=numbl(icpu,ilevel)-1
      end do
-  end if
 !$omp end critical
+  end if
 
   ! Reset grid variables
   do idim=1,ndim

@@ -648,6 +648,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
      if(idim==1)i0=1
      if(idim==2)j0=1
      if(idim==3)k0=1
+     ! loop equivalent to twotondim
      do k3=k3min,k3max+k0
      do j3=j3min,j3max+j0
      do i3=i3min,i3max+i0
@@ -681,6 +682,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
      if(idim==1)i0=1
      if(idim==2)j0=1
      if(idim==3)k0=1
+     ! loop equivalent to twotondim
      do k2=k2min,k2max
      do j2=j2min,j2max
      do i2=i2min,i2max
@@ -792,6 +794,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
         if(idim==1)i0=1
         if(idim==2)j0=1
         if(idim==3)k0=1
+        ! loop equivalent to twotondim
         do k2=k2min,k2max
         do j2=j2min,j2max
         do i2=i2min,i2max
