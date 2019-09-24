@@ -684,36 +684,23 @@ subroutine restriction_fine(ilevel,multigrid)
   vol_loc=dx_loc**ndim
 
   ! Initialize density field to zero
-!$omp parallel private(iskip)
+!$omp parallel do private(iskip)
   do ind=1,twotondim
-     do icpu=1,ncpu
-        iskip=ncoarse+(ind-1)*ngridmax
-!$omp do
-        do i=1,reception(icpu,ilevel)%ngrid
-           rho(reception(icpu,ilevel)%igrid(i)+iskip)=0.0D0
-        end do
-!$omp end do nowait
-     end do
-  end do
-  do ind=1,twotondim
-	 iskip=ncoarse+(ind-1)*ngridmax
-!$omp do
+     iskip=ncoarse+(ind-1)*ngridmax
      do i=1,active(ilevel)%ngrid
         rho(active(ilevel)%igrid(i)+iskip)=0.0D0
      end do
-!$omp end do nowait
-  end do
-  do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
+     do icpu=1,ncpu
+        do i=1,reception(icpu,ilevel)%ngrid
+           rho(reception(icpu,ilevel)%igrid(i)+iskip)=0.0D0
+        end do
+     end do
 	 do ibound=1,nboundary
-!$omp do
 		do i=1,boundary(ibound,ilevel)%ngrid
            rho(boundary(ibound,ilevel)%igrid(i)+iskip)=0.0D0
         end do
-!$omp end do nowait
      end do
   end do
-!$omp end parallel
 
   ! Perform a restriction over split cells (ilevel+1)
   if(ilevel<nlevelmax)then
@@ -751,7 +738,7 @@ subroutine restrict(ind_grid,ngrid,ilevel,multigrid)
   integer ,dimension(1:nvector)::ind_cell,ind_cell_father
   integer ,dimension(1:nvector,1:threetondim)::nbors_father_cells
   integer ,dimension(1:nvector,1:twotondim)::nbors_father_grids
-  real(dp),dimension(1:nvector)::new_rho
+  real(dp),dimension(1:nvector)::add_rho
 
   real(dp)::a,b,c,d,coeff
   real(dp),dimension(1:8)::bbb
@@ -799,22 +786,22 @@ subroutine restrict(ind_grid,ngrid,ilevel,multigrid)
         end do
         ! Gather rho in temporary array
         do i=1,ngrid
-           new_rho(i)=0d0
+           add_rho(i)=0d0
         end do
         ! Perform CIC projection
         if(multigrid)then
            do i=1,ngrid
-              new_rho(i)=new_rho(i)+coeff*f(ind_cell(i),1)
+              add_rho(i)=add_rho(i)+coeff*f(ind_cell(i),1)
            end do
         else
            do i=1,ngrid
-              new_rho(i)=new_rho(i)+coeff*rho(ind_cell(i))
+              add_rho(i)=add_rho(i)+coeff*rho(ind_cell(i))
            end do
         end if
         ! Update array rho
         do i=1,ngrid
 !$omp atomic update
-           rho(ind_cell_father(i))=rho(ind_cell_father(i))+new_rho(i)
+           rho(ind_cell_father(i))=rho(ind_cell_father(i))+add_rho(i)
         end do
 
      end do

@@ -410,20 +410,18 @@ subroutine make_virtual_fine_dp(xx,ilevel)
 !$omp end single nowait
 
   ! Gather emission array
+!$omp do
   do j=1,twotondim
      iskip=ncoarse+(j-1)*ngridmax
      do icpu=1,ncpu
         if (emission(icpu,ilevel)%ngrid>0) then
            step=(j-1)*emission(icpu,ilevel)%ngrid
-!$omp do
            do i=1,emission(icpu,ilevel)%ngrid
               emission(icpu,ilevel)%u(i+step,1)=xx(emission(icpu,ilevel)%igrid(i)+iskip)
            end do
-!$omp end do nowait
         end if
      end do
   end do
-!$omp barrier
 
   ! Send all messages
 !$omp single
@@ -441,16 +439,15 @@ subroutine make_virtual_fine_dp(xx,ilevel)
 !$omp end single
 
   ! Scatter reception array
+!$omp do
   do j=1,twotondim
      iskip=ncoarse+(j-1)*ngridmax
      do icpu=1,ncpu
         if (reception(icpu,ilevel)%ngrid>0) then
            step=(j-1)*reception(icpu,ilevel)%ngrid
-!$omp do
            do i=1,reception(icpu,ilevel)%ngrid
               xx(reception(icpu,ilevel)%igrid(i)+iskip)=reception(icpu,ilevel)%u(i+step,1)
            end do
-!$omp end do nowait
         end if
      end do
   end do
@@ -505,20 +502,18 @@ subroutine make_virtual_fine_int(xx,ilevel)
 !$omp end single nowait
 
   ! Gather emission array
+!$omp do
   do j=1,twotondim
      iskip=ncoarse+(j-1)*ngridmax
      do icpu=1,ncpu
         if (emission(icpu,ilevel)%ngrid>0) then
            step=(j-1)*emission(icpu,ilevel)%ngrid
-!$omp do
            do i=1,emission(icpu,ilevel)%ngrid
               emission(icpu,ilevel)%f(i+step,1)=xx(emission(icpu,ilevel)%igrid(i)+iskip)
            end do
-!$omp end do nowait
         end if
      end do
   end do
-!$omp barrier
 !$omp single
   ! Send all messages
   countsend=0
@@ -536,20 +531,18 @@ subroutine make_virtual_fine_int(xx,ilevel)
 !$omp end single
 
   ! Scatter reception array
+!$omp do
   do j=1,twotondim
      iskip=ncoarse+(j-1)*ngridmax
      do icpu=1,ncpu
         if (reception(icpu,ilevel)%ngrid>0) then
            step=(j-1)*reception(icpu,ilevel)%ngrid
-!$omp do
            do i=1,reception(icpu,ilevel)%ngrid
               xx(reception(icpu,ilevel)%igrid(i)+iskip)=reception(icpu,ilevel)%f(i+step,1)
            end do
-!$omp end do nowait
         end if
      end do
   end do
-!$omp barrier
 !$omp end parallel
   ! Wait for full completion of sends
   call MPI_WAITALL(countsend,reqsend,statuses,info)
@@ -649,12 +642,12 @@ subroutine make_virtual_reverse_dp(xx,ilevel)
 !$omp end single
 
   ! Scatter reception array
+!$omp do schedule(static)
   do j=1,twotondim
      iskip=ncoarse+(j-1)*ngridmax
      do icpu=1,ncpu
         if (emission(icpu,ilevel)%ngrid>0) then
            step=(j-1)*emission(icpu,ilevel)%ngrid
-!$omp parallel do schedule(static)
            do i=1,emission(icpu,ilevel)%ngrid
 !$omp atomic update
               xx(emission(icpu,ilevel)%igrid(i)+iskip)= &
@@ -681,20 +674,18 @@ subroutine make_virtual_reverse_dp(xx,ilevel)
 !$omp end single nowait
 
   ! Gather emission array
+!$omp do
   do j=1,twotondim
      iskip=ncoarse+(j-1)*ngridmax
      do icpu=1,ncpu
         if (reception(icpu,ilevel)%ngrid>0) then
            step=(j-1)*reception(icpu,ilevel)%ngrid
-!$omp do schedule(static)
            do i=1,reception(icpu,ilevel)%ngrid
               reception(icpu,ilevel)%u(i+step,1)=xx(reception(icpu,ilevel)%igrid(i)+iskip)
            end do
-!$omp end do nowait
         end if
      end do
   end do
-!$omp barrier
 
 !$omp single
   ! Send all messages
@@ -713,18 +704,17 @@ subroutine make_virtual_reverse_dp(xx,ilevel)
 !$omp end single
 
   ! Scatter reception array
+!$omp do
   do j=1,twotondim
      iskip=ncoarse+(j-1)*ngridmax
      do icpu=1,ncpu
         if (emission(icpu,ilevel)%ngrid>0) then
            step=(j-1)*emission(icpu,ilevel)%ngrid
-!$omp do schedule(static)
            do i=1,emission(icpu,ilevel)%ngrid
 !$omp atomic update
               xx(emission(icpu,ilevel)%igrid(i)+iskip)= &
                    & xx(emission(icpu,ilevel)%igrid(i)+iskip) + emission(icpu,ilevel)%u(i+step,1)
            end do
-!$omp end do nowait
         end if
      end do
   end do
