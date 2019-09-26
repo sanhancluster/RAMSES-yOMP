@@ -702,6 +702,20 @@ subroutine godfine1(ind_grid,ncache,ilevel)
                    & -flux(i,i3+i0,j3+j0,k3+k0,ivar,idim))
            end do
         end do
+        if(pressure_fix) then
+           ! Update velocity divergence
+           do i=1,ncache
+              divu(ind_cell(i))=divu(ind_cell(i))+ &
+                   & (tmp(i,i3   ,j3   ,k3   ,1,idim) &
+                   & -tmp(i,i3+i0,j3+j0,k3+k0,1,idim))
+           end do
+           ! Update internal energy
+           do i=1,ncache
+              enew(ind_cell(i))=enew(ind_cell(i))+ &
+                   & (tmp(i,i3   ,j3   ,k3   ,2,idim) &
+                   & -tmp(i,i3+i0,j3+j0,k3+k0,2,idim))
+           end do
+        end if
      end do
      end do
      end do
@@ -731,26 +745,44 @@ subroutine godfine1(ind_grid,ncache,ilevel)
         end if
      end do
      ! Conservative update of new state variables
-     uflow=0d0
-     do i=1,nb_noneigh
-        do ivar=1,nvar
-           ! Loop over boundary cells
-           do k3=k3min,k3max-k0
-           do j3=j3min,j3max-j0
-           do i3=i3min,i3max-i0
+     uflow=0d0; dflow=0d0; eflow=0d0
+     ! Loop over boundary cells
+     do k3=k3min,k3max-k0
+     do j3=j3min,j3max-j0
+     do i3=i3min,i3max-i0
+        do i=1,nb_noneigh
+           do ivar=1,nvar
               uflow(i,ivar)=uflow(i,ivar) &
-                    & +flux(ind_cell(i),i3,j3,k3,ivar,idim)
+                    & -flux(ind_cell(i),i3,j3,k3,ivar,idim)
            end do
-           end do
-           end do
+           if(pressure_fix) then
+              ! Update velocity divergence
+              dflow(i)=dflow(i)-tmp(ind_cell(i),i3,j3,k3,1,idim)
+              ! Update internal energy
+              eflow(i)=eflow(i)-tmp(ind_cell(i),i3,j3,k3,2,idim)
+           end if
         end do
      end do
+     end do
+     end do
+
+     ! Update common arrays
      do i=1,nb_noneigh
         do ivar=1,nvar
 !$omp atomic update
-         unew(ind_buffer(i),ivar)=unew(ind_buffer(i),ivar)-uflow(i,ivar)*oneontwotondim
+         unew(ind_buffer(i),ivar)=unew(ind_buffer(i),ivar)+uflow(i,ivar)*oneontwotondim
         end do
      end do
+     if(pressure_fix) then
+        do i=1,nb_noneigh
+!$omp atomic update
+            divu(ind_buffer(i))=divu(ind_buffer(i))+dflow(i)*oneontwotondim
+        end do
+        do i=1,nb_noneigh
+!$omp atomic update
+            enew(ind_buffer(i))=enew(ind_buffer(i))+eflow(i)*oneontwotondim
+        end do
+     end if
 
      !-----------------------
      ! Right flux at boundary
@@ -766,160 +798,44 @@ subroutine godfine1(ind_grid,ncache,ilevel)
         end if
      end do
      ! Conservative update of new state variables
-     uflow=0d0
-     do i=1,nb_noneigh
-        do ivar=1,nvar
-           ! Loop over boundary cells
-           do k3=k3min+k0,k3max
-           do j3=j3min+j0,j3max
-           do i3=i3min+i0,i3max
+     uflow=0d0; dflow=0d0; eflow=0d0
+     ! Loop over boundary cells
+     do k3=k3min+k0,k3max
+     do j3=j3min+j0,j3max
+     do i3=i3min+i0,i3max
+        do i=1,nb_noneigh
+           do ivar=1,nvar
               uflow(i,ivar)=uflow(i,ivar) &
                     & +flux(ind_cell(i),i3+i0,j3+j0,k3+k0,ivar,idim)
            end do
-           end do
-           end do
+           if(pressure_fix) then
+              ! Update velocity divergence
+              dflow(i)=dflow(i)+tmp(ind_cell(i),i3+i0,j3+j0,k3+k0,1,idim)
+              ! Update internal energy
+              eflow(i)=eflow(i)+tmp(ind_cell(i),i3+i0,j3+j0,k3+k0,2,idim)
+           end if
         end do
      end do
+     end do
+     end do
+
+     ! Update common arrays
      do i=1,nb_noneigh
         do ivar=1,nvar
 !$omp atomic update
          unew(ind_buffer(i),ivar)=unew(ind_buffer(i),ivar)+uflow(i,ivar)*oneontwotondim
         end do
      end do
+     if(pressure_fix) then
+        do i=1,nb_noneigh
+!$omp atomic update
+           divu(ind_buffer(i))=divu(ind_buffer(i))+dflow(i)*oneontwotondim
+        end do
+        do i=1,nb_noneigh
+!$omp atomic update
+           enew(ind_buffer(i))=enew(ind_buffer(i))+eflow(i)*oneontwotondim
+        end do
+     end if
   end do
-
-  if(pressure_fix) then
-     do idim=1,ndim
-        i0=0; j0=0; k0=0
-        if(idim==1)i0=1
-        if(idim==2)j0=1
-        if(idim==3)k0=1
-        ! loop equivalent to twotondim
-        do k2=k2min,k2max
-        do j2=j2min,j2max
-        do i2=i2min,i2max
-           ind_son=1+i2+2*j2+4*k2
-           iskip=ncoarse+(ind_son-1)*ngridmax
-           do i=1,ncache
-              ind_cell(i)=iskip+ind_grid(i)
-           end do
-           i3=1+i2
-           j3=1+j2
-           k3=1+k2
-
-           ! Update velocity divergence
-           do i=1,ncache
-              divu(ind_cell(i))=divu(ind_cell(i))+ &
-                   & (tmp(i,i3   ,j3   ,k3   ,1,idim) &
-                   & -tmp(i,i3+i0,j3+j0,k3+k0,1,idim))
-           end do
-           ! Update internal energy
-           do i=1,ncache
-              enew(ind_cell(i))=enew(ind_cell(i))+ &
-                   & (tmp(i,i3   ,j3   ,k3   ,2,idim) &
-                   & -tmp(i,i3+i0,j3+j0,k3+k0,2,idim))
-           end do
-        end do
-        end do
-        end do
-     end do
-
-
-     do idim=1,ndim
-        i0=0; j0=0; k0=0
-        if(idim==1)i0=1
-        if(idim==2)j0=1
-        if(idim==3)k0=1
-
-        !----------------------
-        ! Left flux at boundary
-        !----------------------
-        ! Check if grids sits near left boundary
-        ! and gather neighbor father cells index
-        nb_noneigh=0
-        do i=1,ncache
-           if (son(nbor(ind_grid(i),2*idim-1))==0) then
-              nb_noneigh = nb_noneigh + 1
-              ind_buffer(nb_noneigh) = nbor(ind_grid(i),2*idim-1)
-              ind_cell(nb_noneigh) = i
-           end if
-        end do
-
-        ! Update velocity divergence
-        dflow=0d0
-        do k3=k3min,k3max-k0
-        do j3=j3min,j3max-j0
-        do i3=i3min,i3max-i0
-           do i=1,nb_noneigh
-              dflow(i)=dflow(i)-tmp(ind_cell(i),i3,j3,k3,1,idim)
-           end do
-        end do
-        end do
-        end do
-        ! Update internal energy
-        eflow=0d0
-        do k3=k3min,k3max-k0
-        do j3=j3min,j3max-j0
-        do i3=i3min,i3max-i0
-           do i=1,nb_noneigh
-              eflow(i)=eflow(i)-tmp(ind_cell(i),i3,j3,k3,2,idim)
-           end do
-        end do
-        end do
-        end do
-
-        do i=1,nb_noneigh
-!$omp atomic update
-           divu(ind_buffer(i))=divu(ind_buffer(i))+dflow(i)*oneontwotondim
-!$omp atomic update
-           enew(ind_buffer(i))=enew(ind_buffer(i))+eflow(i)*oneontwotondim
-        end do
-
-        !-----------------------
-        ! Right flux at boundary
-        !-----------------------
-        ! Check if grids sits near right boundary
-        ! and gather neighbor father cells index
-        nb_noneigh=0
-        do i=1,ncache
-           if (son(nbor(ind_grid(i),2*idim))==0) then
-              nb_noneigh = nb_noneigh + 1
-              ind_buffer(nb_noneigh) = nbor(ind_grid(i),2*idim)
-              ind_cell(nb_noneigh) = i
-           end if
-        end do
-
-        ! Update velocity divergence
-        dflow=0d0
-        do k3=k3min+k0,k3max
-        do j3=j3min+j0,j3max
-        do i3=i3min+i0,i3max
-           do i=1,nb_noneigh
-              dflow(i)=dflow(i)+tmp(ind_cell(i),i3+i0,j3+j0,k3+k0,1,idim)
-           end do
-        end do
-        end do
-        end do
-        ! Update internal energy
-        do k3=k3min+k0,k3max
-        do j3=j3min+j0,j3max
-        do i3=i3min+i0,i3max
-           do i=1,nb_noneigh
-              eflow(i)=eflow(i)+tmp(ind_cell(i),i3+i0,j3+j0,k3+k0,2,idim)
-           end do
-        end do
-        end do
-        end do
-
-        do i=1,nb_noneigh
-!$omp atomic update
-           divu(ind_buffer(i))=divu(ind_buffer(i))+dflow(i)*oneontwotondim
-!$omp atomic update
-           enew(ind_buffer(i))=enew(ind_buffer(i))+eflow(i)*oneontwotondim
-        end do
-
-     end do
-  end if
-
   ! End loop over dimensions
 end subroutine godfine1
