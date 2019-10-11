@@ -213,6 +213,7 @@ module amr_parameters
   logical ::isothermal=.false.
   logical ::metal=.false.
   logical ::dust=.false.
+  logical ::dust_cooling=.false.   ! Activate high-T cooling of the gas from dust
   logical ::metal_gasonly=.false.  ! Only count gas-phase metals for cooling
   character(LEN=20)::sticking_coef='chaabouni'
   logical ::haardt_madau=.false.

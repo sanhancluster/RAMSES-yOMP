@@ -90,6 +90,7 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
   integer ::icount,countmax=10000                            ! Dust (YD)
   logical ::okdust                                          ! Dust (YD)
   real(dp)::k1,k2,k3,k4,rhoD0k1,rhoD0k2,rhoD0k3             ! Dust (YD)
+  real(kind=8),dimension(1:nvector)::fdust                  ! Dust (YD)
 #ifdef RT
   integer::ii,ig,iNp,il
   real(kind=8),dimension(1:nvector):: ekk_new
@@ -186,6 +187,11 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
            do i=1,nleaf
               Zsolar(i)=(uold(ind_leaf(i),imetal)-uold(ind_leaf(i),idust))/nH(i)/0.02
            end do
+           if(dust_cooling)then
+              do i=1,nleaf
+                 fdust(i)=uold(ind_leaf(i),idust)/nH(i) ! Dust-to-gas ratio
+              end do
+           endif
         else
            do i=1,nleaf
               Zsolar(i)=uold(ind_leaf(i),imetal)/nH(i)/0.02
@@ -459,13 +465,13 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
      else
         ! Compute net cooling at constant nH
         if(cooling.and..not.neq_chem)then
-           call solve_cooling(nH,T2,Zsolar,boost,dtcool,delta_T2,nleaf)
+           call solve_cooling(nH,T2,Zsolar,fdust,boost,dtcool,delta_T2,nleaf)
         endif
      endif
 #else
      ! Compute net cooling at constant nH
      if(cooling.and..not.neq_chem)then
-        call solve_cooling(nH,T2,Zsolar,boost,dtcool,delta_T2,nleaf)
+        call solve_cooling(nH,T2,Zsolar,fdust,boost,dtcool,delta_T2,nleaf)
      endif
 #endif
 #ifdef RT
@@ -573,7 +579,7 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
 
      if(dust)then
 
-        t0_dest=1d5*year
+        t0_dest=1d5*year ! Assumes a unique grain size of 0.1 micron
         t0_acc =1d8*year
         do i=1,nleaf
            T2(i)=(uold(ind_leaf(i),ndim+2) - ekk(i) - err(i) - emag(i))

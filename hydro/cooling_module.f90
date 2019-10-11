@@ -194,7 +194,7 @@ subroutine set_model(Nmodel,J0in_in,J0min_in,alpha_in,normfacJ0_in,zreioniz_in, 
 !                 -1 : defaut defini dans le module
 ! J0in_in (dble) : valeur du J0 utilisee pour Teyssier et Theuns
 !            Exemple : J0in_in=1.d-22
-!            J0in_in <= 0 utilise le defaut defini dans le moduleR
+!            J0in_in <= 0 utilise le defaut defini dans le module
 ! J0min_in (dble) : valeur du J0min ou J0min_ref (voir option realistic_ne)
 !            utilisee dans tous les modeles a grand redshift
 !            Exemple : J0min_in=1.d-29
@@ -483,12 +483,17 @@ subroutine compute_J0min(h,omegab,omega0,omegaL,J0min_in)
   if (verbose_cooling)  write(*,*) 'J0min found ',J0min_in
 end subroutine compute_J0min
 !=======================================================================
-subroutine solve_cooling(nH,T2,zsolar,boost,dt,deltaT2,ncell)
+subroutine solve_cooling(nH,T2,zsolar,fdust,boost,dt,deltaT2,ncell)
 !=======================================================================
   implicit none
   integer::ncell
   real(kind=8)::dt
   real(kind=8),dimension(1:ncell)::nH,T2,deltaT2,zsolar,boost
+  real(kind=8),dimension(1:ncell)::fdust                    ! Dust (YD)
+  real(kind=8)::cool_dust,cool_dust_prime                   ! Dust (YD)
+  real(kind=8)::xx                                          ! Dust (YD)
+  real(kind=8)::mu_h=0.62d0                                 ! Dust (YD)
+  real(kind=8)::m_e =9.109d-28                              ! Dust (YD)
 
   real(kind=8)::facT,dlog_nH,dlog_T2,precoeff,h,h2,h3
   real(kind=8)::metal,cool,heat,cool_com,heat_com,yy,yy2,yy3
@@ -621,6 +626,23 @@ subroutine solve_cooling(nH,T2,zsolar,boost,dt,deltaT2,ncell)
            ! Total net cooling
            lambda=cool+zzz(ind(i))*metal-heat+(cool_com-heat_com)/nH(ind(i))
            lambda_prime=cool_prime+zzz(ind(i))*metal_prime-heat_prime+(cool_com_prime-heat_com_prime)/nH(ind(i))
+
+           ! Add dust cooling if needed
+           if(dust_cooling)then
+              xx=9.73d7/tau(ind(i)) ! The prefactor assumes mu=0.6 and a=0.1 micron (taken from Vogelsberger+18)
+              if(xx.lt.1.5)then
+                 cool_dust      =6.48d-9
+                 cool_dust_prime=0.0d0
+              else if(xx.lt.4.5)then
+                 cool_dust      =8.36d-16*tau(ind(i))**0.88
+                 cool_dust_prime=7.36d-16*tau(ind(i))**(-0.12)
+              else
+                 cool_dust      =2.50d-20*tau(ind(i))**1.5
+                 cool_dust_prime=3.75d-20*sqrt(tau(ind(i)))
+              endif
+              lambda      =lambda      +fdust(ind(i))*2.01d-10*cool_dust       ! m_p/(m_grain*X)*(ne/nH)=2.01d-10
+              lambda_prime=lambda_prime+fdust(ind(i))*2.01d-10*cool_dust_prime ! (ne/nH=1+Y/(2X),rho_grain=3g/cm3)
+           endif
 
         else
 

@@ -91,7 +91,7 @@ subroutine read_hydro_params(nml_ok)
 
   ! Cooling / basic chemistry parameters
   namelist/cooling_params/cooling,metal,isothermal,haardt_madau,J21 &
-       & ,dust,sticking_coef,zdmax,metal_gasonly                    &
+       & ,dust,dust_cooling,sticking_coef,zdmax,metal_gasonly                    &
        & ,a_spec,self_shielding,z_ave,z_reion,T2max,neq_chem
 
   ! Star formation parameters
