@@ -87,7 +87,7 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
   real(dp)::rhoG0,rhogZ0,rhoZ0,drhoD                        ! Dust (YD)
   real(dp)::rhoGZ00,rhoD00,halfdtloc                        ! Dust (YD)
   real(dp)::oneovertdes,oneovertacc,dtremain,dtloc          ! Dust (YD)
-  integer ::icount,countmax=10000                            ! Dust (YD)
+  integer ::icount,countmax                                 ! Dust (YD)
   logical ::okdust                                          ! Dust (YD)
   real(dp)::k1,k2,k3,k4,rhoD0k1,rhoD0k2,rhoD0k3             ! Dust (YD)
   real(kind=8),dimension(1:nvector)::fdust                  ! Dust (YD)
@@ -110,7 +110,8 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
   integer::irad
 #endif
 
-
+  fdust=0d0
+  countmax=10000
   year=3600_dp*24_dp*365_dp
   ! Mesh spacing in that level
   dx=0.5D0**ilevel
