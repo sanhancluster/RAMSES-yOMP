@@ -227,7 +227,7 @@ subroutine make_sink(ilevel)
   ! Convert hydro variables to primitive variables
   !------------------------------------------------
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid,ind,iskip,ind_cell,ivar,i) &
+!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell) &
 !$omp & private(d,u,v,w,e) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
@@ -285,7 +285,7 @@ subroutine make_sink(ilevel)
   ntot=0
   ! Loop over grids
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid,ind,iskip,ind_cell,ok,i,isink) &
+!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell,ok) &
 !$omp & private(d,x,y,z,star_ratio,temp,d_jeans,d_thres,dxx,dyy,dzz,dr_sink) reduction(+:ntot) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
@@ -407,7 +407,7 @@ subroutine make_sink(ilevel)
   ninc=0
   ! Loop over grids
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid,ind,iskip,ind_cell,nnew,i,ninc_omp) schedule(static)
+!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell,nnew,ninc_omp) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -576,7 +576,8 @@ subroutine make_sink(ilevel)
 
   ! Loop over grids
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell,nnew,ind_grid_new,ind_cell_new,ind_grid_cloud,ind_part_cloud,ind_cloud,itracer,np,ind_tracer,proba_part,ind_sink,xsink_loc) &
+!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell,nnew,ind_grid_new,ind_cell_new,ind_grid_cloud) &
+!$omp private(ind_part_cloud,ind_cloud,itracer,np,ind_tracer,proba_part,ind_sink,xsink_loc) &
 !$omp & private(d,u,v,w,e,x,y,z,temp,d_jeans,d_thres,proba,index_sink_omp,index_sink_tot_omp) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
@@ -724,7 +725,7 @@ subroutine make_sink(ilevel)
   ! Convert hydro variables back to conservative variables
   !---------------------------------------------------------
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid,ind,iskip,ind_cell,ivar,i) &
+!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell) &
 !$omp & private(d,u,v,w,e) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
@@ -914,7 +915,7 @@ subroutine merge_sink(ilevel)
   !-------------------------------
   ! Merge sinks using FOF
   !-------------------------------
-!$omp parallel do private(isink)
+!$omp parallel do
   do isink=1,nsink
      psink(isink)=isink
      gsink(isink)=0
@@ -1010,14 +1011,14 @@ subroutine merge_sink(ilevel)
   !----------------------------------------------------
   ! Compute group centre of mass and average velocity
   !----------------------------------------------------
-!$omp parallel do private(isink)
+!$omp parallel do
   do isink=1,nsinkmax
      xsink_new(isink,:)=0d0; vsink_new(isink,:)=0d0
      msink_new(isink)=0d0; dMsmbh_new(isink)=0d0; Esave_new(isink)=0d0;idsink_new(isink)=0
      oksink_all(isink)=0d0; oksink_new(isink)=0d0; tsink_new(isink)=0d0
      bhspin_new(isink,:)=0d0; spinmag_new(isink)=0d0
   end do
-!$omp parallel do private(isink)
+!$omp parallel do
   do isink=1,nsink
      rank_old(isink)=0; idsink_old(isink)=0; tsink_old(isink)=0
   end do
@@ -2025,7 +2026,7 @@ subroutine bondi_hoyle(ilevel)
 #endif
   endif
 
-!$omp parallel do private(isink, i) schedule(static)
+!$omp parallel do
   do isink=1,nsink
      weighted_density(isink,ilevel)=wdens_new(isink)
      weighted_volume (isink,ilevel)=wvol_new (isink)
@@ -2650,15 +2651,15 @@ subroutine grow_bondi(ilevel)
   ! From km/s to user units: assume a 10 km/s vel disp in the ISM
   sigmav2=(sigmav_max*1d5/scale_v)**2d0
 
-!$omp parallel do private(isink)
-  do isink=1,nsink
+!$omp parallel do
+  do isink=1,nsinkmax
      c_avgptr(isink)=0d0
      v_avgptr(isink)=0d0
      d_avgptr(isink)=0d0
   end do
 
   ! Compute Bondi-Hoyle accretion rate
-!$omp parallel do private(isink,density,c2mean,velocity,volume,v2mean,alpha,ZZ1,ZZ2,r_lso,epsilon_r,r_bondi,r_acc) schedule(static)
+!$omp parallel do private(density,c2mean,velocity,volume,v2mean,alpha,ZZ1,ZZ2,r_lso,epsilon_r,r_bondi,r_acc)
   do isink=1,nsink
      density=0d0
      c2mean=0d0
@@ -2822,7 +2823,7 @@ subroutine grow_bondi(ilevel)
 #endif
   endif
 
-!$omp parallel do private(isink) schedule(static)
+!$omp parallel do
   do isink=1,nsink
      if(.not.fix_smbh_position)then
         vsink(isink,1:ndim)=vsink(isink,1:ndim)*msink(isink)+vsink_all(isink,1:ndim)
@@ -4031,7 +4032,7 @@ subroutine get_rho_star(ilevel)
   !-------------------------------------------------------
   ! Initialize rho_star to zero in virtual boundaries
   !-------------------------------------------------------
-!$omp parallel do private(ind,icpu,iskip,i) collapse(2) schedule(static)
+!$omp parallel do private(iskip) collapse(2) schedule(static)
   do ind=1,twotondim
      do icpu=1,ncpu
         iskip=ncoarse+(ind-1)*ngridmax
@@ -4053,7 +4054,7 @@ subroutine get_rho_star(ilevel)
   !----------------------------------------------------
   ! Reset rho_star in physical boundaries
   !----------------------------------------------------
-!$omp parallel do private(ind,iskip,ibound,i) schedule(static)
+!$omp parallel do private(iskip)
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
      do ibound=1,nboundary
