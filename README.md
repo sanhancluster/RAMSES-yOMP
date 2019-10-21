@@ -29,3 +29,11 @@ Please register also to the [mailing list](http://groups.google.com/group/ramses
 To generate idealised initial conditions of galaxies, check out the [DICE][5] code.
 
 To generate cosmological initial conditions, check out the [MUSIC][6] code.
+
+## Note from RAMSES-yOMP
+
+OMP program requires satisfactory amount of stack size.
+```bash
+ $ ulimit -Ss 2048m
+ $ export OMP_STACKSIZE=2048m
+```
