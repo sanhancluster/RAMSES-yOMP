@@ -205,7 +205,7 @@ subroutine make_sink(ilevel)
     call ranf(tracer_seed,rand)
 
   ! Set new sink variables to old ones
-!$omp parallel do private(isink)
+!$omp parallel do
   do isink=1,nsinkmax
      xsink_new(isink,:)=0d0; msink_new(isink)=0d0; dMsmbh_new(isink)=0d0; Esave_new(isink)=0d0
      vsink_new(isink,:)=0d0; oksink_new(isink)=0d0; tsink_new(isink)=0d0; idsink_new(isink)=0
@@ -447,7 +447,7 @@ subroutine make_sink(ilevel)
   flag_tmp=flag_tmp_all
   deallocate(x_tmp_all,dens_tmp_all,flag_tmp_all)
 #endif
-!$omp parallel do private(i,j,x,dxx,dyy,dzz,dr_sink) schedule(static)
+!$omp parallel do private(x,dxx,dyy,dzz,dr_sink) schedule(static)
   do i=1,ntot_tmp
      if(flag_tmp(i).eq.1)then
         x=x_tmp(i,1);y=x_tmp(i,2);z=x_tmp(i,3)
@@ -1353,12 +1353,12 @@ subroutine merge_sink(ilevel)
   ! Remove sink particles that are part of a FOF group.
   !-----------------------------------------------------
   ! Loop over cpus
-!$omp parallel private(ig,ip,ind_part,ind_grid_part)
+!$omp parallel private(ig,ip,ind_part,ind_grid_part,igrid,npart1,npart2,ipart,next_part,ind_grid,isink_old,isink_new)
   do icpu=1,ncpu
      ig=0
      ip=0
      ! Loop over grids
-!$omp do private(igrid,npart1,npart2,ipart,next_part,ind_grid) schedule(static)
+!$omp do schedule(static)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -1428,7 +1428,7 @@ subroutine merge_sink(ilevel)
         ig=0
         ip=0
         ! Loop over grids
-!$omp do private(igrid,npart1,npart2,ipart,next_part,isink_old,isink_new) schedule(static)
+!$omp do schedule(static)
         do jgrid=1,numbl(icpu,ilevel)
            if(icpu==myid)then
               igrid=active(ilevel)%igrid(jgrid)
@@ -1595,7 +1595,7 @@ subroutine create_cloud_from_sink
   rmass=dble(ir_cloud_massive)*dx_min
 
   ! Create cloud
-!$omp parallel do private(kk,jj,ii,xrel,rr,isink,xtest,in_box,idim,ind_cloud,indp,cc,icloud)
+!$omp parallel do private(xrel,rr,xtest,in_box,ind_cloud,indp,cc,icloud)
   do isink=1,nsink
      xtest(1,1:3)=xsink(isink,1:3)
      in_box=.true.
@@ -1662,7 +1662,7 @@ subroutine kill_entire_cloud(ilevel)
 
   ! Gather sink and cloud particles.
   ! Loop over cpus
-!$omp parallel private(ig,ip,ncache,ind_part,ind_grid_part)
+!$omp parallel private(ig,ip,ncache,ind_part,ind_grid_part,igrid,npart1,npart2,ipart,next_part,ind_grid)
   do icpu=1,ncpu+nboundary
      if(icpu<=ncpu)then
         ncache=numbl(icpu,ilevel)
@@ -1672,7 +1672,7 @@ subroutine kill_entire_cloud(ilevel)
      ig=0
      ip=0
      ! Loop over grids
-!$omp do private(igrid,npart1,npart2,ipart,next_part,ind_grid) schedule(static)
+!$omp do schedule(static)
      do jgrid=1,ncache
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -1803,12 +1803,12 @@ subroutine bondi_hoyle(ilevel)
   ! Reset new sink variables
   v2sink_new=0d0; c2sink_new=0d0; oksink_new=0d0
 
-!$omp parallel private(ig,ip,ind_part,ind_grid,ind_grid_part)
+!$omp parallel private(ig,ip,ind_part,ind_grid,ind_grid_part,igrid,npart1,npart2,ipart,next_part,isink,r2)
   do icpu=1,ncpu
      ig=0
      ip=0
      ! Loop over grids
-!$omp do private(igrid,npart1,npart2,ipart,next_part,isink,r2) schedule(dynamic,nchunk)
+!$omp do schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -1897,7 +1897,7 @@ subroutine bondi_hoyle(ilevel)
 #endif
   endif
 
-!$omp parallel do private(isink) schedule(static)
+!$omp parallel do schedule(static)
   do isink=1,nsink
      if(oksink_all(isink)==1d0)then
         c2sink(isink)=c2sink_all(isink)
@@ -1920,12 +1920,12 @@ subroutine bondi_hoyle(ilevel)
   wdens=0d0; wvol =0d0; wc2=0d0; wmom=0d0; jsink_new=0d0
 
 
-!$omp parallel private(ig,ip,ind_part,ind_grid,ind_grid_part)
+!$omp parallel private(ig,ip,ind_part,ind_grid,ind_grid_part,igrid,npart1,npart2,ipart,next_part)
   do icpu=1,ncpu
      ig=0
      ip=0
      ! Loop over grids
-!$omp do private(igrid,npart1,npart2,ipart,next_part) schedule(dynamic,nchunk)
+!$omp do schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -1992,7 +1992,7 @@ subroutine bondi_hoyle(ilevel)
 
   if(random_jet)then
      if(myid==1)then
-!$omp parallel do private(isink,SS,phi,UU,Rrand,CC) schedule(static)
+!$omp parallel do private(SS,phi,UU,Rrand,CC) schedule(static)
         do isink=1,nsink
            ! Random directions
            call ranf(ompseed,RandNum)
@@ -2732,12 +2732,12 @@ subroutine grow_bondi(ilevel)
   end do
 
 
-!$omp parallel private(ig,ip,ind_part,ind_grid,ind_grid_part)
+!$omp parallel private(ig,ip,ind_part,ind_grid,ind_grid_part,igrid,npart1,npart2,ipart,next_part)
   do icpu=1,ncpu
      ig=0
      ip=0
      ! Loop over grids
-!$omp do private(igrid,npart1,npart2,ipart,next_part) schedule(dynamic,nchunk)
+!$omp do schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -4093,12 +4093,12 @@ subroutine rhostar_from_current_level(ilevel)
   dx=0.5D0**ilevel
 
   ! Loop over cpus
-!$omp parallel private(ig,ip,ind_cell,ind_part,ind_grid,ind_grid_part,x0)
+!$omp parallel private(ig,ip,ind_cell,ind_part,ind_grid,ind_grid_part,x0,igrid,npart1,ipart,local_count)
   do icpu=1,ncpu
      ! Loop over grids
      ig=0
      ip=0
-!$omp do private(igrid,npart1,ipart,local_count)
+!$omp do
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -5006,7 +5006,7 @@ subroutine AGN_feedback
 #endif
   !/AGNRT
 
-!$omp parallel do private(iAGN,isort) schedule(static)
+!$omp parallel do private(isort)
   do iAGN=1,nAGN
      isort=itemp(iAGN)
      iAGN_myid(iAGN)=isort
@@ -5041,7 +5041,7 @@ subroutine AGN_feedback
 
   ! Check if AGN goes into jet mode
   ok_blast_agn(1:nAGN)=.false.
-!$omp parallel do private(iAGN,Mfrac) schedule(static)
+!$omp parallel do private(Mfrac)
   do iAGN=1,nAGN
      if (dMEd_AGN(iAGN) == 0) then
         X_radio(iAGN) = huge(X_radio(iAGN))
@@ -5060,7 +5060,7 @@ subroutine AGN_feedback
        & ,mass_blast,ind_blast,nAGN,iAGN_myid,ok_blast_agn,EsaveAGN,X_radio)
 
   ! Check if AGN goes into thermal blast wave mode
-!$omp parallel do private(iAGN,temp_blast) schedule(static)
+!$omp parallel do private(temp_blast)
   do iAGN=1,nAGN
      if(X_radio(iAGN) .ge. X_floor .and. EsaveAGN(iAGN).eq.0d0)then
         ! Compute estimated average temperature in the blast
@@ -5091,7 +5091,7 @@ subroutine AGN_feedback
   end if
 
   ! Reset total accreted mass if AGN input has been done
-!$omp parallel do private(iAGN,isort) schedule(static)
+!$omp parallel do private(isort)
   do iAGN=1,nAGN
      if(ok_blast_agn(iAGN))then
         isort=iAGN_myid(iAGN)
@@ -5114,7 +5114,7 @@ subroutine AGN_feedback
   ! Important: save the energy for the next time step that has not been put in the current time step
 #ifndef WITHOUTMPI
   Esave_new=0d0
-!$omp parallel do private(iAGN) schedule(static)
+!$omp parallel do private(isink)
   do iAGN=1,nAGN
      isink=iAGN_myid(iAGN)
      Esave_new(isink)=EsaveAGN(iAGN)
@@ -5255,6 +5255,12 @@ subroutine average_AGN(xAGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiveAGN,jAGN,vol_
   passiveAGN = 0
 
   ! Loop over levels
+!$omp parallel private(dx,dx_loc,vol_loc,iz,iy,ix,xc) &
+!$omp & private(ngrid,ind_grid,iskip,ind_cell,ok) &
+!$omp & private(x,y,z,dxx,dyy,dzz,dr_AGN,dr_cell) &
+!$omp & private(jtot,j_x,j_y,j_z,dzjet,d2,tmp_volume,psy,drjet,d,u,v,w,ekk,eint) &
+!$omp & private(box_origin,box_extents,capsule_r,capsule_start,capsule_end) &
+!$omp & reduction(+:vol_gas,psy_norm,mass_gas)
   do ilevel=levelmin,nlevelmax
      ! Computing local volume (important for averaging hydro quantities)
      dx=0.5D0**ilevel
@@ -5271,13 +5277,8 @@ subroutine average_AGN(xAGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiveAGN,jAGN,vol_
      end do
 
      ! Loop over grids
+!$omp do
      ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,i,ind_grid,ind,iskip,ind_cell,ok) &
-!$omp & private(x,y,z,iAGN,dxx,dyy,dzz,dr_AGN,dr_cell) &
-!$omp & private(jtot,j_x,j_y,j_z,dzjet,d2,tmp_volume,psy,drjet,d,u,v,w,ekk,eint) &
-!$omp & private(box_origin,box_extents,capsule_r,capsule_start,capsule_end) &
-!$omp & reduction(+:vol_gas,psy_norm,mass_gas) reduction(MAX:ind_blast,vol_blast,mAGN,dAGNcell,passiveAGN,mass_blast) &
-!$omp & schedule(static)
      do igrid=1,ncache,nvector
         ngrid=MIN(nvector,ncache-igrid+1)
         do i=1,ngrid
@@ -5453,10 +5454,11 @@ subroutine average_AGN(xAGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiveAGN,jAGN,vol_
         end do
         ! End loop over cells
      end do
+!$omp end do nowait
      ! End loop over grids
   end do
   ! End loop over levels
-
+!$omp end parallel
   !################################################################
 #ifndef WITHOUTMPI
   vol_gas_mpi=0d0; mass_gas_mpi=0d0; mAGN_mpi=0d0; psy_norm_mpi=0d0
@@ -5613,7 +5615,7 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
 
   uBlast=0d0
   ok_save=.false.
-!$omp parallel do private(iAGN,epsilon_r,eff_mad) schedule(static)
+!$omp parallel do private(epsilon_r,eff_mad)
   do iAGN=1,nAGN
      if(EsaveAGN(iAGN).gt.0d0)then
         ok_save(iAGN)=.true.
@@ -5671,6 +5673,12 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
   EsaveAGN=0d0
   ! Loop over levels
 
+!$omp parallel private(dx,dx_loc,vol_loc,iz,iy,ix,xc,ncache) &
+!$omp & private(ngrid,ind_grid,iskip,ind_cell,ok) &
+!$omp & private(x,y,z,dxx,dyy,dzz,dr_AGN,ekk,d,etot,eint,T2_1,T2_2) &
+!$omp & private(jtot,j_x,j_y,j_z,dzjet,drjet,d2,tmp_volume,psy,u,v,w,ekkold,d_gas) &
+!$omp & private(box_origin,box_extents,capsule_r,capsule_start,capsule_end) &
+!$omp & reduction(+:EsaveAGN,vol_gas)
   do ilevel=levelmin,nlevelmax
      ! Computing local volume (important for averaging hydro quantities)
      dx=0.5D0**ilevel
@@ -5688,11 +5696,7 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
 
      ! Loop over grids
      ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,i,ind_grid,ind,iskip,ind_cell,ok) &
-!$omp & private(x,y,z,iAGN,dxx,dyy,dzz,dr_AGN,ekk,d,etot,eint,T2_1,T2_2) &
-!$omp & private(jtot,j_x,j_y,j_z,dzjet,d2,tmp_volume,psy,u,v,w,ekkold,d_gas) &
-!$omp & private(box_origin,box_extents,capsule_r,capsule_start,capsule_end) &
-!$omp & reduction(+:EsaveAGN,vol_gas) schedule(static)
+!$omp do
      do igrid=1,ncache,nvector
         ngrid=MIN(nvector,ncache-igrid+1)
         do i=1,ngrid
@@ -5786,7 +5790,7 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
 
                              ! Check if the cell lies within the AGN jet cylindre
                              if (d2 <= rmax2) then
-                                ! NOTE: first 2 options do not work with this version
+                                ! OMPNOTE: first 2 options do not work with OMP
                                 if (AGN_integration == AGN_VOLUME_INTEGRATION_MC) then
                                    call CapsuleBoxIntegrateMC(psy_function_loc, &
                                         box, capsule, tmp_volume, psy)
@@ -5932,8 +5936,10 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
         ! End loop over cells
      end do
      ! End loop over grids
+!$omp end do nowait
   end do
   ! End loop over levels
+!$omp end parallel
 
 !$omp parallel do private(iAGN,ekk,d,idim,etot,eint,T2_1,T2_2,d_gas,u,v,w,ivar) schedule(static)
   do iAGN=1,nAGN
