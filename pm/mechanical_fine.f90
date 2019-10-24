@@ -12,7 +12,9 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   use hydro_commons,only:uold
   use random
   use mpi_mod
+#ifdef _OPENMP
   use omp_lib
+#endif
   implicit none
   !------------------------------------------------------------------------
   ! This routine computes the energy liberated from stellar winds
@@ -73,10 +75,10 @@ subroutine mechanical_feedback_fine(ilevel,icount)
 #ifdef _OPENMP
 !$omp parallel
     ! Give slight offsets for each OMP threads
-    ompseed=MOD(tracer_seed+omp_get_thread_num(),4096)
+    ompseed=MOD(tracer_seed+omp_get_thread_num()+1,4096)
 !$omp end parallel
 #else
-    ompseed=tracer_seed
+    ompseed=tracer_seed+1
 #endif
     call ranf(tracer_seed,rand)
 
@@ -127,7 +129,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
 
      ! Loop over grids
 !$omp do private(igrid,npart1,npart2,ipart,next_part,x0,mw8,mzw8,pw8,ok,ind_son,ind,iskip,ind_cell,mejecta) &
-!$omp& reduction(+:nSNc) schedule(dynamic,nchunk)
+!$omp & reduction(+:nSNc) schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)

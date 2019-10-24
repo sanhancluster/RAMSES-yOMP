@@ -82,6 +82,7 @@ subroutine rho_fine(ilevel,icount)
   !--------------------------
   ! Initialize fields to zero
   !--------------------------
+!$omp parallel private(iskip)
   do ind=1,twotondim
     iskip=ncoarse+(ind-1)*ngridmax
     do i=1,active(ilevel)%ngrid
@@ -268,13 +269,13 @@ subroutine rho_from_current_level(ilevel)
   dx=0.5D0**ilevel
 
   ! Loop over cpus
-!$omp parallel private(ig,ip,ind_grid,ind_part,ind_grid_part,ind_cell,x0) reduction(+:multipole)
+!$omp parallel private(ig,ip,ind_grid,ind_part,ind_grid_part,ind_cell,x0,igrid,npart1,ipart,counter) reduction(+:multipole)
   do icpu=1,ncpu
      ! Loop over grids
      ig=0
      ip=0
      ! Dynamic is faster
-!$omp do private(igrid,npart1,ipart,counter) schedule(static,nchunk)
+!$omp do schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -1243,43 +1244,29 @@ subroutine cic_from_multipole(ilevel)
   if(verbose)write(*,111)ilevel
 
   ! Initialize density field to zero
-!$omp parallel private(iskip,ncache)
+!$omp parallel do private(iskip)
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
      do icpu=1,ncpu
-!$omp do
         do i=1,reception(icpu,ilevel)%ngrid
            rho(reception(icpu,ilevel)%igrid(i)+iskip)=0.0D0
         end do
-!$omp end do nowait
      end do
-  end do
-!$omp barrier
-  do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
-!$omp do
      do i=1,active(ilevel)%ngrid
         rho(active(ilevel)%igrid(i)+iskip)=0.0D0
      end do
-!$omp end do nowait
-  end do
-!$omp barrier
   ! Reset rho in physical boundaries
-  do ind=1,twotondim
-     iskip=ncoarse+(ind-1)*ngridmax
      do ibound=1,nboundary
-!$omp do
         do i=1,boundary(ibound,ilevel)%ngrid
            rho(boundary(ibound,ilevel)%igrid(i)+iskip)=0.0
         end do
-!$omp end do nowait
      end do
   end do
-!$omp barrier
+
   if(hydro)then
      ! Perform a restriction over split cells (ilevel+1)
      ncache=active(ilevel)%ngrid
-!$omp do private(ngrid,ind_grid) reduction(+:multipole) schedule(static)
+!$omp parallel do private(ngrid,ind_grid) reduction(+:multipole) schedule(static)
      do igrid=1,ncache,nvector
         ! Gather nvector grids
         ngrid=MIN(nvector,ncache-igrid+1)
@@ -1288,9 +1275,7 @@ subroutine cic_from_multipole(ilevel)
         end do
         call cic_cell(ind_grid,ngrid,ilevel,multipole)
      end do
-!$omp end do nowait
   end if
-!$omp end parallel
 
 111 format('   Entering cic_from_multipole for level',i2)
 

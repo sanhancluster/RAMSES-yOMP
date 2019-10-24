@@ -94,7 +94,9 @@ subroutine make_sink(ilevel)
   use poisson_commons
   use cooling_module, ONLY: rhoc, mH, twopi
   use mpi_mod
+#ifdef _OPENMP
   use omp_lib
+#endif
   implicit none
   integer::ilevel
   !----------------------------------------------------------------------
@@ -197,10 +199,10 @@ subroutine make_sink(ilevel)
 #ifdef _OPENMP
 !$omp parallel
     ! Give slight offsets for each OMP threads
-    ompseed=MOD(tracer_seed+omp_get_thread_num(),4096)
+    ompseed=MOD(tracer_seed+omp_get_thread_num()+1,4096)
 !$omp end parallel
 #else
-    ompseed=tracer_seed
+    ompseed=tracer_seed+1
 #endif
     call ranf(tracer_seed,rand)
 
@@ -1750,7 +1752,9 @@ subroutine bondi_hoyle(ilevel)
   use amr_commons
   use cooling_module, ONLY: rhoc, mH , twopi
   use mpi_mod
+#ifdef _OPENMP
   use omp_lib
+#endif
   implicit none
   integer::ilevel
   !------------------------------------------------------------------------
@@ -1783,10 +1787,10 @@ subroutine bondi_hoyle(ilevel)
 #ifdef _OPENMP
 !$omp parallel
   ! Give slight offsets for each OMP threads
-  ompseed=MOD(localseed+omp_get_thread_num(),4096)
+  ompseed=MOD(localseed+omp_get_thread_num()+1,4096)
 !$omp end parallel
 #else
-    ompseed=localseed
+    ompseed=localseed+1
 #endif
   call ranf(localseed,rand)
 
@@ -2571,7 +2575,9 @@ subroutine grow_bondi(ilevel)
   use hydro_commons
   use cooling_module, ONLY: XH=>X, rhoc, mH, twopi
   use random, ONLY:IRandNumSize
+#ifdef _OPENMP
   use omp_lib
+#endif
   ! AGNRT
 #ifdef RT
   use rt_parameters,only: rt_AGN
@@ -2620,10 +2626,10 @@ subroutine grow_bondi(ilevel)
 #ifdef _OPENMP
 !$omp parallel
     ! Give slight offsets for each OMP threads
-    ompseed=MOD(tracer_seed+omp_get_thread_num(),4096)
+    ompseed=MOD(tracer_seed+omp_get_thread_num()+1,4096)
 !$omp end parallel
 #else
-    ompseed=tracer_seed
+    ompseed=tracer_seed+1
 #endif
     call ranf(tracer_seed,rand)
 
@@ -5570,7 +5576,6 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
   type(Box_t) :: box
   real(dp) :: d2, dzjet, drjet, tmp_volume
 
-
   ! Geometry parameters
   ! Due of incompatibility with OpenMP, geometry parameter of fortran types are unraveled here.
   real(dp) :: capsule_r
@@ -5941,7 +5946,7 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
   ! End loop over levels
 !$omp end parallel
 
-!$omp parallel do private(iAGN,ekk,d,idim,etot,eint,T2_1,T2_2,d_gas,u,v,w,ivar) schedule(static)
+!$omp parallel do private(ekk,d,etot,eint,T2_1,T2_2,d_gas,u,v,w) schedule(static)
   do iAGN=1,nAGN
 
      if(ind_blast(iAGN)>0)then
@@ -5992,9 +5997,10 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
               u=vAGN(iAGN,1)
               v=vAGN(iAGN,2)
               w=vAGN(iAGN,3)
-
+!$omp atomic update
               uold(ind_blast(iAGN),1)=uold(ind_blast(iAGN),1)+d_gas
               do ivar= imetal, nvar
+!$omp atomic update
                  uold(ind_blast(iAGN), ivar) = uold(ind_blast(iAGN),ivar) + passiveAGN(iAGN, ivar)*d_gas
               end do
               ekk=0d0
@@ -6116,9 +6122,9 @@ subroutine getAGNonmyid(isink_myid,nsink_myid)
   !-----------------------
   isink_myid=0
   ii=0
-!$omp parallel do private(isink,cpu_read,xxmin,yymin,zzmin,xxmax,yymax,zzmax,dmax,ilevel,dx,lmin,bit_length,maxdom) &
+!$omp parallel do private(cpu_read,xxmin,yymin,zzmin,xxmax,yymax,zzmax,dmax,ilevel,dx,lmin,bit_length,maxdom) &
 !$omp & private(imin,imax,jmin,jmax,kmin,kmax,dkey,ndom,idom,jdom,kdom,order_min,bounding_min,bounding_max,cpu_min,cpu_max) &
-!$omp & private(impi,ncpu_read,cpu_list,i,j,k,icpu,ii_omp)
+!$omp & private(ncpu_read,cpu_list,i,j,k,icpu,ii_omp)
   do isink=1,nsink
 
      cpu_read=.false.
@@ -6255,7 +6261,7 @@ subroutine update_sink_position_velocity
 #endif
 
   if(myid==1.and.debug)write(*,*)"NCLOUD first sink in update_sink_position_velocity:",sum(sink_stat_all(1,levelmin:nlevelmax,7))
-!$omp parallel do private(isink,idim,ncloud,vdum) schedule(static)
+!$omp parallel do private(ncloud,vdum)
   do isink=1,nsink
      ncloud = sum(sink_stat_all(isink,levelmin:nlevelmax,ndim*2+1))
      if(ncloud>1)then

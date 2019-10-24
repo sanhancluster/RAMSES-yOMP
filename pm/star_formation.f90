@@ -7,7 +7,9 @@ subroutine star_formation(ilevel)
   use cooling_module, ONLY: XH=>X, rhoc, mH , twopi
   use random
   use mpi_mod
+#ifdef _OPENMP
   use omp_lib
+#endif
   implicit none
 #ifndef WITHOUTMPI
   integer::info,info2,dummy_io
@@ -221,12 +223,12 @@ subroutine star_formation(ilevel)
 #ifdef _OPENMP
 !$omp parallel
   ! Give slight offsets for each OMP threads
-  ompseed=MOD(localseed+omp_get_thread_num(),4096)
-  ompseed_tracer=MOD(tracer_seed+omp_get_thread_num(),4096)
+  ompseed=MOD(localseed+omp_get_thread_num()+1,4096)
+  ompseed_tracer=MOD(tracer_seed+omp_get_thread_num()+1,4096)
 !$omp end parallel
 #else
-  ompseed=localseed
-  ompseed_tracer=tracer_seed
+  ompseed=localseed+1
+  ompseed_tracer=tracer_seed+1
 #endif
   call ranf(localseed,RandNum)
   call ranf(tracer_seed,RandNum)

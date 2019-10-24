@@ -65,7 +65,9 @@ contains
     ! level*
     use random, ONLY:IRandNumSize
     use amr_parameters, only: rAGN
+#ifdef _OPENMP
     use omp_lib
+#endif
     integer, intent(in) :: ilevel
 
 #ifdef WITHOUTMPI
@@ -114,10 +116,10 @@ contains
 #ifdef _OPENMP
 !$omp parallel
     ! Give slight offsets for each OMP threads
-    ompseed=MOD(tracer_seed+omp_get_thread_num(),4096)
+    ompseed=MOD(tracer_seed+omp_get_thread_num()+1,4096)
 !$omp end parallel
 #else
-    ompseed=tracer_seed
+    ompseed=MOD(tracer_seed+1,4096)
 #endif
     call ranf(tracer_seed,rand)
 

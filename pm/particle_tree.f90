@@ -198,7 +198,7 @@ subroutine make_tree_fine(ilevel)
   scale=boxlen/dble(nx_loc)
 
   ! Particle tree structure changes while run, so we copy the current state and use them for indexing.
-!$omp parallel private(icpu,ind_grid,ind_part,ind_grid_part,ig,ip)
+!$omp parallel
 !$omp do
   do ipart=1,npartmax
      itmpp(ipart)=nextp(ipart)
@@ -209,7 +209,9 @@ subroutine make_tree_fine(ilevel)
      headp_old(igrid)=headp(igrid)
      numbp_old(igrid)=numbp(igrid)
   end do
+!$omp end parallel
 
+!$omp parallel private(ind_grid,ind_part,ind_grid_part,ig,ip)
   ! Loop over cpus
   do icpu=1,ncpu
      ig=0
@@ -254,7 +256,6 @@ subroutine make_tree_fine(ilevel)
      if(ip>0)call check_tree(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
   end do
   ! End loop over cpus
-!$omp barrier
   ! Periodic boundaries
   if(sink)then
 !$omp do
