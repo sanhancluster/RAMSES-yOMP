@@ -3,7 +3,6 @@ subroutine courant_fine(ilevel)
   use hydro_commons
   use poisson_commons
   use mpi_mod
-  use omp_lib
   implicit none
 #ifndef WITHOUTMPI
   integer::info

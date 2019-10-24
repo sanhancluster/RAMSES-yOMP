@@ -406,7 +406,8 @@ subroutine refine_fine(ilevel)
   ! Refine cells marked for refinement
   !------------------------------------
   ncreate=0
-!$omp parallel private(ibound,boundary_region,ncache) reduction(+:ncreate)
+!$omp parallel private(ibound,boundary_region,ncache) &
+!$omp & private(ngrid,ind_grid,iskip,ind_cell,ok,ncreate_tmp,icell,ind_grid_tmp,ind_cell_tmp) reduction(+:ncreate)
   do icpu=1,ncpu+nboundary  ! Loop over cpus and boundaries
      if(icpu==myid)then
         ibound=0
@@ -421,7 +422,7 @@ subroutine refine_fine(ilevel)
         boundary_region=.true.
         ncache=boundary(ibound,ilevel)%ngrid
      end if
-!$omp do private(ngrid,ind_grid,iskip,ind_cell,ok,ncreate_tmp,icell,ind_grid_tmp,ind_cell_tmp)
+!$omp do
      do igrid=1,ncache,nvector  ! Loop over grids
         ngrid=MIN(nvector,ncache-igrid+1)
         if(myid==icpu)then
@@ -497,7 +498,8 @@ subroutine refine_fine(ilevel)
   ! it is refined, then destroy its child grid.
   !-----------------------------------------------------
   nkill=0
-!$omp parallel private(ibound,boundary_region,ncache) reduction(+:nkill)
+!$omp parallel private(ibound,boundary_region,ncache) &
+!$omp & private(ngrid,ind_grid,iskip,ind_cell,ok,nkill_tmp,icell,ind_cell_tmp) reduction(+:nkill)
   do icpu=1,ncpu+nboundary  ! Loop over cpus and boundaries
      if(icpu==myid)then
         ibound=0
@@ -512,7 +514,7 @@ subroutine refine_fine(ilevel)
         boundary_region=.true.
         ncache=boundary(ibound,ilevel)%ngrid
      end if
-!$omp do private(ngrid,ind_grid,iskip,ind_cell,ok,nkill_tmp,icell,ind_cell_tmp)
+!$omp do
      do igrid=1,ncache,nvector  ! Loop over grids
         ngrid=MIN(nvector,ncache-igrid+1)
         if(myid==icpu)then

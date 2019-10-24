@@ -107,7 +107,7 @@ subroutine force_fine(ilevel,icount)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(ngrid,iskip,ind_grid,ind_cell) reduction(+:epot_loc), reduction(MAX:rho_loc) schedule(static)
+!$omp parallel do private(ngrid,iskip,ind_grid,ind_cell) reduction(+:epot_loc) reduction(MAX:rho_loc) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid

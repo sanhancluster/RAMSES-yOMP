@@ -357,7 +357,7 @@ subroutine userflag_fine(ilevel)
 
   ! Loop over active grids
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(ngrid,ind_grid,ind,iskip,ind_cell,ok,nok,idim,xx) reduction(+:nflag) schedule(static)
+!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell,ok,nok,xx) reduction(+:nflag) schedule(static)
   do igrid=1,ncache,nvector
 
      ! Gather nvector grids

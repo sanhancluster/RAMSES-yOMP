@@ -374,7 +374,8 @@ subroutine cmp_new_cpu_map
   end do
   end do
   ! Loop over levels
-!$omp parallel private(dx,ix,iy,iz,xc,ncache)
+!$omp parallel private(dx,ix,iy,iz,xc,ncache) &
+!$omp & private(ngrid,ind_grid,iskip,ind_cell,idim,ncell_loc,xx,order_min,order_max,dom,ncell_omp,isub,wflag)
   do ilevel=1,nlevelmax
      ! Cell size and cell center offset
      dx=0.5d0**ilevel
@@ -398,7 +399,7 @@ subroutine cmp_new_cpu_map
            ncache=reception(icpu,ilevel)%ngrid
         end if
         ! Loop over grids by vector sweeps
-!$omp do private(ngrid,ind_grid,iskip,ind_cell,idim,ncell_loc,xx,order_min,order_max,dom,ncell_omp,isub,wflag)
+!$omp do
         do igrid=1,ncache,nvector
            ! Gather nvector grids
            ngrid=MIN(nvector,ncache-igrid+1)
@@ -587,7 +588,7 @@ subroutine cmp_new_cpu_map
   end do
   end do
   ! Loop over levels
-!$omp parallel private(ilevel,dx,ind,ix,iy,iz,xc,ncache)
+!$omp parallel private(ilevel,dx,ind,ix,iy,iz,xc,ncache,ngrid,ind_grid,iskip,ind_cell,xx,order_max,xx_tmp,c_tmp)
   do ilevel=1,nlevelmax
      ! Cell size and cell center offset
      dx=0.5d0**ilevel
@@ -605,7 +606,7 @@ subroutine cmp_new_cpu_map
      end do
      ncache=active(ilevel)%ngrid
      ! Loop over grids by vector sweeps
-!$omp do private(ngrid,ind_grid,iskip,ind_cell,xx,order_max,xx_tmp,c_tmp) schedule(static)
+!$omp do
      do igrid=1,ncache,nvector
         ! Gather nvector grids
         ngrid=MIN(nvector,ncache-igrid+1)
