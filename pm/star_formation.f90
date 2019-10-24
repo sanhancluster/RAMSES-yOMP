@@ -259,13 +259,13 @@ subroutine star_formation(ilevel)
   ndebris_tot=0
   ! Loop over grids
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(ngrid,ind_grid) reduction(+:ntot) schedule(static)
+!$omp parallel do private(ngrid,ind_grid) reduction(+:ntot,mstar_tot) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
         ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
      end do
-     call starform2(ind_grid,ngrid,ilevel,ntot,ompseed)
+     call starform2(ind_grid,ngrid,ilevel,ntot,mstar_tot,ompseed)
   end do
 
   !---------------------------------
@@ -337,7 +337,7 @@ subroutine star_formation(ilevel)
   ! Loop over grids
   ncache=active(ilevel)%ngrid
 !$omp parallel private(ngrid,ind_grid,iskip,ind_cell,ok,nnew,ind_grid_new,ind_cell_new,ind_part, &
-!$omp & n,d,u,v,w,x,y,z,tg,zg,Randnum,v_kick,v_kick_mag,mdebris, &
+!$omp & index_star_omp,n,d,u,v,w,x,y,z,tg,zg,Randnum,v_kick,v_kick_mag,mdebris, &
 !$omp & delta_m_over_m,ipart,ip,move_tracer,itracer,proba,xstar,istar_tracer,nattach)
   nattach = 0
 !$omp do schedule(static)
@@ -646,7 +646,7 @@ end subroutine starform1
 !################################################################
 !################################################################
 !################################################################
-subroutine starform2(ind_grid,ngrid,ilevel,ntot,seed)
+subroutine starform2(ind_grid,ngrid,ilevel,ntot,mstar_tot_tmp,seed)
   use amr_commons
   use pm_commons
   use hydro_commons
@@ -662,7 +662,7 @@ subroutine starform2(ind_grid,ngrid,ilevel,ntot,seed)
   integer ::ngrid
   integer ::ind,i,iskip
   integer ::ntot,nstar_corrected,ncell
-  real(dp)::d
+  real(dp)::d,mstar_tot_tmp
   real(dp)::mstar,dstar,tstar,nISM,phi_t,phi_x,theta,sigs,scrit,b_turb,zeta
   real(dp)::T2,nH,T_poly,cs2,cs2_poly,trel,t_dyn,t_ff,tdec
   real(dp)::ul,ur,fl,fr,trgv,alpha0
@@ -1046,7 +1046,7 @@ subroutine starform2(ind_grid,ngrid,ilevel,ntot,seed)
               nstar(i)=nstar_corrected
            endif
            ! Compute new stars local statistics
-           mstar_tot=mstar_tot+nstar(i)*mstar
+           mstar_tot_tmp=mstar_tot_tmp+nstar(i)*mstar
            if(nstar(i)>0)then
               ntot=ntot+1
               !if(f_w>0 .and. mechanical_feedback==0)ndebris_tot=ndebris_tot+1
