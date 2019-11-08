@@ -86,7 +86,7 @@ subroutine authorize_fine(ilevel)
   ! Authorize all myid grids (needed for uploads)
   ncache=active(ilevel)%ngrid
   ! Loop over grids by vector sweeps
-!$omp parallel do private(igrid,ngrid,i,ind_grid,ind,iskip,ind_cell) schedule(static)
+!$omp parallel do private(ngrid,ind_grid,ind,iskip,ind_cell)
   do igrid=1,ncache,nvector
      ! Gather nvector grids
      ngrid=MIN(nvector,ncache-igrid+1)
@@ -109,11 +109,11 @@ subroutine authorize_fine(ilevel)
   ! End loop over grids
 
   ! Authorize virtual cells that contains myid children cells
-!$omp parallel private(ncache)
+!$omp parallel private(ncache,ngrid,ind_grid,iskip,ind_cell,xx,order_min,order_max,test,xmin,xmax)
   do icpu=1,ncpu
      ncache=reception(icpu,ilevel)%ngrid
      ! Loop over grids by vector sweeps
-!$omp do private(ngrid,ind_grid,iskip,ind_cell,xx,order_min,order_max,test,xmin,xmax)
+!$omp do
      do igrid=1,ncache,nvector
         ! Gather nvector grids
         ngrid=MIN(nvector,ncache-igrid+1)
@@ -228,13 +228,13 @@ subroutine authorize_fine(ilevel)
 
   n_nbor(1:3)=(/1,2,3/)
   ! Loop over steps
-!$omp parallel private(ncache,ngrid,ind_grid)
+!$omp parallel private(ncache,ngrid,ind_grid,iskip,ind_cell,igridn)
   do ibound=1,nexpand_bound
   do ismooth=1,ndim
      ! Initialize flag1 to 0 in virtual cells
      do icpu=1,ncpu
         ncache=reception(icpu,ilevel)%ngrid
-!$omp do private(iskip,ind_cell)
+!$omp do
         do igrid=1,ncache,nvector
            ngrid=MIN(nvector,ncache-igrid+1)
            do i=1,ngrid
@@ -257,7 +257,7 @@ subroutine authorize_fine(ilevel)
      ! Count neighbors and set flag2 accordingly
      do icpu=1,ncpu
         ncache=reception(icpu,ilevel)%ngrid
-!$omp do private(igridn)
+!$omp do
         do igrid=1,ncache,nvector
            ngrid=MIN(nvector,ncache-igrid+1)
            do i=1,ngrid
@@ -275,7 +275,7 @@ subroutine authorize_fine(ilevel)
      ! Set flag2=1 for cells with flag1=1
      do icpu=1,ncpu
         ncache=reception(icpu,ilevel)%ngrid
-!$omp do private(iskip,ind_cell)
+!$omp do
         do igrid=1,ncache,nvector
            ngrid=MIN(nvector,ncache-igrid+1)
            do i=1,ngrid
@@ -352,12 +352,12 @@ subroutine make_virtual_coarse_int(xx)
 
   ! Communications
   fff=0; ffg=0
-!$omp parallel do private(icell)
+!$omp parallel do
   do icell=1,ncell
      if(cpu_map(ind_cell(icell))==myid)fff(icell)=xx(ind_cell(icell))
   end do
   call MPI_ALLREDUCE(fff,ffg,ncell,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD,info)
-!$omp parallel do private(icell)
+!$omp parallel do
   do icell=1,ncell
      xx(ind_cell(icell))=ffg(icell)
   end do
@@ -487,7 +487,7 @@ subroutine make_virtual_fine_int(xx,ilevel)
   if(verbose)write(*,111)ilevel
 
 #ifndef WITHOUTMPI
-!$omp parallel private(step,iskip,icpu)
+!$omp parallel private(step,iskip)
 !$omp single
   ! Receive all messages
   countrecv=0
@@ -814,7 +814,7 @@ subroutine make_virtual_reverse_int(xx,ilevel)
   end do
 
   ! Scatter reception array
-!$omp parallel do private(step,iskip,icpu,i,j) schedule(static)
+!$omp parallel do private(step,iskip) schedule(static)
   do j=1,twotondim
      iskip=ncoarse+(j-1)*ngridmax
      do icpu=1,ncpu
@@ -831,7 +831,7 @@ subroutine make_virtual_reverse_int(xx,ilevel)
 
   else
 
-!$omp parallel private(step,iskip,icpu)
+!$omp parallel private(step,iskip)
 !$omp single
   ! Receive all messages
   countrecv=0
@@ -1046,7 +1046,7 @@ subroutine build_comm(ilevel)
   ! Compute number and index of virtual boundary grids
   !----------------------------------------------------
 #ifndef WITHOUTMPI
-!$omp parallel do private(icpu,ncache,igrid,jgrid,i) schedule(static)
+!$omp parallel do private(icpu,ncache,igrid,jgrid,i)
    do icpu=1,ncpu
       ncache=0
       if(icpu.ne.myid)ncache=numbl(icpu,ilevel)
@@ -1095,7 +1095,7 @@ subroutine build_comm(ilevel)
   call MPI_ALLTOALL(sendbuf,1,MPI_INTEGER,recvbuf,1,MPI_INTEGER,MPI_COMM_WORLD,info)
 
   ! Allocate grid index
-!$omp parallel do private(icpu,ncache) schedule(static)
+!$omp parallel do private(icpu,ncache)
   do icpu=1,ncpu
      emission(icpu,ilevel)%ngrid=recvbuf(icpu)
      ncache=emission(icpu,ilevel)%ngrid
@@ -1138,7 +1138,7 @@ subroutine build_comm(ilevel)
   end do
 
   ! Allocate temporary communication buffers
-!$omp parallel do private(icpu,ncache) schedule(static)
+!$omp parallel do private(icpu,ncache)
   do icpu=1,ncpu
      ncache=emission(icpu,ilevel)%ngrid
      if(ncache>0)then

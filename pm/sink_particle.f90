@@ -5460,7 +5460,7 @@ subroutine average_AGN(xAGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiveAGN,jAGN,vol_
         end do
         ! End loop over cells
      end do
-!$omp end do nowait
+!$omp end do
      ! End loop over grids
   end do
   ! End loop over levels

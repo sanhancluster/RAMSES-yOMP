@@ -64,11 +64,15 @@ subroutine read_params
        tracer_first_balance_part_per_cell,tracer_first_balance_levelmin,tracer_per_cell,tracer_level
   ! MPI initialization
 #ifndef WITHOUTMPI
+#ifdef _OPENMP
   call MPI_INIT_THREAD(MPI_THREAD_SERIALIZED,info2,ierr)
   if(info2<MPI_THREAD_SERIALIZED) then
       write(*,*) 'Error: MPI_THREAD_SERIALIZED is not supported in current MPI library'
       stop
   end if
+#else
+  call MPI_INIT(ierr)
+#endif
   call MPI_COMM_RANK(MPI_COMM_WORLD,myid,ierr)
   call MPI_COMM_SIZE(MPI_COMM_WORLD,ncpu,ierr)
   myid=myid+1 ! Careful with this...

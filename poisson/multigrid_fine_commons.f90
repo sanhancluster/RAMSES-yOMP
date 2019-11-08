@@ -1048,18 +1048,22 @@ subroutine make_virtual_mg_dp(ivar,ilevel)
   end do
 
   ! Gather emission array
+!$omp parallel private(step,iskip,icell)
   do icpu=1,ncpu
      if (emission_mg(icpu,ilevel)%ngrid>0) then
         do j=1,twotondim
            step=(j-1)*emission_mg(icpu,ilevel)%ngrid
            iskip=(j-1)*active_mg(myid,ilevel)%ngrid
+!$omp do
            do i=1,emission_mg(icpu,ilevel)%ngrid
               icell=emission_mg(icpu,ilevel)%igrid(i)+iskip
               emission_mg(icpu,ilevel)%u(i+step,1)=active_mg(myid,ilevel)%u(icell,ivar)
            end do
+!$omp end do nowait
         end do
      end if
   end do
+!$omp end parallel
 
   ! Send all messages
   countsend=0
@@ -1190,19 +1194,23 @@ subroutine make_reverse_mg_dp(ivar,ilevel)
   call MPI_WAITALL(countrecv,reqrecv,statuses,info)
 
   ! Gather emission array
+!$omp parallel private(step,iskip,icell)
   do icpu=1,ncpu
      if (emission_mg(icpu,ilevel)%ngrid>0) then
         do j=1,twotondim
            step=(j-1)*emission_mg(icpu,ilevel)%ngrid
            iskip=(j-1)*active_mg(myid,ilevel)%ngrid
+!$omp do
            do i=1,emission_mg(icpu,ilevel)%ngrid
               icell=emission_mg(icpu,ilevel)%igrid(i)+iskip
               active_mg(myid,ilevel)%u(icell,ivar)=active_mg(myid,ilevel)%u(icell,ivar)+ &
                    & emission_mg(icpu,ilevel)%u(i+step,1)
            end do
+!$omp end do nowait
         end do
      end if
   end do
+!$omp end parallel
 
   ! Wait for full completion of sends
   call MPI_WAITALL(countsend,reqsend,statuses,info)

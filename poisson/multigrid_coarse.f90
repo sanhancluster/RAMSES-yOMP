@@ -329,9 +329,9 @@ recursive subroutine multigrid_iterator(ilevel)
   fact=oneoversix*dx2
 !$omp parallel private(iskip)
   do ind=1,twotondim
+     iskip=ncoarse+(ind-1)*ngridmax
 !$omp do
      do i=1,active(ilevel)%ngrid
-        iskip=ncoarse+(ind-1)*ngridmax
         phi(active(ilevel)%igrid(i)+iskip)=-fact*rho(active(ilevel)%igrid(i)+iskip)
      end do
 !$omp end do nowait

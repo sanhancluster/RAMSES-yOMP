@@ -678,7 +678,6 @@ subroutine interpolate_and_correct_fine(ifinelevel)
       ! End loop over cells
 
    end do
-!$omp end parallel do
    ! End loop over grids
 end subroutine interpolate_and_correct_fine
 
