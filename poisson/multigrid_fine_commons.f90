@@ -1206,7 +1206,7 @@ subroutine make_reverse_mg_dp(ivar,ilevel)
               active_mg(myid,ilevel)%u(icell,ivar)=active_mg(myid,ilevel)%u(icell,ivar)+ &
                    & emission_mg(icpu,ilevel)%u(i+step,1)
            end do
-!$omp end do nowait
+!$omp end do
         end do
      end if
   end do

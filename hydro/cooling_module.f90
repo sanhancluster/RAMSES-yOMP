@@ -1069,9 +1069,9 @@ subroutine cmp_metals(T2,nH,mu,metal_tot,metal_prime,aexp)
   real(kind=8)::TT,lTT,deltaT,lcool1,lcool2,lcool1_prime,lcool2_prime
   real(kind=8)::ZZ,deltaZ
   real(kind=8)::c1=0.4,c2=10.0,TT0=1d5,TTC=1d6,alpha1=0.15
-  real(kind=8)::ux,g_courty,f_courty=1d0,g_courty_prime,f_courty_prime
+  real(kind=8)::ux,g_courty,f_courty,g_courty_prime,f_courty_prime
   integer::iT,iZ
-
+  f_courty=1d0
   ZZ=1d0/aexp-1d0
   TT=T2*mu
   lTT=log10(TT)
@@ -1216,28 +1216,28 @@ subroutine cmp_cooling(T2,nH,t_rad_spec,h_rad_spec,cool_tot,heat_tot,cool_com,he
   mu_out = mu
 
   if (if_cooling_functions) then
-     cool_out=max(cool_tot,smallnum_cooling)
-     heat_out=max(heat_tot,smallnum_cooling)
+     !cool_out=max(cool_tot,smallnum_cooling)
+     !heat_out=max(heat_tot,smallnum_cooling)
      cool_com=max(cool_com,smallnum_cooling)
      heat_com=max(heat_com,smallnum_cooling)
-     cb1s=max(cb1,smallnum_cooling)
-     cb2s=max(cb2,smallnum_cooling)
-     cb3s=max(cb3,smallnum_cooling)
-     ci1s=max(ci1,smallnum_cooling)
-     ci2s=max(ci2,smallnum_cooling)
-     ci3s=max(ci3,smallnum_cooling)
-     cr1s=max(cr1,smallnum_cooling)
-     cr2s=max(cr2,smallnum_cooling)
-     cr3s=max(cr3,smallnum_cooling)
-     cds =max(cd ,smallnum_cooling)
-     ce1s=max(ce1,smallnum_cooling)
-     ce3s=max(ce3,smallnum_cooling)
-     cocs=max(coc,smallnum_cooling)
-     cohs=max(coh,smallnum_cooling)
-     ch1s=max(ch1,smallnum_cooling)
-     ch2s=max(ch2,smallnum_cooling)
-     ch3s=max(ch3,smallnum_cooling)
-     cohs=max(coh,smallnum_cooling)
+     !cb1s=max(cb1,smallnum_cooling)
+     !cb2s=max(cb2,smallnum_cooling)
+     !cb3s=max(cb3,smallnum_cooling)
+     !ci1s=max(ci1,smallnum_cooling)
+     !ci2s=max(ci2,smallnum_cooling)
+     !ci3s=max(ci3,smallnum_cooling)
+     !cr1s=max(cr1,smallnum_cooling)
+     !cr2s=max(cr2,smallnum_cooling)
+     !cr3s=max(cr3,smallnum_cooling)
+     !cds =max(cd ,smallnum_cooling)
+     !ce1s=max(ce1,smallnum_cooling)
+     !ce3s=max(ce3,smallnum_cooling)
+     !cocs=max(coc,smallnum_cooling)
+     !cohs=max(coh,smallnum_cooling)
+     !ch1s=max(ch1,smallnum_cooling)
+     !ch2s=max(ch2,smallnum_cooling)
+     !ch3s=max(ch3,smallnum_cooling)
+     !cohs=max(coh,smallnum_cooling)
   endif
 end subroutine cmp_cooling
 !=======================================================================

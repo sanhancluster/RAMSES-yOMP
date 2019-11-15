@@ -1031,7 +1031,7 @@ subroutine merge_sink(ilevel)
      do isink=1,nsinkmax
         v_DFnew_all(isink,:,:,:) = 0d0; mass_DFnew_all(isink,:,:) = 0d0; n_partnew_all(isink,:,:)=0
         mass_lowspeednew_all(isink,:,:)=0d0; fact_fastnew_all(isink,:,:)=0d0
-        most_massive_sink(:) = 0d0
+        most_massive_sink(isink) = 0d0
      end do
   end if
   !/Particles dynamical friction (HP)
@@ -3980,8 +3980,11 @@ subroutine jet_AGN(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
         wc =w-vsink(isink,3)
 
         !j_sp= d_x*uc + d_y*vc + d_z*wc
+!$omp atomic update
         jsink_new(isink,1)=jsink_new(isink,1) + (d_y*wc-d_z*vc)*d*vol_loc
+!$omp atomic update
         jsink_new(isink,2)=jsink_new(isink,2) + (d_z*uc-d_x*wc)*d*vol_loc
+!$omp atomic update
         jsink_new(isink,3)=jsink_new(isink,3) + (d_x*vc-d_y*uc)*d*vol_loc
 
      endif
@@ -5261,7 +5264,7 @@ subroutine average_AGN(xAGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiveAGN,jAGN,vol_
   passiveAGN = 0
 
   ! Loop over levels
-!$omp parallel private(dx,dx_loc,vol_loc,iz,iy,ix,xc) &
+!$omp parallel private(dx,dx_loc,vol_loc,iz,iy,ix,xc,ncache) &
 !$omp & private(ngrid,ind_grid,iskip,ind_cell,ok) &
 !$omp & private(x,y,z,dxx,dyy,dzz,dr_AGN,dr_cell) &
 !$omp & private(jtot,j_x,j_y,j_z,dzjet,d2,tmp_volume,psy,drjet,d,u,v,w,ekk,eint) &

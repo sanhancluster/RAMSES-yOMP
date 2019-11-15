@@ -25,8 +25,8 @@ module tracer_utils
 contains
 
   subroutine initialize_skip_loc
-    if (fc1) then
 !$omp critical
+    if (fc1) then
        skip_loc=(/0.0d0, 0.0d0, 0.0d0/)
        if(ndim>0) skip_loc(1) = dble(icoarse_min)
        if(ndim>1) skip_loc(2) = dble(jcoarse_min)
@@ -36,8 +36,8 @@ contains
        scale = boxlen/dble(nx_loc)
 
        fc1 = .false.
-!$omp end critical
     end if
+!$omp end critical
 
   end subroutine initialize_skip_loc
   !---------------------------------------------------------------------------------
@@ -286,8 +286,8 @@ contains
     integer, intent(in) :: direction
     integer, dimension(1:twotondim/2), intent(out) :: locs
 
-    if (fc2) then
 !$omp critical
+    if (fc2) then
        mapping(1, 1:4) = (/1, 3, 5, 7/) ! left cells
        mapping(2, 1:4) = (/2, 4, 6, 8/) ! right cells
        mapping(3, 1:4) = (/1, 2, 5, 6/) ! top cells
@@ -296,8 +296,8 @@ contains
        mapping(6, 1:4) = (/5, 6, 7, 8/) ! back cells
 
        fc2 = .false.
-!$omp end critical
     end if
+!$omp end critical
 
     locs(1:twotondimo2) = mapping(direction, 1:twotondimo2)
 
@@ -311,8 +311,8 @@ contains
     integer, dimension(1:twotondim/2) :: locs
 
 
-    if (fc2) then
 !$omp critical
+    if (fc2) then
        mapping(1, 1:4) = (/1, 3, 5, 7/) ! left cells
        mapping(2, 1:4) = (/2, 4, 6, 8/) ! right cells
        mapping(3, 1:4) = (/1, 2, 5, 6/) ! top cells
@@ -321,8 +321,8 @@ contains
        mapping(6, 1:4) = (/5, 6, 7, 8/) ! back cells
 
        fc2 = .false.
-!$omp end critical
     end if
+!$omp end critical
 
     locs(1:twotondimo2) = mapping(direction, 1:twotondimo2)
 

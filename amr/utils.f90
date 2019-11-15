@@ -35,24 +35,27 @@ module utils
   public :: debug_grid, find_grid_containing_max
   public :: constants, cgs
 
+  logical :: fc = .true.
+
 
 contains
   subroutine init_utils()
-    logical, save :: called = .false.
-    if (called) return
+!$omp critical
+    if (fc) then
+       xbound = [real(nx, dp), real(ny, dp), real(nz, dp)]
 
-    called = .true.
-    xbound = [real(nx, dp), real(ny, dp), real(nz, dp)]
+       nx_loc = (icoarse_max - icoarse_min + 1)
+       scale = boxlen/dble(nx_loc)
 
-    nx_loc = (icoarse_max - icoarse_min + 1)
-    scale = boxlen/dble(nx_loc)
+       x_half = scale*xbound/2.0
+       x_box  = scale*xbound
 
-    x_half = scale*xbound/2.0
-    x_box  = scale*xbound
-
-    skip_loc(1) = int(icoarse_min)
-    skip_loc(2) = int(jcoarse_min)
-    skip_loc(3) = int(kcoarse_min)
+       skip_loc(1) = int(icoarse_min)
+       skip_loc(2) = int(jcoarse_min)
+       skip_loc(3) = int(kcoarse_min)
+       fc = .false.
+    end if
+!$omp end critical
   end subroutine init_utils
 
   subroutine distance3d(x1, y1, z1, x2, y2, z2, dx, dy, dz, ignore_periodicity)
@@ -65,7 +68,7 @@ contains
 
     logical :: ignore
 
-    call init_utils()
+    !call init_utils()
 
     dx = x2 - x1
     dy = y2 - y1
@@ -106,7 +109,7 @@ contains
 
     integer :: idim, ipos
 
-    call init_utils()
+    !call init_utils()
 
     do idim = 1, ndim
        do ipos = 1, np
@@ -241,7 +244,7 @@ contains
 
     real(dp) :: xgrid(3)
 
-    call init_utils()
+    !call init_utils()
 
     ind_grid(1:npart) = 0; ind_cell(1:npart) = 0; ind_level(1:npart) = 0
 

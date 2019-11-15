@@ -368,6 +368,7 @@ subroutine refine_fine(ilevel)
   integer,dimension(1:IRandNumSize),save :: ompseed
   integer, dimension(1:ncpu,1:IRandNumSize)::allseed
   real(dp) :: rand
+  integer :: numbf_omp
 !$omp threadprivate(ompseed)
 
   if(ilevel==nlevelmax)return
@@ -407,7 +408,7 @@ subroutine refine_fine(ilevel)
   !------------------------------------
   ncreate=0
 !$omp parallel private(ibound,boundary_region,ncache) &
-!$omp & private(ngrid,ind_grid,iskip,ind_cell,ok,ncreate_tmp,icell,ind_grid_tmp,ind_cell_tmp) reduction(+:ncreate)
+!$omp & private(ngrid,ind_grid,iskip,ind_cell,ok,ncreate_tmp,icell,ind_grid_tmp,ind_cell_tmp,numbf_omp) reduction(+:ncreate)
   do icpu=1,ncpu+nboundary  ! Loop over cpus and boundaries
      if(icpu==myid)then
         ibound=0
@@ -457,8 +458,13 @@ subroutine refine_fine(ilevel)
            end do
            ncreate=ncreate+ncreate_tmp
 
+!$omp atomic capture
+           numbf=numbf-ncreate_tmp
+           numbf_omp=numbf
+!$omp end atomic
+
            ! Check for free memory
-           if(ncreate_tmp>=numbf) then
+           if(numbf_omp<=0) then
               write(*,*)'No more free memory'
               write(*,*)'Increase ngridmax'
 #ifndef WITHOUTMPI
@@ -490,6 +496,7 @@ subroutine refine_fine(ilevel)
 !$omp end do nowait
   end do
 !$omp end parallel
+  used_mem=ngridmax-numbf
   if(verbose)write(*,112)ncreate
   endif
 
@@ -674,8 +681,6 @@ subroutine make_grid_fine(ind_grid,ind_cell,ind,ilevel,nn,ibound,boundary_region
      igrid=headf
      ind_grid_son(i)=igrid
      headf=next(headf)
-     numbf=numbf-1
-     used_mem=ngridmax-numbf
   end do
 !$omp end critical
 
@@ -1143,8 +1148,8 @@ subroutine kill_grid(ind_cell,ilevel,nn,ibound,boundary_region)
      prev(igrid)=tailf
      next(igrid)=0
      tailf=igrid
-     numbf=numbf+1
   end do
+  numbf=numbf+nn
 !$omp end critical
 
 end subroutine kill_grid
