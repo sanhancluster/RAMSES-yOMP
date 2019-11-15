@@ -3,6 +3,9 @@ subroutine read_params
   use pm_parameters
   use poisson_parameters
   use hydro_parameters
+#ifdef _OPENMP
+  use omp_lib
+#endif
 #ifdef DICE
   use dice_commons
 #endif
@@ -21,6 +24,7 @@ subroutine read_params
   real(kind=8)::delta_aout=0,aend=0
   logical::nml_ok, info_ok
   integer,parameter::tag=1134
+  integer::mythr
 #ifndef WITHOUTMPI
   integer::dummy_io,ierr,info2
 #endif
@@ -80,6 +84,12 @@ subroutine read_params
 #ifdef WITHOUTMPI
   ncpu=1
   myid=1
+#endif
+#ifdef _OPENMP
+!$omp parallel private(mythr)
+  mythr=omp_get_thread_num()+1
+  if(mythr==1)nthr=omp_get_num_threads()
+!$omp end parallel
 #endif
   !--------------------------------------------------
   ! Advertise RAMSES
