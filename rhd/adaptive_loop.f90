@@ -23,7 +23,6 @@ subroutine adaptive_loop
   if(pic)call init_part              ! Initialize particle variables
   if(pic)call init_tree              ! Initialize particle tree
   if(nrestart==0)call init_refine_2  ! Build initial AMR grid again
-  call init_utils
 
 #ifndef WITHOUTMPI
   tt2=MPI_WTIME()

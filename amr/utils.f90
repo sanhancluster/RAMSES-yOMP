@@ -68,7 +68,7 @@ contains
 
     logical :: ignore
 
-    !call init_utils()
+    call init_utils()
 
     dx = x2 - x1
     dy = y2 - y1
@@ -109,7 +109,7 @@ contains
 
     integer :: idim, ipos
 
-    !call init_utils()
+    call init_utils()
 
     do idim = 1, ndim
        do ipos = 1, np
@@ -244,7 +244,7 @@ contains
 
     real(dp) :: xgrid(3)
 
-    !call init_utils()
+    call init_utils()
 
     ind_grid(1:npart) = 0; ind_cell(1:npart) = 0; ind_level(1:npart) = 0
 

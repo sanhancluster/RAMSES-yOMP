@@ -1071,7 +1071,7 @@ subroutine cmp_metals(T2,nH,mu,metal_tot,metal_prime,aexp)
   real(kind=8)::c1=0.4,c2=10.0,TT0=1d5,TTC=1d6,alpha1=0.15
   real(kind=8)::ux,g_courty,f_courty,g_courty_prime,f_courty_prime
   integer::iT,iZ
-  f_courty=1d0
+
   ZZ=1d0/aexp-1d0
   TT=T2*mu
   lTT=log10(TT)
