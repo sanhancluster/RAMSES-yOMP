@@ -227,8 +227,8 @@ subroutine star_formation(ilevel)
   ompseed_tracer=MOD(tracer_seed+omp_get_thread_num()+1,4096)
 !$omp end parallel
 #else
-  ompseed=localseed+1
-  ompseed_tracer=tracer_seed+1
+  ompseed=MOD(localseed+1,4096)
+  ompseed_tracer=MOD(tracer_seed+1,4096)
 #endif
   call ranf(localseed,RandNum)
   call ranf(tracer_seed,RandNum)
@@ -259,13 +259,13 @@ subroutine star_formation(ilevel)
   ndebris_tot=0
   ! Loop over grids
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(ngrid,ind_grid) reduction(+:ntot,mstar_tot) schedule(static)
+!$omp parallel do private(ngrid,ind_grid) reduction(+:ntot,mstar_tot,mstar_lost) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
         ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
      end do
-     call starform2(ind_grid,ngrid,ilevel,ntot,mstar_tot,ompseed)
+     call starform2(ind_grid,ngrid,ilevel,ntot,mstar_tot,mstar_lost,ompseed)
   end do
 
   !---------------------------------
@@ -646,7 +646,7 @@ end subroutine starform1
 !################################################################
 !################################################################
 !################################################################
-subroutine starform2(ind_grid,ngrid,ilevel,ntot,mstar_tot_tmp,seed)
+subroutine starform2(ind_grid,ngrid,ilevel,ntot,mstar_tot_tmp,mstar_lost_tmp,seed)
   use amr_commons
   use pm_commons
   use hydro_commons
@@ -662,7 +662,7 @@ subroutine starform2(ind_grid,ngrid,ilevel,ntot,mstar_tot_tmp,seed)
   integer ::ngrid
   integer ::ind,i,iskip
   integer ::ntot,nstar_corrected,ncell
-  real(dp)::d,mstar_tot_tmp
+  real(dp)::d,mstar_tot_tmp,mstar_lost_tmp
   real(dp)::mstar,dstar,tstar,nISM,phi_t,phi_x,theta,sigs,scrit,b_turb,zeta
   real(dp)::T2,nH,T_poly,cs2,cs2_poly,trel,t_dyn,t_ff,tdec
   real(dp)::ul,ur,fl,fr,trgv,alpha0
@@ -1042,7 +1042,7 @@ subroutine starform2(ind_grid,ngrid,ilevel,ntot,mstar_tot_tmp,seed)
            ! Security to prevent more than 90% of gas depletion
            if (mgas > 0.9*mcell) then
               nstar_corrected=int(0.9*mcell/mstar)
-              mstar_lost=mstar_lost+(nstar(i)-nstar_corrected)*mstar
+              mstar_lost_tmp=mstar_lost_tmp+(nstar(i)-nstar_corrected)*mstar
               nstar(i)=nstar_corrected
            endif
            ! Compute new stars local statistics

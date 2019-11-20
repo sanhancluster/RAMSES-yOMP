@@ -202,7 +202,7 @@ subroutine make_sink(ilevel)
     ompseed=MOD(tracer_seed+omp_get_thread_num()+1,4096)
 !$omp end parallel
 #else
-    ompseed=tracer_seed+1
+    ompseed=MOD(tracer_seed+1,4096)
 #endif
     call ranf(tracer_seed,rand)
 
@@ -1790,7 +1790,7 @@ subroutine bondi_hoyle(ilevel)
   ompseed=MOD(localseed+omp_get_thread_num()+1,4096)
 !$omp end parallel
 #else
-    ompseed=localseed+1
+  ompseed=MOD(localseed+1,4096)
 #endif
   call ranf(localseed,rand)
 
@@ -2629,7 +2629,7 @@ subroutine grow_bondi(ilevel)
     ompseed=MOD(tracer_seed+omp_get_thread_num()+1,4096)
 !$omp end parallel
 #else
-    ompseed=tracer_seed+1
+    ompseed=MOD(tracer_seed+1,4096)
 #endif
     call ranf(tracer_seed,rand)
 

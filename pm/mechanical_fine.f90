@@ -78,7 +78,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
     ompseed=MOD(tracer_seed+omp_get_thread_num()+1,4096)
 !$omp end parallel
 #else
-    ompseed=tracer_seed+1
+    ompseed=MOD(tracer_seed+1,4096)
 #endif
     call ranf(tracer_seed,rand)
 
