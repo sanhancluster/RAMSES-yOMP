@@ -1598,31 +1598,34 @@ subroutine create_cloud_from_sink
   rmass=dble(ir_cloud_massive)*dx_min
 
   ! Create cloud
-!$omp parallel do private(xrel,rr,xtest,in_box,ind_cloud,indp,cc,icloud)
-  do isink=1,nsink
-     xtest(1,1:3)=xsink(isink,1:3)
-     in_box=.true.
-     do idim=1,ndim
-        if (period(idim) .and. xtest(1,idim)>boxlen)xtest(1,idim)=xtest(1,idim)-boxlen
-        if (period(idim) .and. xtest(1,idim)<0.)xtest(1,idim)=xtest(1,idim)+boxlen
-        if (xtest(1,idim)<0.0 .or. xtest(1,idim)>boxlen)in_box=.false.
-     end do
-     cc(1)=0
-     if(in_box) call cmp_cpumap(xtest,cc,1)
-     if(cc(1).eq.myid)then
-        call add_list_single(ind_cloud,ind_grid(1),ncloud_sink)
-        icloud=0
-        do kk=-2*ir_cloud,2*ir_cloud
-        do jj=-2*ir_cloud,2*ir_cloud
-        do ii=-2*ir_cloud,2*ir_cloud
-           xrel(1)=dble(ii)*dx_min/2.0
-           xrel(2)=dble(jj)*dx_min/2.0
-           xrel(3)=dble(kk)*dx_min/2.0
-           rr=sqrt(sum(xrel**2))
-           if(rr<=rmax)then
-              xtest(1,1:3)=xsink(isink,1:3)+xrel(1:3)
-              icloud=icloud+1
-              indp=ind_cloud(icloud)
+!$omp parallel do private(xrel,rr,xtest,in_box,ind_cloud,indp,cc,ind_grid_test,ind_cell_test,ind_lvl_test) collapse(3)
+  do kk=-2*ir_cloud,2*ir_cloud
+  do jj=-2*ir_cloud,2*ir_cloud
+  do ii=-2*ir_cloud,2*ir_cloud
+     xrel(1)=dble(ii)*dx_min/2.0
+     xrel(2)=dble(jj)*dx_min/2.0
+     xrel(3)=dble(kk)*dx_min/2.0
+     rr=sqrt(sum(xrel**2))
+     if(rr<=rmax)then
+        do isink=1,nsink
+           xtest(1,1:3)=xsink(isink,1:3)+xrel(1:3)
+           in_box=.true.
+           do idim=1,ndim
+              if (period(idim) .and. xtest(1,idim)>boxlen)xtest(1,idim)=xtest(1,idim)-boxlen
+              if (period(idim) .and. xtest(1,idim)<0.)xtest(1,idim)=xtest(1,idim)+boxlen
+              if (xtest(1,idim)<0.0 .or. xtest(1,idim)>boxlen)in_box=.false.
+           end do
+           cc(1)=0
+           !if(in_box)call cmp_cpumap(xtest,cc,1)
+           write(*,*)xtest
+           if (in_box) then
+              call find_grid_containing(xtest,ind_grid_test,ind_cell_test,ind_lvl_test,1)
+              cc(1) = cpu_map(ind_cell_test(1))
+           end if
+           if(cc(1).eq.myid)then
+              call remove_free(ind_cloud,1)
+              call add_list(ind_cloud,ind_grid,ok_true,1)
+              indp=ind_cloud(1)
               idp(indp)=-isink
               levelp(indp)=nlevelmax_current
               mp(indp)=msink(isink)/dble(ncloud_sink)
@@ -1637,10 +1640,11 @@ subroutine create_cloud_from_sink
               endif
            end if
         end do
-        end do
-        end do
      end if
   end do
+  end do
+  end do
+
 
 #endif
 end subroutine create_cloud_from_sink
