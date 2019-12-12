@@ -1561,12 +1561,14 @@ subroutine create_cloud_from_sink
   real(dp),dimension(1:ndim)::xrel
   real(dp),dimension(1:nvector,1:ndim)::xtest
   integer ,dimension(1:nvector)::ind_grid,cc
-  integer ,dimension(1:ncloud_sink)::ind_cloud
+  integer ,dimension(1:nsink)::ind_cloud
   integer ,dimension(1:nvector)::ind_grid_test,ind_cell_test,ind_lvl_test
   logical ,dimension(1:nvector)::ok_true
   logical,dimension(1:ndim)::period
   logical::in_box
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
+
+  integer ,dimension(1:1)::ind_part
 
   ! Conversion factor from user units to cgs units
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
@@ -1598,7 +1600,7 @@ subroutine create_cloud_from_sink
   rmass=dble(ir_cloud_massive)*dx_min
 
   ! Create cloud
-!$omp parallel do private(xrel,rr,xtest,in_box,ind_cloud,indp,cc,ind_grid_test,ind_cell_test,ind_lvl_test) collapse(3)
+!$omp parallel do private(xrel,rr,xtest,in_box,ind_part,indp,cc,ind_grid_test,ind_cell_test,ind_lvl_test) collapse(3)
   do kk=-2*ir_cloud,2*ir_cloud
   do jj=-2*ir_cloud,2*ir_cloud
   do ii=-2*ir_cloud,2*ir_cloud
@@ -1616,16 +1618,16 @@ subroutine create_cloud_from_sink
               if (xtest(1,idim)<0.0 .or. xtest(1,idim)>boxlen)in_box=.false.
            end do
            cc(1)=0
-           !if(in_box)call cmp_cpumap(xtest,cc,1)
-           write(*,*)xtest
            if (in_box) then
               call find_grid_containing(xtest,ind_grid_test,ind_cell_test,ind_lvl_test,1)
               cc(1) = cpu_map(ind_cell_test(1))
            end if
            if(cc(1).eq.myid)then
-              call remove_free(ind_cloud,1)
-              call add_list(ind_cloud,ind_grid,ok_true,1)
-              indp=ind_cloud(1)
+              call remove_free(ind_part,1)
+!$omp critical
+              call add_list(ind_part,ind_grid,ok_true,1)
+!$omp end critical
+              indp=ind_part(1)
               idp(indp)=-isink
               levelp(indp)=nlevelmax_current
               mp(indp)=msink(isink)/dble(ncloud_sink)

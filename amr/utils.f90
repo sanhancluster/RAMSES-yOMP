@@ -255,10 +255,10 @@ contains
     ! Initialize at level = 1
     xgrid = (xg(igrid, :) - skip_loc) * scale
 
-    if (any(pos(:, :) < 0._dp)) then
+    if (any(pos(1:npart, :) < 0._dp)) then
        print*, 'Got a position < 0'
        stop
-    else if (any(pos(:, :) > boxlen)) then ! assuming x_box == [1, 1, 1]
+    else if (any(pos(1:npart, :) > boxlen)) then ! assuming x_box == [1, 1, 1]
        print*, 'Got a position > 1'
        stop
     end if
