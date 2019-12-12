@@ -1545,6 +1545,7 @@ subroutine create_cloud_from_sink
   use pm_commons
   use hydro_commons
   use mpi_mod
+  use utils, only: find_grid_containing
   implicit none
   !----------------------------------------------------------------------
   ! This routine creates the whole cloud of particles for each sink,
@@ -1561,11 +1562,11 @@ subroutine create_cloud_from_sink
   real(dp),dimension(1:nvector,1:ndim)::xtest
   integer ,dimension(1:nvector)::ind_grid,cc
   integer ,dimension(1:ncloud_sink)::ind_cloud
+  integer ,dimension(1:nvector)::ind_grid_test,ind_cell_test,ind_lvl_test
   logical ,dimension(1:nvector)::ok_true
   logical,dimension(1:ndim)::period
   logical::in_box
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
-  integer::icloud
 
   ! Conversion factor from user units to cgs units
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
@@ -3521,6 +3522,8 @@ subroutine accrete_jeans(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   real(dp), dimension(1:nvector, 1:ndim), save :: xsink_loc
   integer :: ii, itracer
 
+  integer,dimension(1:IRandNumSize) :: seed
+
   if (MC_tracer) then
      if (myid == 1) then
         print*, '__________ WARNING ! __________'
@@ -3739,7 +3742,7 @@ subroutine accrete_jeans(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
 
                     if (ii == nvector) then
                        call tracer2sink(ind_tracer, proba_tracer, &
-                            xsink_loc, ind_sink, ii, dx_loc)
+                            xsink_loc, ind_sink, ii, dx_loc, seed)
                        ii = 0
                     end if
                  end if
@@ -3779,7 +3782,7 @@ subroutine accrete_jeans(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   ! Empty buffer
   if (MC_tracer .and. ii > 0) then
      call tracer2sink(ind_tracer, proba_tracer, &
-          xsink_loc, ind_sink, ii, dx_loc)
+          xsink_loc, ind_sink, ii, dx_loc, seed)
   end if
 
 #endif
