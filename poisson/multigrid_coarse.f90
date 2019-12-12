@@ -397,9 +397,11 @@ subroutine gauss_seidel(ilevel,redstep)
   real(kind=8)::oneoversix,dx,dx2
   integer,dimension(1:3,1:4)::ired,iblack
   integer,dimension(1:3,1:2,1:8)::iii,jjj
-  integer,dimension(1:nvector)::ind_grid
 
-  common /omp_gauss_seidel/ired,iblack,iii,jjj,dx,dx2,oneoversix
+  integer,dimension(1:nvector)::ind_grid,ind_cell
+  integer,dimension(1:nvector,0:twondim)::igridn
+  real(dp),dimension(1:nvector,1:ndim)::phig,phid
+  real(dp),dimension(1:nvector)::residu
 
   ! Set constants
   dx=0.5d0**ilevel
@@ -421,47 +423,14 @@ subroutine gauss_seidel(ilevel,redstep)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static)
+!$omp parallel do private(igrid,ngrid,ind_grid,igridn,ind,id1,ih1,phig,id2,ih2,phid) &
+!$omp & private(iskip,ind_cell,residu)
   do igrid=1,ncache,nvector
      ! Gather nvector grids
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
        ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
      end do
-     call gseidel1(ind_grid,ngrid,ilevel,redstep)
-
-  end do
-  ! Loop over grids
-
-end subroutine gauss_seidel
-!###########################################################
-!###########################################################
-!###########################################################
-!###########################################################
-subroutine gseidel1(ind_grid,ngrid,ilevel,redstep)
-  use amr_commons
-  use pm_commons
-  use poisson_commons
-  implicit none
-  integer::ilevel
-  logical::redstep
-  !------------------------------------------------------------------
-  ! This routine computes one relaxation sweep
-  ! for one Gauss-Seidel iteration.
-  !------------------------------------------------------------------
-  integer::i,ind0,idim,ngrid,ind,iskip
-  integer::id1,id2,ig1,ig2,ih1,ih2
-  real(kind=8)::oneoversix,dx,dx2
-  integer,dimension(1:3,1:4)::ired,iblack
-  integer,dimension(1:3,1:2,1:8)::iii,jjj
-
-  integer,dimension(1:nvector)::ind_grid,ind_cell
-  integer,dimension(1:nvector,0:twondim)::igridn
-  real(dp),dimension(1:nvector,1:ndim)::phig,phid
-  real(dp),dimension(1:nvector)::residu
-
-  common /omp_gauss_seidel/ired,iblack,iii,jjj,dx,dx2,oneoversix
-
 
   ! Gather neighboring grids
   do i=1,ngrid
@@ -519,9 +488,10 @@ subroutine gseidel1(ind_grid,ngrid,ilevel,redstep)
   end do
      ! Loop over cells
 
+  end do
+  ! Loop over grids
 
-
-end subroutine gseidel1
+end subroutine gauss_seidel
 !###########################################################
 !###########################################################
 !###########################################################
@@ -541,9 +511,10 @@ subroutine cmp_residual_mg(ilevel)
   real(kind=8)::oneoversix,dx,dx2
   integer,dimension(1:3,1:2,1:8)::iii,jjj
 
-  integer ,dimension(1:nvector)::ind_grid
-
-  common /omp_cmp_residual_mg/ iii,jjj, dx,dx2,oneoversix
+  integer ,dimension(1:nvector)::ind_grid,ind_cell
+  integer ,dimension(1:nvector,0:twondim)::igridn
+  real(dp),dimension(1:nvector,1:ndim)::phig,phid
+  real(kind=8),dimension(1:nvector)::residu
 
   ! Set constants
   dx=0.5d0**ilevel
@@ -559,7 +530,8 @@ subroutine cmp_residual_mg(ilevel)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static)
+!$omp parallel do private(ngrid,ind_grid,igridn,id1,ih1,phig,id2,ih2,phid) &
+!$omp & private(iskip,ind_cell,residu)
   do igrid=1,ncache,nvector
 
      ! Gather nvector grids
@@ -567,36 +539,6 @@ subroutine cmp_residual_mg(ilevel)
      do i=1,ngrid
         ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
      end do
-     call cmpresmg1(ind_grid,ngrid,ilevel)
-
-  end do
-  ! End loop over grids
-
-end subroutine cmp_residual_mg
-!###########################################################
-!###########################################################
-!###########################################################
-!###########################################################
-subroutine cmpresmg1(ind_grid,ngrid,ilevel)
-  use amr_commons
-  use pm_commons
-  use poisson_commons
-  implicit none
-  integer::ilevel
-  !------------------------------------------------------------------
-  ! This routine computes the residual r = b - A x
-  ! and stores it in f(i,1)
-  !------------------------------------------------------------------
-  integer::i,idim,ngrid,ncache,ind,iskip
-  integer::id1,id2,ig1,ig2,ih1,ih2
-  real(kind=8)::oneoversix,dx,dx2
-  integer,dimension(1:3,1:2,1:8)::iii,jjj
-
-  integer ,dimension(1:nvector)::ind_grid,ind_cell
-  integer ,dimension(1:nvector,0:twondim)::igridn
-  real(dp),dimension(1:nvector,1:ndim)::phig,phid
-  real(kind=8),dimension(1:nvector)::residu
-  common /omp_cmp_residual_mg/ iii,jjj, dx,dx2,oneoversix
 
      ! Gather neighboring grids
      do i=1,ngrid
@@ -645,9 +587,10 @@ subroutine cmpresmg1(ind_grid,ngrid,ilevel)
      end do
      ! End loop over cells
 
+  end do
+  ! End loop over grids
 
-
-end subroutine cmpresmg1
+end subroutine cmp_residual_mg
 !###########################################################
 !###########################################################
 !###########################################################
