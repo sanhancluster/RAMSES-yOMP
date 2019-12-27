@@ -116,7 +116,7 @@ subroutine make_sink(ilevel)
   logical ::ok_free
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_m
   real(dp)::d,x,y,z,u,v,w,e,temp
-  real(dp)::d_jeans,d_thres,dd_sink
+  real(dp)::d_jeans,d_thres,dd_sink,ds_sink
   real(dp)::birth_epoch,rmax_sink2,x_half,y_half,z_half,x_box,y_box,z_box
   real(dp),dimension(1:3)::xbound,skip_loc
   real(dp)::dx,dx_loc,scale,dxx,dyy,dzz,dr_sink,rmax_sink
@@ -165,6 +165,11 @@ subroutine make_sink(ilevel)
 
   ! Density threshold for sink particle creation
   dd_sink=n_sink/scale_nH
+  if(ns_sink>0)then
+      ds_sink=ns_sink/scale_nH
+  else
+      ds_sink=dd_sink
+  end if
   d_star=0d0
   if (star)d_star=n_star/scale_nH
 
@@ -318,7 +323,7 @@ subroutine make_sink(ilevel)
            !d_thres=dd_sink
 
            ! Check if the stellar density is higher than a star/sink formation threshold
-           if(star.and.rho_star(ind_cell(i))<max(d_star, dd_sink))ok(i)=.false.
+           if(star.and.rho_star(ind_cell(i))<max(d_star, ds_sink))ok(i)=.false.
 !!         ! Check if the star ratio is higher than a certain fraction
 !!         if(star.and.star_ratio<star_ratio_floor)ok(i)=.false.
            ! Check if the density is higher than star/sink formation threshold

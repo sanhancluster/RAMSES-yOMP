@@ -102,7 +102,7 @@ subroutine read_hydro_params(nml_ok)
 
   ! Sink-SMBH parameters
   namelist/smbh_params/agn,smbh,sink_AGN,bondi,drag,spin_bh,force_exact_mseed &
-       & ,bhspinmerge,vrel_merge,random_jet,mad_jet,selfgrav,Mseed,n_sink &
+       & ,bhspinmerge,vrel_merge,random_jet,mad_jet,selfgrav,Mseed,n_sink,ns_sink &
        & ,eAGN_K,eAGN_T,X_floor,boost_acc,boost_drag,T2maxAGN,TAGN,mloadAGN &
        & ,f_bondi,ind_rsink,rAGN,r_gal,rmerge,sigmav_max,star_ratio_floor &
        & ,drag_part,DF_ncells,d_boost,no_accretion,fix_smbh_position &

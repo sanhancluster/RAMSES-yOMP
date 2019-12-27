@@ -141,6 +141,7 @@ module amr_parameters
   real(dp)::hexp   =0.0D0     ! Current Hubble parameter
   real(dp)::texp   =0.0D0     ! Current proper time
   real(dp)::n_sink = -1.d0    ! Sink particle density threshold in H/cc
+  real(dp)::ns_sink = -1.d0   ! Sink particle stellar density threshold in H/cc
   real(dp)::rho_sink = -1.D0  ! Sink particle density threshold in g/cc
   real(dp)::d_sink = -1.D0    ! Sink particle density threshold in user units
   real(dp)::m_star =-1.0      ! Star particle mass in units of mass_sph
