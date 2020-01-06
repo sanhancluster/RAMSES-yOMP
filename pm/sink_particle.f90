@@ -3267,7 +3267,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed)
               vrel(3)=vp(ind_part(j),3)-w
               vnorm_rel=max(sqrt( vrel(1)**2 + vrel(2)**2 + vrel(3)**2 ), smallc)
               mach=vnorm_rel/cgas
-              alpha=max((d/d_boost)**boost_drag,1d0)
+              alpha=max((d/(d_boost/scale_nH))**boost_drag,1d0)
               factor=alpha * fudge * d*msink(isink)/cgas**2 / vnorm_rel
               ! TODO: deal with very low mach number
               if(mach.le.0.950d0)factor=factor/mach**2*(0.5d0*log((1d0+mach)/(1d0-mach))-mach)
