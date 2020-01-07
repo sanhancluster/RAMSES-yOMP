@@ -130,7 +130,7 @@ subroutine dump_all
         filename=trim(filedir)//'part_'//trim(nchar)//'.out'
         filename_desc=TRIM(filedir)//'part_file_descriptor.txt'
         call backup_part(filename, filename_desc)
-        if(sink)then
+        if(myid==1.and.sink)then
            filename=trim(filedir)//'sink_'//trim(nchar)//'.out'
            filename_desc=trim(filedir)//'sink_file_descriptor.txt'
            call backup_sink(filename, filename_desc)
