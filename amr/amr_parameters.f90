@@ -102,6 +102,7 @@ module amr_parameters
 
   ! Step parameters
   integer::nrestart=0         ! New run or backup file number
+  integer::nrestart_seek=5000 ! Search for the final snapshot in descending order 
   integer::nrestart_quad=0    ! Restart with double precision Hilbert keys
   real(dp)::trestart=0.0      ! Restart time
   logical::restart_remap=.false. ! Force load balance on restart

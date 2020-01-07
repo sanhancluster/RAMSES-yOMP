@@ -22,9 +22,9 @@ subroutine read_params
   integer(kind=8)::nparttot=0
   real(kind=8)::delta_tout=0,tend=0
   real(kind=8)::delta_aout=0,aend=0
-  logical::nml_ok, info_ok
+  logical::nml_ok, info_ok, restart_file_ok
   integer,parameter::tag=1134
-  integer::mythr
+  integer::mythr, 
 #ifndef WITHOUTMPI
   integer::dummy_io,ierr,info2
 #endif
@@ -33,7 +33,7 @@ subroutine read_params
   ! Namelist definitions
   !--------------------------------------------------
   namelist/run_params/clumpfind,cosmo,pic,sink,sinkprops,lightcone,poisson,hydro,rt,verbose,debug &
-       & ,nrestart,ncontrol,nstepmax,nsubcycle,load_weights,nremap,ordering &
+       & ,nrestart,nrestart_seek,ncontrol,nstepmax,nsubcycle,load_weights,nremap,ordering &
        & ,bisec_tol,static,overload,cost_weighting,aton,nrestart_quad,restart_remap &
        & ,static_dm,static_gas,static_stars,convert_birth_times,use_proper_time,remap_pscalar
   namelist/output_params/output,noutput,foutput,aout,tout &
@@ -226,7 +226,21 @@ subroutine read_params
      CALL GET_COMMAND_ARGUMENT(2,cmdarg)
      read(cmdarg,*) nrestart
   endif
-
+  
+  ! check for the most recent nout and restart from it. 
+  if (myid==1 .and. nrestart == -1) then
+     do while(nrestart == -1)
+     call title(nrestart_seek,nchar)
+     INQUIRE(FILE=, EXIST=restart_file_ok)
+     if (restart_file_ok) then
+         nrestart = nrestart_seek
+     else
+         nrestart_seek -= 1
+     endif
+            
+     enddo
+  endif
+    
   if (myid==1 .and. nrestart .gt. 0) then
      call title(nrestart,nchar)
      info_file='output_'//TRIM(nchar)//'/info_'//TRIM(nchar)//'.txt'
