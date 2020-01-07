@@ -24,8 +24,8 @@ subroutine read_params
   real(kind=8)::delta_aout=0,aend=0
   logical::nml_ok, info_ok, restart_file_ok
   integer,parameter::tag=1134
-  integer::mythr, 
-#ifndef WITHOUTMPI
+  integer::mythr
+#ifndef WITHOUTMPiI
   integer::dummy_io,ierr,info2
 #endif
 
@@ -230,14 +230,13 @@ subroutine read_params
   ! check for the most recent nout and restart from it. 
   if (myid==1 .and. nrestart == -1) then
      do while(nrestart == -1)
-     call title(nrestart_seek,nchar)
-     INQUIRE(FILE=, EXIST=restart_file_ok)
-     if (restart_file_ok) then
-         nrestart = nrestart_seek
-     else
-         nrestart_seek -= 1
-     endif
-            
+        call title(nrestart_seek,nchar)
+        INQUIRE(FILE=, EXIST=restart_file_ok)
+        if (restart_file_ok) then
+           nrestart = nrestart_seek
+        else
+           nrestart_seek = nrestart_seek - 1
+        endif    
      enddo
   endif
     
