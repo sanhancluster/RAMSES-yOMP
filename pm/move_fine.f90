@@ -1192,14 +1192,12 @@ subroutine move_gas_tracer(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed)
   !--------------------------------------------------------------------
   do idim = 1, ndim
      do ipart = 1, np
-!$omp atomic write
         xp(ind_part(ipart), idim) = new_xp(ipart, idim)
      end do
   end do
 
   ! Store the new parent (here a cell) of the particle
   do ipart = 1, np
-!$omp atomic write
      partp(ind_part(ipart)) = new_partp(ipart)
   end do
 
