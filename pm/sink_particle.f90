@@ -4887,6 +4887,7 @@ subroutine AGN_feedback
         xdp(1:nsink)=jsink(1:nsink,idim)
         write(ilun)xdp    ! gas AM
      enddo
+     write(ilun)tsink     (1:nsink) ! Birth time
      write(ilun)dMBHoverdt(1:nsink) ! Bondi accretion rate
      write(ilun)dMEdoverdt(1:nsink) ! Eddington accretion rate
      write(ilun)dMsmbh    (1:nsink) ! Total accreted mass
