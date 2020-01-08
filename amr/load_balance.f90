@@ -457,7 +457,7 @@ subroutine cmp_new_cpu_map
                        write(*,*) ' wrong type for flag1 --> change to integer kind=8: ',wflag
                        stop
                     endif
-                    flag1(ncell_omp)=flag1(ncell_omp)*niter_cost(ilevel)
+                    flag1(ncell_omp)=flag1(ncell_omp)*niter_cost(ilevel)+niter_cost(nlevelmax)*part_univ_cost
 !$omp atomic update
                     npart_sub(isub)=npart_sub(isub)+flag1(ncell_omp)
                     hilbert_key(ncell_omp)=order_max(ncell_loc)
