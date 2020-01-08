@@ -231,7 +231,8 @@ subroutine read_params
   if (myid==1 .and. nrestart == -1) then
      do while(nrestart == -1)
         call title(nrestart_seek,nchar)
-        INQUIRE(FILE=, EXIST=restart_file_ok)
+        info_file='output_'//TRIM(nchar)//'/info_'//TRIM(nchar)//'.txt'
+        INQUIRE(FILE=info_file, EXIST=restart_file_ok)
         if (restart_file_ok) then
            nrestart = nrestart_seek
         else
