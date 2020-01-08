@@ -58,6 +58,12 @@ module amr_parameters
   integer,parameter::nchunk=OMP_NCHUNK
 #endif
 
+  ! Precompute powers of 2 in the right prec for hilbert curve (MT)
+  ! Careful, starts at zero, so that powof2(0) == 1
+  real(qdp),parameter,dimension(0:ndim*32-1) :: powof2 = (/ (2.0_qdp**i, i=0,ndim*32-1) /)
+  ! real(qdp),parameter:: zero_qdp = 0._qdp, one_qdp = 1._qdp
+  !/MT
+
   integer, parameter :: nstride = 65536
 
   ! Run control
