@@ -100,7 +100,7 @@ end subroutine hilbert2d
 !================================================================
 !================================================================
 subroutine hilbert3d(x,y,z,order,bit_length,npoint)
-  use amr_parameters, ONLY: qdp, powerof2
+  use amr_parameters, ONLY: qdp, powof2
   implicit none
 
   integer,  intent(in)                     ::bit_length,npoint
