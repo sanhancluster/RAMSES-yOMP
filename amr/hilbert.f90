@@ -100,7 +100,7 @@ end subroutine hilbert2d
 !================================================================
 !================================================================
 subroutine hilbert3d(x,y,z,order,bit_length,npoint)
-  use amr_parameters, ONLY: qdp
+  use amr_parameters, ONLY: qdp, powerof2
   implicit none
 
   integer,  intent(in)                     ::bit_length,npoint
@@ -180,9 +180,11 @@ subroutine hilbert3d(x,y,z,order,bit_length,npoint)
      do i=0,3*bit_length-1
         b0=0 ; if(i_bit_mask(i))b0=1
 #ifdef QUADHILBERT
-        order(ip)=order(ip)+real(b0,kind=16)*real(2,kind=16)**i
+        !order(ip)=order(ip)+real(b0,kind=16)*real(2,kind=16)**i
+        order(ip)=order(ip)+real(b0,kind=16)*powof2(i)
 #else
-        order(ip)=order(ip)+real(b0,kind=8)*real(2,kind=8)**i
+        !order(ip)=order(ip)+real(b0,kind=8)*real(2,kind=8)**i
+        order(ip)=order(ip)+real(b0,kind=8)*powof2(i)
 #endif
      end do
 
