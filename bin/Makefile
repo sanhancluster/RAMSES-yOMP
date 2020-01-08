@@ -2,13 +2,13 @@
 # If you have problems with this makefile, contact Romain.Teyssier@gmail.com
 #############################################################################
 # Compilation time parameters
-NVECTOR = 32
+NVECTOR = 128
 NDIM = 3
 NPRE = 8
 NENER = 0
 NGROUPS = 0
 NIONS = 0
-METALS = 1
+METALS = 0
 #Extra variables beyond those required by dimensions, or listed above
 NVAR_EXTRA = 0
 SOLVER = hydro
@@ -25,12 +25,12 @@ USE_OLD_MPI_INCLUDE = 0
 EXEC = ramses
 # Activate OpenMP
 OPENMP = 1
-OMP_NCHUNK = 8
+OMP_NCHUNK = 16
 #############################################################################
 # Patches to include (without DICE)
 #PATCH = ../patch/AGNSFSNpatch/AGNspinRT:../patch/AGNSFSNpatch/sfsn
 #PATCH = ../patch/AGNSFSNpatch/sfsn
-PATCH = ../patch/debug
+#PATCH = ../patch/debug
 #############################################################################
 # Compute the right value for NVAR
 NVAR := $(shell echo $$(($(NDIM) + 2 + $(NVAR_EXTRA) + $(NIONS) + $(NENER) + $(REFMASK)+ $(METALS) )) )
@@ -76,7 +76,7 @@ endif
 # --- LONGINT ---------------------------------------------------------------
 ifeq ($(LONGINT),1)
 DEFINES += -DLONGINT
-CEXEC += _longint
+CEXEC += _lint
 endif
 # --- QUADHILBERT -----------------------------------------------------------
 ifeq ($(QUADHILBERT),1)
@@ -117,8 +117,8 @@ PATCH := $(subst $(SPACE),:,$(PATCH))
 #FFLAGS = -cpp $(DEFINES) -DWITHOUTMPI
 
 # --- MPI, gfortran syntax ------------------------------
-F90 = mpif90 -frecord-marker=4 -O3 -ffree-line-length-none -g -fbacktrace $(OMPFLAG)
-FFLAGS = -x f95-cpp-input $(DEFINES)
+#F90 = mpif90 -frecord-marker=4 -O3 -ffree-line-length-none -g -fbacktrace $(OMPFLAG)
+#FFLAGS = -x f95-cpp-input $(DEFINES)
 
 # --- MPI, gfortran DEBUG syntax ------------------------------
 #F90 = mpif90 -frecord-marker=4 -ffree-line-length-none -fbacktrace -g -O0 -fbounds-check -Wuninitialized -Wall $(OMPFLAG)
