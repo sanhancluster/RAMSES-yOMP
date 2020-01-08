@@ -184,7 +184,7 @@ subroutine init_sink
      endif
 
 
-     call title(1,nchar)
+     call title(myid,nchar)
      fileloc=TRIM(fileloc)//TRIM(nchar)
 
      inquire(file=fileloc, exist=ic_sink)
