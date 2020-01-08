@@ -327,6 +327,10 @@ recursive subroutine amr_step(ilevel,icount)
   call newdt_fine(ilevel)
   if(ilevel>levelmin)then
      dtnew(ilevel)=MIN(dtnew(ilevel-1)/real(nsubcycle(ilevel-1)),dtnew(ilevel))
+     if(dtnew(ilevel)<dtstop)then
+         write(*,*) 'dtnew=', dtnew(ilevel), 'stopping...'
+         call clean_stop
+     end if
   end if
 
   ! Set unew equal to uold
