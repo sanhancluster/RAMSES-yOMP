@@ -183,7 +183,7 @@ recursive subroutine amr_step(ilevel,icount)
   ! Put here all stuffs that are done only at coarse time step
   !-----------------------------------------------------------
   if(ilevel==levelmin)then
-                               call timer('feedback','start')
+                               call timer('star - feedback','start')
      if (hydro .and. star .and. eta_sn>0 .and. f_w>0 .and. mechanical_feedback==0) then
      !----------------------------------------------------
      ! Kinetic feedback
@@ -209,7 +209,7 @@ recursive subroutine amr_step(ilevel,icount)
                                call timer('poisson - save phi','start')
      !save old potential for time-extrapolation at level boundaries
      call save_phi_old(ilevel)
-                               call timer('rho','start')
+                               call timer('particles - cic','start')
      call rho_fine(ilevel,icount)
   endif
 
@@ -257,7 +257,7 @@ recursive subroutine amr_step(ilevel,icount)
      call force_fine(ilevel,icount)
 
      ! Mechanical feedback from stars
-                               call timer('feedback','start')
+                               call timer('star - feedback','start')
      if(hydro.and.star.and.eta_sn>0 .and. mechanical_feedback==2) then
         call mechanical_feedback_fine(ilevel,icount)
      endif
@@ -367,7 +367,7 @@ recursive subroutine amr_step(ilevel,icount)
 #if NDIM==3
   ! Thermal feedback from stars (also call if no feedback, for bookkeeping)
   if(hydro .and. star .and. f_w==0.0 .and. mechanical_feedback==0) then
-                               call timer('feedback','start')
+                               call timer('star - feedback','start')
      call thermal_feedback(ilevel)
   endif
 #endif
@@ -481,7 +481,7 @@ recursive subroutine amr_step(ilevel,icount)
   !----------------------------------
   ! Star formation in leaf cells only
   !----------------------------------
-                               call timer('star formation','start')
+                               call timer('star - formation','start')
   if(hydro.and.star.and.(.not.static_gas))call star_formation(ilevel)
 
   ! Compute Bondi-Hoyle accretion parameters
