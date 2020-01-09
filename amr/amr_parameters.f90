@@ -357,7 +357,7 @@ module amr_parameters
 
   !Number of processes sharing one token
   !Only one process can write at a time in an I/O group
-  integer::IOGROUPSIZE=0           ! Main snapshot controlled in OUTPUT_PARAMS
+  integer::IOGROUPSIZE=10          ! Main snapshot
   integer::IOGROUPSIZECONE=0       ! Lightcone
   integer::IOGROUPSIZEREP=0        ! Subfolder size
   logical::withoutmkdir=.false.    !If true mkdir should be done before the run
