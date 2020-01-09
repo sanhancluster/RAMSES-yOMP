@@ -55,7 +55,6 @@ module amr_commons
   real(dp),dimension(1:MAXLEVEL)::rho_max        ! Maximum density at each level
   integer ,dimension(1:MAXLEVEL)::nsubcycle=2    ! Subcycling at each level
   integer ,dimension(1:MAXLEVEL)::load_weights=1 ! Additional weights to cost-based load balancing
-  real(dp)                      ::part_univ_cost=0d0  ! Give this amount of extra cost weights to particle (regardless of level)
 
   ! Pointers for each level linked list
   integer,allocatable,dimension(:,:)::headl
