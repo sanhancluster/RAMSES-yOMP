@@ -34,6 +34,6 @@ To generate cosmological initial conditions, check out the [MUSIC][6] code.
 
 OMP program requires satisfactory amount of stack size.
 ```bash
- $ ulimit -Ss 2048m
+ $ ulimit -Ss unlimited
  $ export OMP_STACKSIZE=2048m
 ```
