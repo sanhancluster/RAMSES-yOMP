@@ -88,6 +88,8 @@ module amr_parameters
   logical::lightcone=.false.  ! Enable lightcone generation
   logical::clumpfind=.false.  ! Enable clump finder
   logical::aton=.false.       ! Enable ATON coarse grid radiation transfer
+  logical::exact_timer=.false.! Measure exact timer for each routine using barriers
+  real(dp)::part_univ_cost=0d0  ! Give this amount of extra cost weights to particle (regardless of level)
 
   ! Mesh parameters
   integer::nx=1,ny=1,nz=1     ! Number of coarse cells in each dimension

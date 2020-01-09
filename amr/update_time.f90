@@ -59,14 +59,20 @@ end module
 !=======================================================================
 subroutine timer (label, cmd)
   use timer_m
+  use amr_parameters,only:exact_timer
+  use mpi_mod
   implicit none
   character(len=*)::label,cmd
   real(kind=8)::wallclock,current
+#ifndef WITHOUTMPI
+  integer::mpi_err
+#endif
 !-----------------------------------------------------------------------
   current = wallclock()                                                 ! current time
   if (itimer > 0) then                                                  ! if timer is active ..
      time(itimer) = time(itimer) + current - start(itimer)              ! add to it
   end if
+  if(exact_timer)     call MPI_BARRIER(MPI_COMM_WORLD,mpi_err)
   call findit (label)                                                   ! locate timer slot
   if (cmd == 'start') then                                              ! start command
      start(itimer) = current                                            ! register start time
