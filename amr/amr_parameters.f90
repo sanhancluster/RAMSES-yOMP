@@ -118,7 +118,7 @@ module amr_parameters
   integer::ncontrol=1         ! Write control variables
   integer::nremap=0           ! Load balancing frequency (0: never)
   integer,allocatable,dimension(:)::remap_pscalar
-  integer::dtstop=0          ! Halt the simulation when dt is smaller than this value
+  real(dp)::dtstop=0          ! Halt the simulation when dt is smaller than this value
 
   ! Output parameters
   logical::output=.true.      ! Write output files
@@ -359,7 +359,7 @@ module amr_parameters
 
   !Number of processes sharing one token
   !Only one process can write at a time in an I/O group
-  integer::IOGROUPSIZE=10          ! Main snapshot
+  integer::IOGROUPSIZE=0          ! Main snapshot
   integer::IOGROUPSIZECONE=0       ! Lightcone
   integer::IOGROUPSIZEREP=0        ! Subfolder size
   logical::withoutmkdir=.false.    !If true mkdir should be done before the run
