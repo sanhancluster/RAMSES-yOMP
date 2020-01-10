@@ -13,6 +13,7 @@ subroutine adaptive_loop
 #ifndef WITHOUTMPI
   integer(kind=8)::n_step
   integer::info,tot_pt
+  integer::i,ncell
   real(kind=8)::tt1,tt2,muspt,muspt_this_step,wallsec,dumpsec
   real(kind=4)::real_mem,real_mem_tot
   real(kind=8),save::tstart=0.0
@@ -155,7 +156,11 @@ subroutine adaptive_loop
      ! MC Tracer !
      ! Reset fluxes
      if(MC_tracer) then
-        fluxes(:, :) = 0_dp
+        ncell=ncoarse+twotondim*ngridmax
+!$omp parallel do
+        do i=1,ncell
+           fluxes(i, :) = 0_dp
+        end do
      end if
 
      ! ========= !
