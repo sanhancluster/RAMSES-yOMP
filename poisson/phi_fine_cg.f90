@@ -100,7 +100,7 @@ subroutine phi_fine_cg(ilevel,icount)
      ! Compute residual norm
      !====================================
      r2=0.0d0
-!$omp parallel private(iskip,idx) reduction(+:r2)
+!$omp parallel private(iskip,idx) reduction(+:r2) num_threads(nthr_cg)
       do ind=1,twotondim
 		  iskip=ncoarse+(ind-1)*ngridmax
 !$omp do
@@ -131,7 +131,7 @@ subroutine phi_fine_cg(ilevel,icount)
 	  !====================================
 	  ! Recurrence on p
 	  !====================================
-!$omp parallel private(iskip,idx)
+!$omp parallel private(iskip,idx) num_threads(nthr_cg)
 	  do ind=1,twotondim
 		  iskip=ncoarse+(ind-1)*ngridmax
 !$omp do
@@ -154,7 +154,7 @@ subroutine phi_fine_cg(ilevel,icount)
 	  ! Compute p.Ap scalar product
 	  !====================================
 	  pAp=0.0d0
-!$omp parallel private(iskip,idx) reduction(+:pAp)
+!$omp parallel private(iskip,idx) reduction(+:pAp) num_threads(nthr_cg)
 	  do ind=1,twotondim
 		  iskip=ncoarse+(ind-1)*ngridmax
 !$omp do
@@ -180,7 +180,7 @@ subroutine phi_fine_cg(ilevel,icount)
 	  !====================================
 	  ! Recurrence on x and r
 	  !====================================
-!$omp parallel private(iskip,idx)
+!$omp parallel private(iskip,idx) num_threads(nthr_cg)
 	  do ind=1,twotondim
 		  iskip=ncoarse+(ind-1)*ngridmax
 !$omp do

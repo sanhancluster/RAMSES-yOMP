@@ -37,6 +37,7 @@ module amr_commons
   integer::ncpu,ndomain,myid,overload=1
 #ifdef _OPENMP
   integer::nthr=1  ! OpenMP number of threads
+  integer::nthr_cg=MIN(nthr, 8)  ! OpenMP number of threads for poisson-cg routines
 #endif
   ! Friedman model variables
   integer::n_frw
