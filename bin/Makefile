@@ -187,6 +187,9 @@ ifeq ($(RT),1)
 MODOBJ += rt_parameters.o rt_hydro_commons.o coolrates_module.o \
          rt_spectra.o rt_cooling_module.o rt_flux_module.o
 endif
+ifeq ($(OPENMP),1)
+MODOBJ += omp_utils.o
+endif
 ifeq ($(DICE),1)
 AMROBJ = dice_commons.o
 else
