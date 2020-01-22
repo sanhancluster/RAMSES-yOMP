@@ -691,6 +691,8 @@ subroutine virtual_tree_fine(ilevel)
   integer :: ipart2, jpart2
   real(dp) :: dx, d2min, d2, x1(1:ndim), x2(1:ndim)
 
+  ! OMP
+  integer :: ithr,ngrid_now
   integer,dimension(1:nthr) :: icpu_thr,igrid_thr,ngrid_thr,ipcom_thr
 
   dx=0.5D0**ilevel
