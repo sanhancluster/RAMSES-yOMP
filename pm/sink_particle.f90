@@ -2817,6 +2817,7 @@ subroutine grow_bondi(ilevel)
   ! End loop over cpus
 !$omp end parallel
 
+  if(exact_timer) call timer('mpi','start')
   if(nsink>0)then
 #ifndef WITHOUTMPI
      call MPI_ALLREDUCE(msink_new,msink_all,nsinkmax     ,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,info)
@@ -2840,6 +2841,7 @@ subroutine grow_bondi(ilevel)
 #endif
 #endif
   endif
+  if(exact_timer) call timer('sinks - grow','start')
 
 !$omp parallel do
   do isink=1,nsink
