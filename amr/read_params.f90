@@ -35,7 +35,7 @@ subroutine read_params
   namelist/run_params/clumpfind,cosmo,pic,sink,sinkprops,lightcone,poisson,hydro,rt,verbose,debug &
        & ,nrestart,nrestart_seek,ncontrol,nstepmax,nsubcycle,load_weights,part_univ_cost,exact_timer,nremap,ordering &
        & ,bisec_tol,static,overload,cost_weighting,aton,nrestart_quad,restart_remap &
-       & ,static_dm,static_gas,static_stars,convert_birth_times,use_proper_time,remap_pscalar,dtstop
+       & ,static_dm,static_gas,static_stars,convert_birth_times,use_proper_time,remap_pscalar,dtstop,nthr_cg
   namelist/output_params/output,noutput,foutput,aout,tout &
        & ,tend,delta_tout,aend,delta_aout,gadget_output,walltime_hrs,minutes_dump &
        & ,dump_stop,foutput_timer,wallstep
