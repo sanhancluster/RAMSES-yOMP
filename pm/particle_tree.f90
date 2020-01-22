@@ -691,6 +691,10 @@ subroutine virtual_tree_fine(ilevel)
   integer :: ipart2, jpart2
   real(dp) :: dx, d2min, d2, x1(1:ndim), x2(1:ndim)
 
+  ! OMP
+  integer :: ithr,ngrid_now
+  integer,dimension(1:nthr) :: icpu_thr,igrid_thr,ngrid_thr,ipcom_thr
+
   dx=0.5D0**ilevel
 
   if(numbtot(1,ilevel)==0)return
@@ -748,42 +752,42 @@ subroutine virtual_tree_fine(ilevel)
      end if
   end do
 
-  if (MC_tracer) then
-     ! Use itmpp to store the index within communicator
-     ! Note: itmpp is also used in `sink_particle_tracer` for
-     ! `gas_tracers`, so there is no interference here.
-!$omp parallel do private(ipcom,igrid,npart1,ipart)
-     do icpu=1,ncpu
-        if(reception(icpu,ilevel)%npart>0)then
-           ! Gather particles by vector sweeps
-           ipcom=0
-           ! OMPNOTE: This loop should be serial
-           do jgrid=1,reception(icpu,ilevel)%ngrid
-              igrid =reception(icpu,ilevel)%igrid(jgrid)
-              npart1=numbp(igrid)
-              ipart =headp(igrid)
-              ! Store index within communicator for stars
-              do jpart = 1, npart1
-                 ipcom = ipcom+1
-                 if (is_star(typep(ipart))) then
-                    itmpp(ipart) = ipcom
-                 end if
-                 ipart = nextp(ipart)
-              end do
-           end do
-        end if
-     end do
-  end if
-
-  ! Gather particle in communication buffer
-!$omp parallel do private(ip,ipcom,ind_com,ind_part,ind_list,npart1,ipart,next_part)
+  call cpu_parallel_reception_part(ilevel,icpu_thr,igrid_thr,ngrid_thr,ipcom_thr)
   ! OMPNOTE: ipcom should be serialized with grid linked list!
-  do icpu=1,ncpu
-     if(reception(icpu,ilevel)%npart>0)then
-     ! Gather particles by vector sweeps
+!$omp parallel do private(ithr,icpu,igrid,ncache,ngrid_now) &
+!$omp & private(npart1,ipart,jpart,next_part,ip,ipcom,ind_com,ind_part,ind_list)
+  do ithr=1,nthr
+     if(ngrid_thr(ithr)==0)cycle
+     icpu=icpu_thr(ithr)
+     igrid=igrid_thr(ithr)
+     ipcom=ipcom_thr(ithr)
+     ! Init loop
      ip=0
-     ipcom=0
-     do igrid=1,reception(icpu,ilevel)%ngrid
+     ! End init loop
+
+     ngrid_now=0
+     ncache=reception(icpu,ilevel)%ngrid
+     ! Loop over grids,cpus by vector sweeps
+     do
+        if(ngrid_now>=ngrid_thr(ithr))exit
+        if(igrid>ncache)then
+           ! Clear cpu cache
+           if(ip>0)call fill_comm(ind_part,ind_com,ind_list,ip,ilevel,icpu)
+           ip=0
+           ! End clear cpu cache
+           icpu=icpu+1
+           ncache=reception(icpu,ilevel)%ngrid
+           do while(reception(icpu,ilevel)%npart==0 .and. icpu<ncpu)
+              ngrid_now=ngrid_now+ncache
+              icpu=icpu+1
+              ncache=reception(icpu,ilevel)%ngrid
+           end do
+           ipcom=0
+           igrid=1
+           cycle
+        end if
+
+        ! Do something with igrid
         npart1=numbp(reception(icpu,ilevel)%igrid(igrid))
         ipart =headp(reception(icpu,ilevel)%igrid(igrid))
         ! Loop over particles
@@ -792,6 +796,14 @@ subroutine virtual_tree_fine(ilevel)
            next_part=nextp(ipart)
            ip=ip+1
            ipcom=ipcom+1
+
+           ! Use itmpp to store the index within communicator
+           ! Note: itmpp is also used in `sink_particle_tracer` for
+           ! `gas_tracers`, so there is no interference here.
+           if (MC_tracer .and. is_star(typep(ipart))) then
+               itmpp(ipart) = ipcom
+           end if
+
            ind_com (ip)=ipcom
            ind_part(ip)=ipart
            ind_list(ip)=reception(icpu,ilevel)%igrid(igrid)
@@ -802,10 +814,18 @@ subroutine virtual_tree_fine(ilevel)
            end if
            ipart=next_part  ! Go to next particle
         end do
+        ! End igrid usage
+
+        ngrid_now=ngrid_now+1
+        igrid=igrid+1
      end do
+     ! End loop over grids,cpus
+
+     ! Clear cache
      if(ip>0)call fill_comm(ind_part,ind_com,ind_list,ip,ilevel,icpu)
-     end if
+     ! End clear cache
   end do
+  ! End loop over threads
 
   ! Communicate virtual particle number to parent cpu
   ! Main bottleneck
