@@ -750,33 +750,6 @@ subroutine virtual_tree_fine(ilevel)
      end if
   end do
 
-  if (MC_tracer) then
-     ! Use itmpp to store the index within communicator
-     ! Note: itmpp is also used in `sink_particle_tracer` for
-     ! `gas_tracers`, so there is no interference here.
-!$omp parallel do private(ipcom,igrid,npart1,ipart)
-     do icpu=1,ncpu
-        if(reception(icpu,ilevel)%npart>0)then
-           ! Gather particles by vector sweeps
-           ipcom=0
-           ! OMPNOTE: This loop should be serial
-           do jgrid=1,reception(icpu,ilevel)%ngrid
-              igrid =reception(icpu,ilevel)%igrid(jgrid)
-              npart1=numbp(igrid)
-              ipart =headp(igrid)
-              ! Store index within communicator for stars
-              do jpart = 1, npart1
-                 ipcom = ipcom+1
-                 if (is_star(typep(ipart))) then
-                    itmpp(ipart) = ipcom
-                 end if
-                 ipart = nextp(ipart)
-              end do
-           end do
-        end if
-     end do
-  end if
-
   call cpu_parallel_reception_part(ilevel,icpu_thr,igrid_thr,ngrid_thr,ipcom_thr)
   ! OMPNOTE: ipcom should be serialized with grid linked list!
 !$omp parallel do private(ithr,icpu,igrid,ncache,ngrid_now) &
@@ -821,6 +794,14 @@ subroutine virtual_tree_fine(ilevel)
            next_part=nextp(ipart)
            ip=ip+1
            ipcom=ipcom+1
+
+           ! Use itmpp to store the index within communicator
+           ! Note: itmpp is also used in `sink_particle_tracer` for
+           ! `gas_tracers`, so there is no interference here.
+           if (MC_tracer .and. is_star(typep(ipart))) then
+               itmpp(ipart) = ipcom
+           end if
+
            ind_com (ip)=ipcom
            ind_part(ip)=ipart
            ind_list(ip)=reception(icpu,ilevel)%igrid(igrid)
