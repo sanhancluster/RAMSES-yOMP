@@ -72,7 +72,10 @@ subroutine timer (label, cmd)
   if (itimer > 0) then                                                  ! if timer is active ..
      time(itimer) = time(itimer) + current - start(itimer)              ! add to it
   end if
-  if(exact_timer)     call MPI_BARRIER(MPI_COMM_WORLD,mpi_err)
+  if(exact_timer) then
+      call MPI_BARRIER(MPI_COMM_WORLD,mpi_err)
+      current = wallclock()                                             ! current time
+  end if
   call findit (label)                                                   ! locate timer slot
   if (cmd == 'start') then                                              ! start command
      start(itimer) = current                                            ! register start time
