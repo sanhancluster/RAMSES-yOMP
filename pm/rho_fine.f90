@@ -581,12 +581,12 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
   integer ,dimension(1:nvector,1:threetondim)::nbors_father_cells
   integer ,dimension(1:nvector,1:twotondim)::nbors_father_grids
   ! Particle-based arrays
-  logical ,dimension(1:nvector)::ok
+  logical ,dimension(1:nvector,1:twotondim)::ok,ok2
   real(dp),dimension(1:nvector)::mmm
   real(dp),dimension(1:ndim+1)::multipole_tmp
   ! Save type
   type(part_t),dimension(1:nvector)::fam
-  real(dp),dimension(1:nvector)::vol2
+  real(dp),dimension(1:nvector,1:twotondim)::vol2,vol3
   real(dp),dimension(1:nvector,1:ndim)::x,dd,dg
   integer ,dimension(1:nvector,1:ndim)::ig,id,igg,igd,icg,icd
   real(dp),dimension(1:nvector,1:twotondim)::vol
@@ -792,64 +792,37 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
   do ind=1,twotondim
 
      do j=1,np
-        ok(j)=(igrid(j,ind)>0).and.is_not_tracer(fam(j))
+        ok(j,ind)=(igrid(j,ind)>0).and.is_not_tracer(fam(j))
 #ifdef DICE
-        if(dice_init) ok(j)=ok(j).and.(idp(ind_part(j)).ne.1)
+        if(dice_init) ok(j,ind)=ok(j,ind).and.(idp(ind_part(j)).ne.1)
 #endif
      end do
 
      if (.not. point_mass_sink) then
         do j=1,np
-            vol2(j)=mmm(j)*vol(j,ind)/vol_loc
+            vol2(j,ind)=mmm(j)*vol(j,ind)/vol_loc
         end do
      else
         do j=1,np
-            vol2(j)=mmm(j)*vol(j,ind)/vol_loc
+            vol2(j,ind)=mmm(j)*vol(j,ind)/vol_loc
             if (is_cloud(fam(j))) then
                 if (is_central_cloud(fam(j))) then
-                    vol2(j)=vol(j,ind)/vol_loc*msink(-idp(ind_part(j)))
+                    vol2(j,ind)=vol(j,ind)/vol_loc*msink(-idp(ind_part(j)))
                 else
-                    vol2(j)=0
+                    vol2(j,ind)=0
                 end if
             end if
         end do
      end if
 
-     if(cic_levelmax==0.or.ilevel<=cic_levelmax)then
-        do j=1,np
-           if(ok(j))then
-!$omp atomic update
-              rho(indp(j,ind))=rho(indp(j,ind))+vol2(j)
-           end if
-        end do
-     else if(ilevel>cic_levelmax)then
-        do j=1,np
-           ! check for non-DM (and non-tracer)
-           if ( ok(j) .and. is_not_DM(fam(j)) ) then
-!$omp atomic update
-              rho(indp(j,ind))=rho(indp(j,ind))+vol2(j)
-           end if
-        end do
-     endif
-
-     if(ilevel==cic_levelmax)then
-        do j=1,np
-           ! check for DM
-           if ( ok(j) .and. is_DM(fam(j)) ) then
-!$omp atomic update
-              rho_top(indp(j,ind))=rho_top(indp(j,ind))+vol2(j)
-           end if
-        end do
-     endif
-
      do j=1,np
-        vol2(j)=vol(j,ind)
+        vol3(j,ind)=vol(j,ind)
      end do
 
      ! Remove test particles for static runs
      if(static)then
         do j=1,np
-           ok(j)=ok(j).and.mmm(j)>0.0
+           ok2(j,ind)=ok(j,ind).and.mmm(j)>0.0
         end do
      endif
 
@@ -857,7 +830,7 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
      if(mass_cut_refine>0.0)then
         do j=1,np
            if ( is_DM(fam(j)) ) then
-              ok(j)=ok(j) .and. mmm(j) < mass_cut_refine
+              ok2(j,ind)=ok2(j,ind) .and. mmm(j) < mass_cut_refine
            endif
         end do
      endif
@@ -866,23 +839,52 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
      if(star)then
         do j=1,np
            if ( is_not_DM(fam(j)) ) then
-              vol2(j) = vol2(j)*mmm(j)/mass_sph
+              vol3(j,ind) = vol3(j,ind)*mmm(j)/mass_sph
            endif
+        end do
+     endif
+  end do
+
+  do ind=1,twotondim
+     if(cic_levelmax==0.or.ilevel<=cic_levelmax)then
+        do j=1,np
+           if(ok(j,ind))then
+!$omp atomic update
+              rho(indp(j,ind))=rho(indp(j,ind))+vol2(j,ind)
+           end if
+        end do
+     else if(ilevel>cic_levelmax)then
+        do j=1,np
+           ! check for non-DM (and non-tracer)
+           if ( ok(j,ind) .and. is_not_DM(fam(j)) ) then
+!$omp atomic update
+              rho(indp(j,ind))=rho(indp(j,ind))+vol2(j,ind)
+           end if
+        end do
+     endif
+
+     if(ilevel==cic_levelmax)then
+        do j=1,np
+           ! check for DM
+           if ( ok(j,ind) .and. is_DM(fam(j)) ) then
+!$omp atomic update
+              rho_top(indp(j,ind))=rho_top(indp(j,ind))+vol2(j,ind)
+           end if
         end do
      endif
 
      if(cic_levelmax==0.or.ilevel<cic_levelmax)then
         do j=1,np
-           if(ok(j))then
+           if(ok2(j,ind))then
 !$omp atomic update
-              phi(indp(j,ind))=phi(indp(j,ind))+vol2(j)
+              phi(indp(j,ind))=phi(indp(j,ind))+vol3(j,ind)
            end if
         end do
      else if(ilevel>=cic_levelmax)then
         do j=1,np
-           if ( ok(j) .and. is_not_DM(fam(j)) ) then
+           if ( ok2(j,ind) .and. is_not_DM(fam(j)) ) then
 !$omp atomic update
-              phi(indp(j,ind))=phi(indp(j,ind))+vol2(j)
+              phi(indp(j,ind))=phi(indp(j,ind))+vol3(j,ind)
            end if
         end do
      endif
