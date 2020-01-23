@@ -90,7 +90,11 @@ subroutine read_params
   mythr=omp_get_thread_num()+1
   if(mythr==1) then
      nthr=omp_get_num_threads()
-     nthr_cg = MIN(nthr,nthr_cg)
+     if(nthr_cg<0) then
+        nthr_cg=nthr
+     else
+        nthr_cg = MIN(nthr,nthr_cg)
+     end if
   end if
 !$omp end parallel
 #endif
