@@ -88,8 +88,10 @@ subroutine read_params
 #ifdef _OPENMP
 !$omp parallel private(mythr)
   mythr=omp_get_thread_num()+1
-  if(mythr==1)nthr=omp_get_num_threads()
-  nthr_cg = MIN(nthr, nthr_cg)
+  if(mythr==1) then
+     nthr=omp_get_num_threads()
+     nthr_cg = MIN(nthr,nthr_cg)
+  end if
 !$omp end parallel
 #endif
   !--------------------------------------------------
@@ -108,18 +110,15 @@ subroutine read_params
   write(*,*)'               (c) CEA 1999-2007, UZH 2008-2014                '
   write(*,*)' '
 #ifdef _OPENMP
-  write(*,'(" Working with nproc = ",I4," and nthread = ",I3," for ndim = ",I1)')ncpu,nthr,ndim
+  write(*,'(" Working with nproc = ",I4," and nthr = ",I3," for ndim = ",I1)')ncpu,nthr,ndim
+  write(*,'(" With nvector = ",I3," and nchunk = ",I3," and nthr_cg = ",I3)')nvector,nchunk,nthr_cg
 #else
   write(*,'(" Working with nproc = ",I4," for ndim = ",I1)')ncpu,ndim
-#endif
-  ! Check nvar is not too small
-#ifdef OMP_NCHUNK
-  write(*,'(" With nvector = ",I3," and nchunk = ",I3)')nvector,nchunk
-#else
   write(*,'(" With nvector = ",I3)')nvector
 #endif
 #ifdef SOLVERhydro
   write(*,'(" Using solver = hydro with nvar = ",I2)')nvar
+  ! Check nvar is not too small
   if(nvar<ndim+2)then
      write(*,*)'You should have: nvar>=ndim+2'
      write(*,'(" Please recompile with -DNVAR=",I2)')ndim+2
