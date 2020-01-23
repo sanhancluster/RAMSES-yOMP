@@ -442,7 +442,7 @@ subroutine cmp_new_cpu_map
                     isub=(dom(ncell_loc)-1)/ncpu+1
 !$omp atomic update
                     ncell_sub(isub)=ncell_sub(isub)+1
-                    flag1(ncell_omp)=8*10 ! Magic number, relative cost between particle and cells
+                    flag1(ncell_omp)=magic_number ! Magic number, relative cost between particle and cells
                     if(pic)then
                        ! Add more load for tracer particles
                        if (tracer .and. ilevel >= tracer_first_balance_levelmin) then

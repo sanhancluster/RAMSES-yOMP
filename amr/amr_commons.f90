@@ -56,6 +56,7 @@ module amr_commons
   real(dp),dimension(1:MAXLEVEL)::rho_max        ! Maximum density at each level
   integer ,dimension(1:MAXLEVEL)::nsubcycle=2    ! Subcycling at each level
   integer ,dimension(1:MAXLEVEL)::load_weights=1 ! Additional weights to cost-based load balancing
+  integer                       ::magic_number=8*10 ! Magic number, relative cost between particle and cells
 
   ! Pointers for each level linked list
   integer,allocatable,dimension(:,:)::headl
