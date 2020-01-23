@@ -25,11 +25,11 @@ subroutine synchro_fine(ilevel)
   endif
 
   ! Synchronize velocity using CIC
-!$omp parallel private(ig,ip,ind_grid,ind_part,ind_grid_part)
+!$omp parallel private(ig,ip,ind_grid,ind_part,ind_grid_part,igrid,npart1,ipart,local_counter)
   ig=0
   ip=0
   ! Loop over grids
-!$omp do private(igrid,npart1,ipart,local_counter) schedule(static)
+!$omp do schedule(dynamic,nchunk)
   do jgrid=1,numbl(myid,ilevel)
      igrid=active(ilevel)%igrid(jgrid)
      npart1=numbp(igrid)  ! Number of particles in the grid
