@@ -575,7 +575,7 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
   ! are updated by the input particle list.
   !------------------------------------------------------------------
   logical::error
-  integer::j,ind,idim,nx_loc
+  integer::j,ind,idim,nx_loc,ic
   real(dp)::dx,dx_loc,scale,vol_loc
   ! Grid-based arrays
   integer ,dimension(1:nvector,1:threetondim)::nbors_father_cells
@@ -592,7 +592,8 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
   real(dp),dimension(1:nvector,1:twotondim)::vol
   integer ,dimension(1:nvector,1:twotondim)::igrid,icell,indp,kg
   real(dp),dimension(1:3)::skip_loc
-
+  integer ,dimension(1:nvector*twotondim)::indp_add
+  real(dp),dimension(1:nvector*twotondim)::vol2_add,vol2_top_add,vol3_add
 
   ! Mesh spacing in that level
   dx=0.5D0**ilevel
@@ -845,53 +846,48 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
      endif
   end do
 
+  ic=0; indp_add=0
+  vol2_add=0d0; vol2_top_add=0d0; vol3_add=0d0
   do ind=1,twotondim
-     if(cic_levelmax==0.or.ilevel<=cic_levelmax)then
-        do j=1,np
-           if(ok(j,ind))then
-!$omp atomic update
-              rho(indp(j,ind))=rho(indp(j,ind))+vol2(j,ind)
+     do j=1,np
+        if(ic==0 .or. indp_add(ic)/=indp(j,ind)) then
+           ! If current indp is new, add another.
+           ic=ic+1
+           indp_add(ic)=indp(j,ind)
+        end if
+        if(ok(j,ind)) then
+           if(cic_levelmax==0 .or. is_not_DM(fam(j)) .or. ilevel<=cic_levelmax)then
+              vol2_add(ic)=vol2_add(ic)+vol2(j,ind)
            end if
-        end do
-     else if(ilevel>cic_levelmax)then
-        do j=1,np
-           ! check for non-DM (and non-tracer)
-           if ( ok(j,ind) .and. is_not_DM(fam(j)) ) then
-!$omp atomic update
-              rho(indp(j,ind))=rho(indp(j,ind))+vol2(j,ind)
+           if(ilevel==cic_levelmax .and. is_DM(fam(j))) then
+              vol2_top_add(ic)=vol2_top_add(ic)+vol2(j,ind)
            end if
-        end do
-     endif
+        end if
+        if(ok2(j,ind)) then
+           if(cic_levelmax==0 .or. is_not_DM(fam(j)) .or. ilevel<=cic_levelmax)then
+              vol3_add(ic)=vol3_add(ic)+vol3(j,ind)
+           end if
+        end if
+     end do
+  end do
 
-     if(ilevel==cic_levelmax)then
-        do j=1,np
-           ! check for DM
-           if ( ok(j,ind) .and. is_DM(fam(j)) ) then
+  do j=1,ic
 !$omp atomic update
-              rho_top(indp(j,ind))=rho_top(indp(j,ind))+vol2(j,ind)
-           end if
-        end do
-     endif
+     rho(indp_add(j))=rho(indp_add(j))+vol2_add(j)
+  end do
+  do j=1,ic
+!$omp atomic update
+     rho_top(indp_add(j))=rho_top(indp_add(j))+vol2_top_add(j)
+  end do
+  do j=1,ic
+!$omp atomic update
+     phi(indp_add(j))=phi(indp_add(j))+vol3_add(j)
+  end do
 
-     if(cic_levelmax==0.or.ilevel<cic_levelmax)then
-        do j=1,np
-           if(ok2(j,ind))then
-!$omp atomic update
-              phi(indp(j,ind))=phi(indp(j,ind))+vol3(j,ind)
-           end if
-        end do
-     else if(ilevel>=cic_levelmax)then
-        do j=1,np
-           if ( ok2(j,ind) .and. is_not_DM(fam(j)) ) then
-!$omp atomic update
-              phi(indp(j,ind))=phi(indp(j,ind))+vol3(j,ind)
-           end if
-        end do
-     endif
-
-     ! Always refine sinks to the maximum level
-     ! by setting particle number density above m_refine(ilevel)
-     if(sink_refine)then
+  ! Always refine sinks to the maximum level
+  ! by setting particle number density above m_refine(ilevel)
+  if(sink_refine)then
+     do ind=1,twotondim
         do j=1,np
            if ( is_cloud(fam(j)) ) then
               ! if (direct_force_sink(-1*idp(ind_part(j))))then
@@ -900,8 +896,8 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
               ! endif
            end if
         end do
-     end if
-  end do
+     end do
+  end if
 
 end subroutine cic_amr
 !###########################################################
