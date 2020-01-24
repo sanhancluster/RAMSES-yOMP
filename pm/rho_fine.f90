@@ -862,7 +862,9 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
            end if
         end do
      endif
+  end do
 
+  do ind=1,twotondim
      if(ilevel==cic_levelmax)then
         do j=1,np
            ! check for DM
@@ -872,7 +874,9 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
            end if
         end do
      endif
+  end do
 
+  do ind=1,twotondim
      if(cic_levelmax==0.or.ilevel<cic_levelmax)then
         do j=1,np
            if(ok2(j,ind))then
@@ -888,7 +892,9 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
            end if
         end do
      endif
+  end do
 
+  do ind=1,twotondim
      ! Always refine sinks to the maximum level
      ! by setting particle number density above m_refine(ilevel)
      if(sink_refine)then
