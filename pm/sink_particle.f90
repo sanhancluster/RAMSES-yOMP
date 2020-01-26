@@ -2793,7 +2793,7 @@ subroutine grow_bondi(ilevel)
               ! Select only sink particles
               !if(idp(ipart).lt.0 .and. tp(ipart).eq.0.d0)then
               if (is_cloud(typep(ipart))) then
-                 ! Force only one isink to pass accrete_bondi (Huge performance gain)
+                 ! Force only one isink to pass accrete_bondi (Huge performance gain!)
                  if(ip==nvector.or.isink/=-idp(ipart))then
                     if(isink/=0) then
                        call accrete_bondi(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,ompseed,isink)
@@ -2924,6 +2924,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
   ! Temporal arrays
   real(dp)::dMBH_coarse_add,dMEd_coarse_add,dMsmbh_add,msink_add
   real(dp),dimension(1:ndim)::vsink_add
+  real(dp),dimension(1:nvector)::acc_part
   real(dp),dimension(1:nvector,1:twotondim)::acc_cell
 
 #ifdef RT
@@ -3088,7 +3089,6 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
 
   ! Init temporal arrays
   dMBH_coarse_add=0d0; dMEd_coarse_add=0d0; dMsmbh_add=0d0; msink_add=0d0; vsink_add=0d0
-  acc_cell=0d0
 
   ! Remove mass from hydro cells
   do j=1,np
@@ -3200,7 +3200,8 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
 
         ! Store accreted mass from cell
         if (MC_tracer) then
-           acc_cell(ind_grid_part(j),icell(j)) = acc_cell(ind_grid_part(j),icell(j)) + acc_mass
+           acc_part(j) = acc_mass
+           !acc_cell(ind_grid_part(j),icell(j)) = acc_cell(ind_grid_part(j),icell(j)) + acc_mass
         end if
 
         d=d-acc_mass/vol_loc
@@ -3298,17 +3299,31 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
   end do
 
   if (MC_tracer) then
+     acc_cell=0d0
+     do j=1,np
+        if(isink/=-idp(ind_part(j))) then
+           write(*,*) 'Error on accrete_bondi', myid, j, isink, -idp(ind_part(j)), ind_part(j)
+        end if
+        ! Fix ind_grid if igrid has been changed
+        if(igrid(j)/=ind_grid(ind_grid_part(j))) then
+           ng=ng+1
+           ind_grid(ng)=igrid(j)
+           ind_grid_part(j)=ng
+        end if
+        acc_cell(ind_grid_part(j),icell(j)) = &
+              & acc_cell(ind_grid_part(j),icell(j)) + acc_part(j)
+     end do
      ! MC Tracer
      ! Init local index
      ii = 0
      ! The gas is coming from the central cell (and the tracers)
      do i=1,ng
-        itracer = headp(igrid(i))
-        do jpart=1,numbp(igrid(i))
+        itracer = headp(ind_grid(i))
+        do jpart=1,numbp(ind_grid(i))
            if(is_gas_tracer(typep(itracer)) .and. move_flag(itracer) == 0) then
               ! Check in which cell tracer particle is on
               do ind=1,twotondim
-                 ic=ncoarse+(ind-1)*ngridmax+igrid(i)
+                 ic=ncoarse+(ind-1)*ngridmax+ind_grid(i)
                  acc_mass = acc_cell(i,ind)
                  if(partp(itracer) == ic .and. acc_mass>0d0) then
                     d = uold(ic,1)
