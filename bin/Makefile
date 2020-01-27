@@ -25,7 +25,6 @@ USE_OLD_MPI_INCLUDE = 0
 EXEC = ramses
 # Activate OpenMP
 OPENMP = 1
-OMP_NCHUNK = 16
 #############################################################################
 # Patches to include (without DICE)
 #PATCH = ../patch/AGNSFSNpatch/AGNspinRT:../patch/AGNSFSNpatch/sfsn
@@ -70,7 +69,6 @@ endif
 # --- OpenMP ----------------------------------------------------------------
 ifeq ($(OPENMP),1)
 OMPFLAG += -fopenmp
-DEFINES += -DOMP_NCHUNK=$(OMP_NCHUNK)
 CEXEC += _omp
 endif
 # --- LONGINT ---------------------------------------------------------------
