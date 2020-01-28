@@ -770,8 +770,6 @@ subroutine move1(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,sink_stat_local)
               vsink_new(isink,1:ndim)=vp(ind_part(j),1:ndim)
               oksink_new(isink)=1.0
            endif
-		   ! Main bottleneck: ATOMIC
-!!$omp atomic update
            sink_stat_local(isink,ndim*2+1)=sink_stat_local(isink,ndim*2+1)+1d0
            do idim=1,ndim
               xx=xp(ind_part(j),idim)+vp(ind_part(j),idim)*dtnew(ilevel)-xsink(isink,idim)
@@ -781,9 +779,7 @@ subroutine move1(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,sink_stat_local)
               if(xx<-scale*xbound(idim)/2.0)then
                  xx=xx+scale*xbound(idim)
               endif
-!!$omp atomic update
               sink_stat_local(isink,idim     )=sink_stat_local(isink,idim     )+xsink(isink,idim)+xx
-!!$omp atomic update
               sink_stat_local(isink,idim+ndim)=sink_stat_local(isink,idim+ndim)+vp(ind_part(j),idim)
            enddo
        endif

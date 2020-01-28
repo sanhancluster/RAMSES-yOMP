@@ -649,7 +649,6 @@ subroutine make_virtual_reverse_dp(xx,ilevel)
         if (emission(icpu,ilevel)%ngrid>0) then
            step=(j-1)*emission(icpu,ilevel)%ngrid
            do i=1,emission(icpu,ilevel)%ngrid
-!$omp atomic update
               xx(emission(icpu,ilevel)%igrid(i)+iskip)= &
                    & xx(emission(icpu,ilevel)%igrid(i)+iskip) + emission(icpu,ilevel)%u(i+step,1)
            end do
@@ -711,7 +710,6 @@ subroutine make_virtual_reverse_dp(xx,ilevel)
         if (emission(icpu,ilevel)%ngrid>0) then
            step=(j-1)*emission(icpu,ilevel)%ngrid
            do i=1,emission(icpu,ilevel)%ngrid
-!$omp atomic update
               xx(emission(icpu,ilevel)%igrid(i)+iskip)= &
                    & xx(emission(icpu,ilevel)%igrid(i)+iskip) + emission(icpu,ilevel)%u(i+step,1)
            end do
@@ -821,7 +819,6 @@ subroutine make_virtual_reverse_int(xx,ilevel)
         if (emission(icpu,ilevel)%ngrid>0) then
            step=(j-1)*emission(icpu,ilevel)%ngrid
            do i=1,emission(icpu,ilevel)%ngrid
-!$omp atomic update
               xx(emission(icpu,ilevel)%igrid(i)+iskip)= &
                    & xx(emission(icpu,ilevel)%igrid(i)+iskip) + emission(icpu,ilevel)%f(i+step,1)
            end do
@@ -883,7 +880,6 @@ subroutine make_virtual_reverse_int(xx,ilevel)
         if (emission(icpu,ilevel)%ngrid>0) then
            step=(j-1)*emission(icpu,ilevel)%ngrid
            do i=1,emission(icpu,ilevel)%ngrid
-!$omp atomic update
               xx(emission(icpu,ilevel)%igrid(i)+iskip)= &
                    & xx(emission(icpu,ilevel)%igrid(i)+iskip) + emission(icpu,ilevel)%f(i+step,1)
            end do
