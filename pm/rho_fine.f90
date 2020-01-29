@@ -901,8 +901,8 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
 
      do ind2=1,threetondim
         do ind=1,twotondim
-           indp_now=ncoarse+(ind-1)*ngridmax+son(nbors_father_cells(1,ind2))
            if(rho_add(ind2,ind)>0d0) then
+              indp_now=ncoarse+(ind-1)*ngridmax+son(nbors_father_cells(1,ind2))
 !$omp atomic update
               rho(indp_now)=rho(indp_now)+rho_add(ind2,ind)
            end if
@@ -911,8 +911,8 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
 
      do ind2=1,threetondim
         do ind=1,twotondim
-           indp_now=ncoarse+(ind-1)*ngridmax+son(nbors_father_cells(1,ind2))
            if(rho_top_add(ind2,ind)>0d0) then
+              indp_now=ncoarse+(ind-1)*ngridmax+son(nbors_father_cells(1,ind2))
 !$omp atomic update
               rho_top(indp_now)=rho_top(indp_now)+rho_top_add(ind2,ind)
            end if
@@ -921,8 +921,8 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
 
      do ind2=1,threetondim
         do ind=1,twotondim
-           indp_now=ncoarse+(ind-1)*ngridmax+son(nbors_father_cells(1,ind2))
            if(phi_add(ind2,ind)>0d0) then
+              indp_now=ncoarse+(ind-1)*ngridmax+son(nbors_father_cells(1,ind2))
 !$omp atomic update
               phi(indp_now)=phi(indp_now)+phi_add(ind2,ind)
            end if
