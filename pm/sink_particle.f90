@@ -1573,7 +1573,7 @@ subroutine create_cloud_from_sink
   logical::in_box
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
 
-  integer ,dimension(1:1)::ind_part
+  integer ,dimension(1:nvector)::ind_part
 
   ! Conversion factor from user units to cgs units
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
@@ -2608,7 +2608,7 @@ subroutine grow_bondi(ilevel)
   integer,dimension(1:nvector)::ind_grid,ind_part,ind_grid_part
   real(dp)::density,volume
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_m
-  integer::ind,ivar,iskip
+  integer::ind,ivar,iskip,counter
   real(dp)::alpha,d_star,pi,factG,c2mean,nfloor,sigmav2,v2mean
   real(dp)::ZZ1,ZZ2,r_lso,epsilon_r,onethird
   real(dp),dimension(1:3)::velocity
@@ -2786,6 +2786,7 @@ subroutine grow_bondi(ilevel)
            ig=ig+1
            ind_grid(ig)=igrid
            ipart=headp(igrid)
+           counter = 0
            ! Loop over particles
            do jpart=1,npart1
               ! Save next particle   <--- Very important !!!
@@ -2809,10 +2810,14 @@ subroutine grow_bondi(ilevel)
                  ip=ip+1
                  ind_part(ip)=ipart
                  ind_grid_part(ip)=ig
+                 counter = counter + 1
               endif
               ipart=next_part  ! Go to next particle
            end do
            ! End loop over particles
+           if (counter == 0 .and. ig > 0) then
+              ig = ig - 1
+           end if
         end if
      end do
 !$omp end do nowait
