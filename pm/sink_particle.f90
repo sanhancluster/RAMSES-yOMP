@@ -1573,7 +1573,7 @@ subroutine create_cloud_from_sink
   logical::in_box
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
 
-  integer ,dimension(1:1)::ind_part
+  integer ,dimension(1:nvector)::ind_part
 
   ! Conversion factor from user units to cgs units
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
@@ -2608,7 +2608,7 @@ subroutine grow_bondi(ilevel)
   integer,dimension(1:nvector)::ind_grid,ind_part,ind_grid_part
   real(dp)::density,volume
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_m
-  integer::ind,ivar,iskip
+  integer::ind,ivar,iskip,counter
   real(dp)::alpha,d_star,pi,factG,c2mean,nfloor,sigmav2,v2mean
   real(dp)::ZZ1,ZZ2,r_lso,epsilon_r,onethird
   real(dp),dimension(1:3)::velocity
@@ -2786,6 +2786,7 @@ subroutine grow_bondi(ilevel)
            ig=ig+1
            ind_grid(ig)=igrid
            ipart=headp(igrid)
+           counter = 0
            ! Loop over particles
            do jpart=1,npart1
               ! Save next particle   <--- Very important !!!
@@ -2809,10 +2810,14 @@ subroutine grow_bondi(ilevel)
                  ip=ip+1
                  ind_part(ip)=ipart
                  ind_grid_part(ip)=ig
+                 counter = counter + 1
               endif
               ipart=next_part  ! Go to next particle
            end do
            ! End loop over particles
+           if (counter == 0 .and. ig > 0) then
+              ig = ig - 1
+           end if
         end if
      end do
 !$omp end do nowait
@@ -4136,7 +4141,7 @@ subroutine rhostar_from_current_level(ilevel)
      ! Loop over grids
      ig=0
      ip=0
-!$omp do
+!$omp do schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -4229,20 +4234,21 @@ subroutine cic_star(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel)
   ! are updated by the input particle list.
   !------------------------------------------------------------------
   logical::error
-  integer::j,ind,idim,nx_loc
+  integer::j,ind,idim,nx_loc,ind2,indp_now
   real(dp)::dx,dx_loc,scale,vol_loc
   ! Grid-based arrays
   integer ,dimension(1:nvector,1:threetondim)::nbors_father_cells
   integer ,dimension(1:nvector,1:twotondim)::nbors_father_grids
   ! Particle-based arrays
-  logical ,dimension(1:nvector)::ok
+  logical ,dimension(1:nvector,1:twotondim)::ok
   real(dp),dimension(1:nvector)::mmm
-  real(dp),dimension(1:nvector)::vol2
+  real(dp),dimension(1:nvector,1:twotondim)::vol2
   real(dp),dimension(1:nvector,1:ndim)::x,dd,dg
   integer ,dimension(1:nvector,1:ndim)::ig,id,igg,igd,icg,icd
   real(dp),dimension(1:nvector,1:twotondim)::vol
   integer ,dimension(1:nvector,1:twotondim)::igrid,icell,indp,kg
   real(dp),dimension(1:3)::skip_loc
+  real(dp),dimension(1:threetondim,1:twotondim)::rho_star_add
 
   ! Mesh spacing in that level
   dx=0.5D0**ilevel
@@ -4411,30 +4417,55 @@ subroutine cic_star(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel)
   end do
 #endif
 
-  ! Compute parent cell adress
-  do ind=1,twotondim
-     do j=1,np
-        indp(j,ind)=ncoarse+(icell(j,ind)-1)*ngridmax+igrid(j,ind)
-     end do
-  end do
-
   ! Update mass density field
   do ind=1,twotondim
      do j=1,np
-        ok(j)=igrid(j,ind)>0
+        ok(j,ind)=igrid(j,ind)>0
      end do
-
      do j=1,np
-        vol2(j)=mmm(j)*vol(j,ind)/vol_loc
-     end do
-
-     do j=1,np
-        if (ok(j)) then
-!$omp atomic update
-           rho_star(indp(j,ind))=rho_star(indp(j,ind))+vol2(j)
-        end if
+        vol2(j,ind)=mmm(j)*vol(j,ind)/vol_loc
      end do
   end do
+
+  ! OMPNOTE: We deal with 2 cases
+  ! Single grid case: deposit rho to temporary array and put it to common array later (Faster at high density)
+  ! Multiple grid case: classical way (Faster at low density)
+  if(ng==1) then
+     rho_star_add = 0d0
+     do ind=1,twotondim
+        do j=1,np
+           if(ok(j,ind)) then
+              rho_star_add(kg(j,ind),icell(j,ind))=rho_star_add(kg(j,ind),icell(j,ind))+vol2(j,ind)
+           end if
+        end do
+     end do
+
+     do ind2=1,threetondim
+        do ind=1,twotondim
+           if(rho_star_add(ind2,ind)>0d0) then
+              indp_now=ncoarse+(ind-1)*ngridmax+son(nbors_father_cells(1,ind2))
+!$omp atomic update
+              rho_star(indp_now)=rho_star(indp_now)+rho_star_add(ind2,ind)
+           end if
+        end do
+     end do
+  else
+     ! Compute parent cell adress
+     do ind=1,twotondim
+        do j=1,np
+           indp(j,ind)=ncoarse+(icell(j,ind)-1)*ngridmax+igrid(j,ind)
+        end do
+     end do
+
+     do ind=1,twotondim
+        do j=1,np
+           if (ok(j,ind)) then
+!$omp atomic update
+              rho_star(indp(j,ind))=rho_star(indp(j,ind))+vol2(j,ind)
+           end if
+        end do
+     end do
+  end if
 
 end subroutine cic_star
 !###########################################################
