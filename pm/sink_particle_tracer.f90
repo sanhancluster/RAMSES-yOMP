@@ -225,6 +225,8 @@ contains
 
   subroutine tracer2jet(ind_AGN, ind_part, AGN_pos, AGN_j, npart, rmax, seed)
     use random, ONLY:IRandNumSize
+    use utils, ONLY:find_grid_containing
+    use amr_commons, ONLY:cpu_map
     ! Compute the position of the particle within the jet
     ! On exit, the array itmpp contains the target CPU
     integer, intent(in), dimension(1:nvector) :: ind_AGN, ind_part
@@ -234,7 +236,7 @@ contains
 
     real(dp) :: radius2, hh, ux(3), uy(3), uz(3), rmax2, xx, yy
     real(dp), dimension(1:nvector, 1:3) :: newPos
-    integer, dimension(1:nvector) :: cpus
+    integer, dimension(1:nvector) :: ind_grid_test, ind_cell_test, ind_lvl_test
     integer :: i
     logical :: ok
 
@@ -284,10 +286,10 @@ contains
     call normalize_position(newpos, npart)
 
     ! Compute location of particles in CPUs
-    call cmp_cpumap(newpos, cpus(1:npart), npart)
+    call find_grid_containing(newpos, ind_grid_test, ind_cell_test, ind_lvl_test, npart)
 
     do i = 1, npart
-       itmpp(ind_part(i)) = cpus(i)
+       itmpp(ind_part(i)) = cpu_map(ind_cell_test(i))
        xp(ind_part(i), :) = newpos(i, :)
     end do
 
