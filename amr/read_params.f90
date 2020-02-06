@@ -25,7 +25,7 @@ subroutine read_params
   logical::nml_ok, info_ok, restart_file_ok
   integer,parameter::tag=1134
   integer::mythr
-#ifndef WITHOUTMPiI
+#ifndef WITHOUTMPI
   integer::dummy_io,ierr,info2
 #endif
 
@@ -116,7 +116,7 @@ subroutine read_params
   write(*,*)' '
 #ifdef _OPENMP
   write(*,'(" Working with nproc = ",I4," and nthr = ",I3," for ndim = ",I1)')ncpu,nthr,ndim
-  write(*,'(" With nvector = ",I3," and nchunk = ",I3," and nthr_cg = ",I3)')nvector,nchunk,nthr_cg
+  write(*,'(" With nvector = ",I3)')nvector
 #else
   write(*,'(" Working with nproc = ",I4," for ndim = ",I1)')ncpu,ndim
   write(*,'(" With nvector = ",I3)')nvector
