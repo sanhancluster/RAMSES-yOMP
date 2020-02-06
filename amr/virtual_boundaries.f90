@@ -113,7 +113,7 @@ subroutine authorize_fine(ilevel)
   do icpu=1,ncpu
      ncache=reception(icpu,ilevel)%ngrid
      ! Loop over grids by vector sweeps
-!$omp do
+!$omp do schedule(dynamic,nchunk)
      do igrid=1,ncache,nvector
         ! Gather nvector grids
         ngrid=MIN(nvector,ncache-igrid+1)
@@ -234,7 +234,7 @@ subroutine authorize_fine(ilevel)
      ! Initialize flag1 to 0 in virtual cells
      do icpu=1,ncpu
         ncache=reception(icpu,ilevel)%ngrid
-!$omp do
+!$omp do schedule(dynamic,nchunk)
         do igrid=1,ncache,nvector
            ngrid=MIN(nvector,ncache-igrid+1)
            do i=1,ngrid
@@ -257,7 +257,7 @@ subroutine authorize_fine(ilevel)
      ! Count neighbors and set flag2 accordingly
      do icpu=1,ncpu
         ncache=reception(icpu,ilevel)%ngrid
-!$omp do
+!$omp do schedule(dynamic,nchunk)
         do igrid=1,ncache,nvector
            ngrid=MIN(nvector,ncache-igrid+1)
            do i=1,ngrid
@@ -275,7 +275,7 @@ subroutine authorize_fine(ilevel)
      ! Set flag2=1 for cells with flag1=1
      do icpu=1,ncpu
         ncache=reception(icpu,ilevel)%ngrid
-!$omp do
+!$omp do schedule(dynamic,nchunk)
         do igrid=1,ncache,nvector
            ngrid=MIN(nvector,ncache-igrid+1)
            do i=1,ngrid
@@ -293,6 +293,7 @@ subroutine authorize_fine(ilevel)
         end do
 !$omp end do nowait
      end do
+!$omp barrier
   end do
   ! End loop over steps
   end do
@@ -947,14 +948,14 @@ subroutine build_comm(ilevel)
      call make_virtual_coarse_int(flag2(1))
   else
      ! Initialize flag2 to local adress for cpu map = myid cells
-!$omp parallel private(ncache)
+!$omp parallel private(ncache,ngrid,ind_grid,iskip,ind_cell)
      do icpu=1,ncpu
         if(icpu==myid) then
            ncache=active(ilevel-1)%ngrid
         else
            ncache=reception(icpu,ilevel-1)%ngrid
         end if
-!$omp do private(ngrid,ind_grid,iskip,ind_cell)
+!$omp do
         do igrid=1,ncache,nvector
            ngrid=MIN(nvector,ncache-igrid+1)
            if(icpu==myid) then
