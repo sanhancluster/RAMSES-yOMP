@@ -252,7 +252,7 @@ subroutine cmp_residual_cg(ilevel,icount)
   iii(3,2,1:8)=(/0,0,0,0,6,6,6,6/); jjj(3,2,1:8)=(/5,6,7,8,1,2,3,4/)
 
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static)
+!$omp parallel do private(igrid,ngrid,ind_grid) num_threads(nthr_cg)
   do igrid=1,ncache,nvector
       ! Gather nvector grids
       ngrid=MIN(nvector,ncache-igrid+1)
@@ -397,7 +397,7 @@ subroutine cmp_Ap_cg(ilevel)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static)
+!$omp parallel do private(igrid,ngrid,ind_grid) num_threads(nthr_cg)
   do igrid=1,ncache,nvector
       ! Gather nvector grids
       ngrid=MIN(nvector,ncache-igrid+1)
@@ -511,7 +511,7 @@ subroutine make_initial_phi(ilevel,icount)
   real(dp),dimension(1:nvector,1:twotondim)::phi_int
 
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static)
+!$omp parallel do private(igrid,ngrid,ind_grid) num_threads(nthr_cg)
   do igrid=1,ncache,nvector
       ! Gather nvector grids
       ngrid=MIN(nvector,ncache-igrid+1)
@@ -631,7 +631,7 @@ subroutine make_multipole_phi(ilevel)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) schedule(static)
+!$omp parallel do private(igrid,ngrid,ind_grid) num_threads(nthr_cg)
   do igrid=1,ncache,nvector
       ! Gather nvector grids
       ngrid=MIN(nvector,ncache-igrid+1)
