@@ -1562,17 +1562,14 @@ subroutine create_cloud_from_sink
   !----------------------------------------------------------------------
 
   real(dp)::scale,dx_min,rr,rmax,rmass
-  integer ::icpu,isink,indp,ii,jj,kk,nx_loc,idim,ip
+  integer ::icpu,isink,ii,jj,kk,nx_loc,idim,ip
   real(dp),dimension(1:ndim)::xrel,xcloud
   real(dp),dimension(1:nvector,1:ndim)::xtest
-  integer ,dimension(1:nvector)::ind_grid,ind_sink,cc
-  integer ,dimension(1:nvector)::ind_grid_test,ind_cell_test,ind_lvl_test
+  integer ,dimension(1:nvector)::ind_grid,ind_sink
   logical ,dimension(1:nvector)::ok_true,is_central
   logical,dimension(1:ndim)::period
   logical::in_box
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
-
-  integer ,dimension(1:nvector)::ind_part
 
   ! Conversion factor from user units to cgs units
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
@@ -1604,7 +1601,7 @@ subroutine create_cloud_from_sink
   rmass=dble(ir_cloud_massive)*dx_min
 
   ! Create cloud
-!$omp parallel private(xrel,rr,xtest,in_box,ind_part,indp,cc,ind_grid_test,ind_cell_test,ind_lvl_test,xcloud,ip,is_central)
+!$omp parallel private(ip,is_central,xrel,rr,xcloud,xtest,in_box)
    ip = 0
    is_central=.false.
 !$omp do collapse(3)
@@ -1628,7 +1625,7 @@ subroutine create_cloud_from_sink
               ip = ip + 1
               xtest(ip,:) = xcloud(:)
               ind_sink(ip) = isink
-              if((ii.eq.0).and.(jj.eq.0).and.(kk.eq.0)) is_central(ip)=.true.
+              if((ii==0).and.(jj==0).and.(kk==0)) is_central(ip)=.true.
               if(ip==nvector) then
                  call create_cloud(xtest,ind_sink,ind_grid,is_central,ip)
                  ip=0
@@ -1663,7 +1660,7 @@ subroutine create_cloud(xtest,ind_sink,ind_grid,is_central,np)
   integer ,dimension(1:nvector),intent(in) :: ind_sink,ind_grid
   logical ,dimension(1:nvector),intent(in) :: is_central
   integer ,intent(in) :: np
-  integer ,dimension(1:nvector) :: ind_part,ind_grid_test,ind_cell_test,ind_lvl_test,cc
+  integer ,dimension(1:nvector) :: ind_part,ind_grid_test,ind_cell_test,ind_lvl_test
   logical ,dimension(1:nvector) :: ok,ok_true
   integer :: i,j,nnew,indp,isink
 
