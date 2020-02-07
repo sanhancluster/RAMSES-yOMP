@@ -4234,7 +4234,7 @@ subroutine cic_star(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel)
   ! are updated by the input particle list.
   !------------------------------------------------------------------
   logical::error
-  integer::j,ind,idim,nx_loc,ind2,indp_now
+  integer::j,ind,idim,nx_loc,ind2
   real(dp)::dx,dx_loc,scale,vol_loc
   ! Grid-based arrays
   integer ,dimension(1:nvector,1:threetondim)::nbors_father_cells
@@ -4249,6 +4249,7 @@ subroutine cic_star(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel)
   integer ,dimension(1:nvector,1:twotondim)::igrid,icell,indp,kg
   real(dp),dimension(1:3)::skip_loc
   real(dp),dimension(1:threetondim,1:twotondim)::rho_star_add
+  integer ,dimension(1:threetondim,1:twotondim)::indp_nb
 
   ! Mesh spacing in that level
   dx=0.5D0**ilevel
@@ -4427,7 +4428,7 @@ subroutine cic_star(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel)
      end do
   end do
 
-  ! OMPNOTE: We deal with 2 cases
+  ! OMPNOTE: We use 2 strategies
   ! Single grid case: deposit rho to temporary array and put it to common array later (Faster at high density)
   ! Multiple grid case: classical way (Faster at low density)
   if(ng==1) then
@@ -4442,10 +4443,15 @@ subroutine cic_star(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel)
 
      do ind2=1,threetondim
         do ind=1,twotondim
+           indp_nb(ind2,ind)=ncoarse+(ind-1)*ngridmax+son(nbors_father_cells(1,ind2))
+        end do
+     end do
+
+     do ind2=1,threetondim
+        do ind=1,twotondim
            if(rho_star_add(ind2,ind)>0d0) then
-              indp_now=ncoarse+(ind-1)*ngridmax+son(nbors_father_cells(1,ind2))
 !$omp atomic update
-              rho_star(indp_now)=rho_star(indp_now)+rho_star_add(ind2,ind)
+              rho_star(indp_nb(ind2,ind))=rho_star(indp_nb(ind2,ind))+rho_star_add(ind2,ind)
            end if
         end do
      end do

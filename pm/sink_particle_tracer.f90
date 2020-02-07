@@ -1,6 +1,6 @@
 module sink_particle_tracer
   use amr_parameters, only : dp, ndim, nvector, verbose, aexp, nlevelmax, boxlen, icoarse_max, icoarse_min, nlevelsheld
-  use amr_parameters, only : X_floor
+  use amr_parameters, only : X_floor, nchunk
   use amr_commons, only: ncpu, MC_tracer, metal, myid, star, sink, twondim, use_initial_mass, &
        write_stellar_densities, communicator
   ! Particle list and stuff
@@ -88,7 +88,7 @@ contains
     integer, dimension(1:nvector), save :: ind_AGN, ind_part
     real(dp), dimension(1:nvector, 1:ndim), save :: buffer_j, buffer_pos
     integer, save :: j
-!$omp threadprivate(j,ind_AGN,ind_part,buffer_j,buffer_pos)
+
     integer, dimension(:), allocatable, save :: sendbuf, recvbuf
     integer, dimension(:), allocatable, save :: reqsend, reqrecv
     integer, dimension(:, :), allocatable, save :: statuses
@@ -126,7 +126,6 @@ contains
     !----------------------------------------
     ! Select the AGNs in jet mode, and get their particles
     !----------------------------------------
-    j = 0
 
     ! Loop over AGNs in jet mode, gather tracer particles and move
     ! them in the direction of the jet
@@ -137,7 +136,9 @@ contains
     ! particles are detached from the correct grid.
     ii = 0
     ! Look on AGN (vectorized)
-!$omp parallel do private(jj,ncache,ii,iAGN,proba,ipart,i,ok,rand)
+!$omp parallel private(jj,ncache,iAGN,proba,ipart,i,ok,rand,j,ind_AGN,ind_part,buffer_j,buffer_pos)
+    j = 0
+!$omp do schedule(dynamic,nchunk)
     do jj = 1, nAGN, nvector
        ncache = min(nvector, nAGN - jj + 1)
        do ii = 1, ncache
@@ -209,7 +210,6 @@ contains
        end do ! end cache loop
     end do ! end loop on AGN
 
-!$omp parallel
     if (j > 0) then
        call tracer2jet(ind_AGN, ind_part, &
             buffer_pos, buffer_j,&
@@ -225,6 +225,8 @@ contains
 
   subroutine tracer2jet(ind_AGN, ind_part, AGN_pos, AGN_j, npart, rmax, seed)
     use random, ONLY:IRandNumSize
+    use utils, ONLY:find_grid_containing
+    use amr_commons, ONLY:cpu_map
     ! Compute the position of the particle within the jet
     ! On exit, the array itmpp contains the target CPU
     integer, intent(in), dimension(1:nvector) :: ind_AGN, ind_part
@@ -234,7 +236,7 @@ contains
 
     real(dp) :: radius2, hh, ux(3), uy(3), uz(3), rmax2, xx, yy
     real(dp), dimension(1:nvector, 1:3) :: newPos
-    integer, dimension(1:nvector) :: cpus
+    integer, dimension(1:nvector) :: ind_grid_test, ind_cell_test, ind_lvl_test
     integer :: i
     logical :: ok
 
@@ -284,10 +286,10 @@ contains
     call normalize_position(newpos, npart)
 
     ! Compute location of particles in CPUs
-    call cmp_cpumap(newpos, cpus(1:npart), npart)
+    call find_grid_containing(newpos, ind_grid_test, ind_cell_test, ind_lvl_test, npart)
 
     do i = 1, npart
-       itmpp(ind_part(i)) = cpus(i)
+       itmpp(ind_part(i)) = cpu_map(ind_cell_test(i))
        xp(ind_part(i), :) = newpos(i, :)
     end do
 
@@ -315,6 +317,7 @@ contains
     integer :: iAGN
 
     integer :: i, next_ipart
+    integer, dimension(1:ncpu) :: npart_add
 
     if(verbose) write(*, 111) ilevel
 
@@ -329,6 +332,8 @@ contains
     !------------------------------------------------------------
     ! Count the number of particles to send
     !------------------------------------------------------------
+     npart_add = 0
+!$omp parallel do private(icell,ok,igrid,ipart,icpu) reduction(+:npart_add)
     do iAGN = 1, nAGN
        ! Select AGN in jet mode, with their cell at the current level
        icell = ind_blast(iAGN)
@@ -344,16 +349,17 @@ contains
           do i = 1, numbp(igrid)
              icpu = itmpp(ipart)
              if (is_gas_tracer(typep(ipart)) .and. icpu > 0) then
-                reception(icpu, ilevel)%npart = reception(icpu, ilevel)%npart + 1
+                npart_add(icpu) = npart_add(icpu) + 1
              end if
-
              ipart = nextp(ipart)
           end do
        end if
     end do
 
+!$omp parallel do
     do icpu = 1, ncpu
-       sendbuf(icpu) = reception(icpu, ilevel)%npart
+       reception(icpu, ilevel)%npart = npart_add(icpu)
+       sendbuf(icpu) = npart_add(icpu)
     end do
 
     !------------------------------------------------------------
@@ -388,6 +394,7 @@ contains
     !------------------------------------------------------------
     ! Fill communication buffer
     !------------------------------------------------------------
+!$omp parallel do private(ipcom,ip,icell,ok,igrid,ipart,next_ipart,ind_com,ind_part,ind_list)
     do icpu=1, ncpu
        ipcom = 0
        ip = 0
@@ -430,6 +437,7 @@ contains
 
     ! IMPORTANT
     ! Now reset ind_blast to prevent tracers to be sent at next step
+!$omp parallel do private(icell,igrid)
     do iAGN = 1, nAGN
        icell = ind_blast(iAGN)
        if (icell > 0) then
@@ -530,9 +538,11 @@ contains
     !------------------------------------------------------------
     ! Empty communication buffer
     !------------------------------------------------------------
+!$omp parallel private(ncache,npart1,ind_com)
     do icpu = 1, ncpu
        ! Loop over particles by vector sweeps
        ncache = emission(icpu, ilevel)%npart
+!$omp do
        do ipart = 1, ncache, nvector
           npart1 = min(nvector, ncache-ipart+1)
           do ip = 1, npart1
@@ -540,7 +550,9 @@ contains
           end do
           call empty_tracer_comm(ind_com, npart1, ilevel, icpu, emission)
        end do
+!$omp end do nowait
     end do
+!$omp end parallel
 
     ! Deallocate temporary communication buffers
     do icpu = 1, ncpu
@@ -567,7 +579,7 @@ contains
     integer, intent(in), dimension(1:nvector) :: ind_part, ind_com, ind_list
     integer :: current_property
     integer :: i, idim
-    logical, dimension(1:nvector), save :: ok=.true.
+    logical, dimension(1:nvector) :: ok=.true.
 
     type(communicator), intent(inout) :: reception(:, :)
 
@@ -664,10 +676,10 @@ contains
     type(communicator), intent(in) :: emission(:, :)
 
     integer :: i, idim
-    integer, dimension(1:nvector), save :: ind_list, ind_part, ind_cell, ind_level
-    logical, dimension(1:nvector), save :: ok=.true.
+    integer, dimension(1:nvector) :: ind_list, ind_part, ind_cell, ind_level
+    logical, dimension(1:nvector) :: ok=.true.
     integer :: current_property
-    real(dp), dimension(1:nvector, 1:ndim), save :: pos
+    real(dp), dimension(1:nvector, 1:ndim) :: pos
 
     ! Compute parent grid index
     do idim = 1, 3
@@ -681,7 +693,9 @@ contains
 
     ! Add particle to parent linked list
     call remove_free(ind_part, np)
+!$omp critical(omp_particle_free)
     call add_list(ind_part, ind_list, ok, np)
+!$omp end critical(omp_particle_free)
 
     ! Scatter particle level and identity
     do i=1,np

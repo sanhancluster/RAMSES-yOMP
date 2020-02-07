@@ -356,7 +356,7 @@ end subroutine parallel_link_startracer
 !#########################################################################
 !#########################################################################
 !#########################################################################
-subroutine cpu_parallel_link_activestar(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr,tyoung)
+subroutine cpu_parallel_link(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr,target)
   use amr_commons
   use pm_commons
   implicit none
@@ -367,12 +367,11 @@ subroutine cpu_parallel_link_activestar(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid
   ! Additionally, this routine is designed to run on multiple cpu loops,
   ! so it stores current status of the loop (icpu, jgrid)
   !----------------------------------------------------------------------
-  integer :: ilevel
+  integer :: ilevel,target
   integer, dimension(1:nthr) :: head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr
   integer, dimension(:), allocatable :: npart_grid
 
   integer :: icpu,ngrid_tot,igrid,jgrid,kgrid,ipart,jpart,next_part,npart1,npart_tot,npart_now,ngrid_now,weight_eql,ithr
-  real :: tyoung
 
   ngrid_tot=0
   do icpu=1,ncpu
@@ -386,39 +385,18 @@ subroutine cpu_parallel_link_activestar(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid
      return
   end if
 
-!$omp parallel do private(kgrid)
+!$omp parallel do
   do kgrid=1,ngrid_tot
      npart_grid(kgrid)=0 ! base weight 1
   end do
 
-  npart_tot=0
-  kgrid=1
-  npart_now=0
-  ! Count the total number of particles
-  do icpu=1,ncpu
-     igrid=headl(icpu,ilevel)
-     do jgrid=1,numbl(icpu,ilevel)
-        npart1=numbp(igrid)
-        if(npart1>0)then
-           ipart=headp(igrid)
-           ! Loop over particles
-           do jpart=1,npart1
-             if (is_star_active(typep(ipart))) then
-                npart_now=npart_now+1
-             end if
-             ipart=nextp(ipart) ! Go to next particle
-           end do
-           ! End loop over particles
-        end if
-        npart_grid(kgrid)=npart_grid(kgrid)+npart_now
-        npart_tot=npart_tot+npart_now
-        kgrid=kgrid+1
-        npart_now=0
-        igrid=next(igrid)
-     end do
-  end do
+  if(target==1) then
+     call get_partmap_notracer(ilevel,npart_grid,ngrid_tot,npart_tot)
+  else if(target==2) then
+     call get_partmap_cloud(ilevel,npart_grid,ngrid_tot,npart_tot)
+  end if
 
-  ! Calculate rough number of particles per grids
+  ! Calculate the rough number of particles per grids
   weight_eql=(npart_tot+ngrid_tot)/nthr
 
   head_thr(1)=0
@@ -448,17 +426,14 @@ subroutine cpu_parallel_link_activestar(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid
         npart_now=npart_now+npart_grid(kgrid)
         kgrid=kgrid+1
         igrid=next(igrid)
-        ! Save state and move to next thread
         if(npart_now+ngrid_now>=weight_eql) then
-
+           ! Save state and move to the next thread
            ngrid_thr(ithr)=ngrid_now
            npart_thr(ithr)=npart_now
-
            ngrid_tot=ngrid_tot-ngrid_now
            ngrid_now=0
 
            ithr=ithr+1
-
            head_thr(ithr)=igrid
            icpu_thr(ithr)=icpu
            jgrid_thr(ithr)=jgrid+1
@@ -470,597 +445,7 @@ subroutine cpu_parallel_link_activestar(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid
         end if
      end do
   end do
-end subroutine cpu_parallel_link_activestar
-!#########################################################################
-!#########################################################################
-!#########################################################################
-!#########################################################################
-subroutine cpu_parallel_link_star(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr)
-  use amr_commons
-  use pm_commons
-  implicit none
-  !----------------------------------------------------------------------
-  ! This routine interates over grid and particle linked list and divide
-  ! them by number of threads weighted by specific type of particles and
-  ! put head information for each thread.
-  ! Additionally, this routine is designed to run on multiple cpu loops,
-  ! so it stores current status of the loop (icpu, jgrid)
-  !----------------------------------------------------------------------
-  integer :: ilevel
-  integer, dimension(1:nthr) :: head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr
-  integer, dimension(:), allocatable :: npart_grid
-
-  integer :: icpu,ngrid_tot,igrid,jgrid,kgrid,ipart,jpart,next_part,npart1,npart_tot,npart_now,ngrid_now,weight_eql,ithr
-
-  ngrid_tot=0
-  do icpu=1,ncpu
-     ngrid_tot=ngrid_tot+numbl(icpu,ilevel)
-  end do
-
-  allocate(npart_grid(ngrid_tot))
-
-  if(ngrid_tot==0) then
-     ngrid_thr=0
-     return
-  end if
-
-!$omp parallel do private(kgrid)
-  do kgrid=1,ngrid_tot
-     npart_grid(kgrid)=0 ! base weight 1
-  end do
-
-  npart_tot=0
-  kgrid=1
-  npart_now=0
-  ! Count the total number of particles
-  do icpu=1,ncpu
-     igrid=headl(icpu,ilevel)
-     do jgrid=1,numbl(icpu,ilevel)
-        npart1=numbp(igrid)
-        if(npart1>0)then
-           ipart=headp(igrid)
-           ! Loop over particles
-           do jpart=1,npart1
-             if (is_star(typep(ipart))) then
-                npart_now=npart_now+1
-             end if
-             ipart=nextp(ipart) ! Go to next particle
-           end do
-           ! End loop over particles
-        end if
-        npart_grid(kgrid)=npart_grid(kgrid)+npart_now
-        npart_tot=npart_tot+npart_now
-        kgrid=kgrid+1
-        npart_now=0
-        igrid=next(igrid)
-     end do
-  end do
-
-  ! Calculate rough number of particles per grids
-  weight_eql=(npart_tot+ngrid_tot)/nthr
-
-  head_thr(1)=0
-
-  jgrid_thr(1)=1
-  kgrid=1
-  npart_now=0
-  ngrid_now=0
-
-  ngrid_thr=0
-  npart_thr=0
-
-  ithr=1
-  do icpu=1,ncpu
-     igrid=headl(icpu,ilevel)
-     do jgrid=1,numbl(icpu,ilevel)
-        if(head_thr(1)==0) then
-           head_thr(1)=igrid
-           icpu_thr(1)=icpu
-        end if
-        if(ithr == nthr) then
-           ngrid_thr(ithr)=ngrid_tot
-           npart_thr(ithr)=npart_tot
-           return
-        end if
-        ngrid_now=ngrid_now+1
-        npart_now=npart_now+npart_grid(kgrid)
-        kgrid=kgrid+1
-        igrid=next(igrid)
-        ! Save state and move to next thread
-        if(npart_now+ngrid_now>=weight_eql) then
-
-           ngrid_thr(ithr)=ngrid_now
-           npart_thr(ithr)=npart_now
-
-           ngrid_tot=ngrid_tot-ngrid_now
-           ngrid_now=0
-
-           ithr=ithr+1
-
-           head_thr(ithr)=igrid
-           icpu_thr(ithr)=icpu
-           jgrid_thr(ithr)=jgrid+1
-
-           ! Correct the weight
-           npart_tot=npart_tot-npart_now
-           weight_eql=(npart_tot+ngrid_tot)/(nthr-ithr+1)
-           npart_now=0
-        end if
-     end do
-  end do
-end subroutine cpu_parallel_link_star
-!#########################################################################
-!#########################################################################
-!#########################################################################
-!#########################################################################
-subroutine cpu_parallel_link_cloud(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr)
-  use amr_commons
-  use pm_commons
-  implicit none
-  !----------------------------------------------------------------------
-  ! This routine interates over grid and particle linked list and divide
-  ! them by number of threads weighted by specific type of particles and
-  ! put head information for each thread.
-  ! Additionally, this routine is designed to run on multiple cpu loops,
-  ! so it stores current status of the loop (icpu, jgrid)
-  !----------------------------------------------------------------------
-  integer :: ilevel
-  integer, dimension(1:nthr) :: head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr
-  integer, dimension(:), allocatable :: npart_grid
-
-  integer :: icpu,ngrid_tot,igrid,jgrid,kgrid,ipart,jpart,next_part,npart1,npart_tot,npart_now,ngrid_now,weight_eql,ithr
-
-  ngrid_tot=0
-  do icpu=1,ncpu
-     ngrid_tot=ngrid_tot+numbl(icpu,ilevel)
-  end do
-
-  allocate(npart_grid(ngrid_tot))
-
-  if(ngrid_tot==0) then
-     ngrid_thr=0
-     return
-  end if
-
-!$omp parallel do private(kgrid)
-  do kgrid=1,ngrid_tot
-     npart_grid(kgrid)=0 ! base weight 1
-  end do
-
-  npart_tot=0
-  kgrid=1
-  npart_now=0
-  ! Count the total number of particles
-  do icpu=1,ncpu
-     igrid=headl(icpu,ilevel)
-     do jgrid=1,numbl(icpu,ilevel)
-        npart1=numbp(igrid)
-        if(npart1>0)then
-           ipart=headp(igrid)
-           ! Loop over particles
-           do jpart=1,npart1
-             if (is_cloud(typep(ipart))) then
-                npart_now=npart_now+1
-             end if
-             ipart=nextp(ipart) ! Go to next particle
-           end do
-           ! End loop over particles
-        end if
-        npart_grid(kgrid)=npart_grid(kgrid)+npart_now
-        npart_tot=npart_tot+npart_now
-        kgrid=kgrid+1
-        npart_now=0
-        igrid=next(igrid)
-     end do
-  end do
-
-  ! Calculate rough number of particles per grids
-  weight_eql=(npart_tot+ngrid_tot)/nthr
-
-  head_thr(1)=0
-
-  jgrid_thr(1)=1
-  kgrid=1
-  npart_now=0
-  ngrid_now=0
-
-  ngrid_thr=0
-  npart_thr=0
-
-  ithr=1
-  do icpu=1,ncpu
-     igrid=headl(icpu,ilevel)
-     do jgrid=1,numbl(icpu,ilevel)
-        if(head_thr(1)==0) then
-           head_thr(1)=igrid
-           icpu_thr(1)=icpu
-        end if
-        if(ithr == nthr) then
-           ngrid_thr(ithr)=ngrid_tot
-           npart_thr(ithr)=npart_tot
-           return
-        end if
-        ngrid_now=ngrid_now+1
-        npart_now=npart_now+npart_grid(kgrid)
-        kgrid=kgrid+1
-        igrid=next(igrid)
-        ! Save state and move to next thread
-        if(npart_now+ngrid_now>=weight_eql) then
-
-           ngrid_thr(ithr)=ngrid_now
-           npart_thr(ithr)=npart_now
-
-           ngrid_tot=ngrid_tot-ngrid_now
-           ngrid_now=0
-
-           ithr=ithr+1
-
-           head_thr(ithr)=igrid
-           icpu_thr(ithr)=icpu
-           jgrid_thr(ithr)=jgrid+1
-
-           ! Correct the weight
-           npart_tot=npart_tot-npart_now
-           weight_eql=(npart_tot+ngrid_tot)/(nthr-ithr+1)
-           npart_now=0
-        end if
-     end do
-  end do
-end subroutine cpu_parallel_link_cloud
-!#########################################################################
-!#########################################################################
-!#########################################################################
-!#########################################################################
-subroutine cpu_parallel_link_cloud_tracer(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr)
-  use amr_commons
-  use pm_commons
-  implicit none
-  !----------------------------------------------------------------------
-  ! This routine interates over grid and particle linked list and divide
-  ! them by number of threads weighted by specific type of particles and
-  ! put head information for each thread.
-  ! Additionally, this routine is designed to run on multiple cpu loops,
-  ! so it stores current status of the loop (icpu, jgrid)
-  !----------------------------------------------------------------------
-  integer :: ilevel
-  integer, dimension(1:nthr) :: head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr
-  integer, dimension(:), allocatable :: npart_grid
-
-  integer :: icpu,ngrid_tot,igrid,jgrid,kgrid,ipart,jpart,next_part,npart1,npart_tot,npart_now,ngrid_now,weight_eql,ithr
-
-  ngrid_tot=0
-  do icpu=1,ncpu
-     ngrid_tot=ngrid_tot+numbl(icpu,ilevel)
-  end do
-
-  allocate(npart_grid(ngrid_tot))
-
-  if(ngrid_tot==0) then
-     ngrid_thr=0
-     return
-  end if
-
-!$omp parallel do private(kgrid)
-  do kgrid=1,ngrid_tot
-     npart_grid(kgrid)=0 ! base weight 1
-  end do
-
-  npart_tot=0
-  kgrid=1
-  npart_now=0
-  ! Count the total number of particles
-  do icpu=1,ncpu
-     igrid=headl(icpu,ilevel)
-     do jgrid=1,numbl(icpu,ilevel)
-        npart1=numbp(igrid)
-        if(npart1>0)then
-           ipart=headp(igrid)
-           ! Loop over particles
-           do jpart=1,npart1
-             if (is_cloud_tracer(typep(ipart))) then
-                npart_now=npart_now+1
-             end if
-             ipart=nextp(ipart) ! Go to next particle
-           end do
-           ! End loop over particles
-        end if
-        npart_grid(kgrid)=npart_grid(kgrid)+npart_now
-        npart_tot=npart_tot+npart_now
-        kgrid=kgrid+1
-        npart_now=0
-        igrid=next(igrid)
-     end do
-  end do
-
-  ! Calculate rough number of particles per grids
-  weight_eql=(npart_tot+ngrid_tot)/nthr
-
-  head_thr(1)=0
-
-  jgrid_thr(1)=1
-  kgrid=1
-  npart_now=0
-  ngrid_now=0
-
-  ngrid_thr=0
-  npart_thr=0
-
-  ithr=1
-  do icpu=1,ncpu
-     igrid=headl(icpu,ilevel)
-     do jgrid=1,numbl(icpu,ilevel)
-        if(head_thr(1)==0) then
-           head_thr(1)=igrid
-           icpu_thr(1)=icpu
-        end if
-        if(ithr == nthr) then
-           ngrid_thr(ithr)=ngrid_tot
-           npart_thr(ithr)=npart_tot
-           return
-        end if
-        ngrid_now=ngrid_now+1
-        npart_now=npart_now+npart_grid(kgrid)
-        kgrid=kgrid+1
-        igrid=next(igrid)
-        ! Save state and move to next thread
-        if(npart_now+ngrid_now>=weight_eql) then
-
-           ngrid_thr(ithr)=ngrid_now
-           npart_thr(ithr)=npart_now
-
-           ngrid_tot=ngrid_tot-ngrid_now
-           ngrid_now=0
-
-           ithr=ithr+1
-
-           head_thr(ithr)=igrid
-           icpu_thr(ithr)=icpu
-           jgrid_thr(ithr)=jgrid+1
-
-           ! Correct the weight
-           npart_tot=npart_tot-npart_now
-           weight_eql=(npart_tot+ngrid_tot)/(nthr-ithr+1)
-           npart_now=0
-        end if
-     end do
-  end do
-end subroutine cpu_parallel_link_cloud_tracer
-!#########################################################################
-!#########################################################################
-!#########################################################################
-!#########################################################################
-subroutine cpu_parallel_link_stardm(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr)
-  use amr_commons
-  use pm_commons
-  implicit none
-  !----------------------------------------------------------------------
-  ! This routine interates over grid and particle linked list and divide
-  ! them by number of threads weighted by specific type of particles and
-  ! put head information for each thread.
-  ! Additionally, this routine is designed to run on multiple cpu loops,
-  ! so it stores current status of the loop (icpu, jgrid)
-  !----------------------------------------------------------------------
-  integer :: ilevel
-  integer, dimension(1:nthr) :: head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr
-  integer, dimension(:), allocatable :: npart_grid
-
-  integer :: icpu,ngrid_tot,igrid,jgrid,kgrid,ipart,jpart,next_part,npart1,npart_tot,npart_now,ngrid_now,weight_eql,ithr
-
-  ngrid_tot=0
-  do icpu=1,ncpu
-     ngrid_tot=ngrid_tot+numbl(icpu,ilevel)
-  end do
-
-  allocate(npart_grid(ngrid_tot))
-
-  if(ngrid_tot==0) then
-     ngrid_thr=0
-     return
-  end if
-
-!$omp parallel do private(kgrid)
-  do kgrid=1,ngrid_tot
-     npart_grid(kgrid)=0 ! base weight 1
-  end do
-
-  npart_tot=0
-  kgrid=1
-  npart_now=0
-  ! Count the total number of particles
-  do icpu=1,ncpu
-     igrid=headl(icpu,ilevel)
-     do jgrid=1,numbl(icpu,ilevel)
-        npart1=numbp(igrid)
-        if(npart1>0)then
-           ipart=headp(igrid)
-           ! Loop over particles
-           do jpart=1,npart1
-             if (is_star(typep(ipart)) .or. is_dm(typep(ipart))) then
-                npart_now=npart_now+1
-             end if
-             ipart=nextp(ipart) ! Go to next particle
-           end do
-           ! End loop over particles
-        end if
-        npart_grid(kgrid)=npart_grid(kgrid)+npart_now
-        npart_tot=npart_tot+npart_now
-        kgrid=kgrid+1
-        npart_now=0
-        igrid=next(igrid)
-     end do
-  end do
-
-  ! Calculate rough number of particles per grids
-  weight_eql=(npart_tot+ngrid_tot)/nthr
-
-  head_thr(1)=0
-
-  jgrid_thr(1)=1
-  kgrid=1
-  npart_now=0
-  ngrid_now=0
-
-  ngrid_thr=0
-  npart_thr=0
-
-  ithr=1
-  do icpu=1,ncpu
-     igrid=headl(icpu,ilevel)
-     do jgrid=1,numbl(icpu,ilevel)
-        if(head_thr(1)==0) then
-           head_thr(1)=igrid
-           icpu_thr(1)=icpu
-        end if
-        if(ithr == nthr) then
-           ngrid_thr(ithr)=ngrid_tot
-           npart_thr(ithr)=npart_tot
-           return
-        end if
-        ngrid_now=ngrid_now+1
-        npart_now=npart_now+npart_grid(kgrid)
-        kgrid=kgrid+1
-        igrid=next(igrid)
-        ! Save state and move to next thread
-        if(npart_now+ngrid_now>=weight_eql) then
-
-           ngrid_thr(ithr)=ngrid_now
-           npart_thr(ithr)=npart_now
-
-           ngrid_tot=ngrid_tot-ngrid_now
-           ngrid_now=0
-
-           ithr=ithr+1
-
-           head_thr(ithr)=igrid
-           icpu_thr(ithr)=icpu
-           jgrid_thr(ithr)=jgrid+1
-
-           ! Correct the weight
-           npart_tot=npart_tot-npart_now
-           weight_eql=(npart_tot+ngrid_tot)/(nthr-ithr+1)
-           npart_now=0
-        end if
-     end do
-  end do
-end subroutine cpu_parallel_link_stardm
-!#########################################################################
-!#########################################################################
-!#########################################################################
-!#########################################################################
-subroutine cpu_parallel_link_notracer(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr)
-  use amr_commons
-  use pm_commons
-  implicit none
-  !----------------------------------------------------------------------
-  ! This routine interates over grid and particle linked list and divide
-  ! them by number of threads weighted by specific type of particles and
-  ! put head information for each thread.
-  ! Additionally, this routine is designed to run on multiple cpu loops,
-  ! so it stores current status of the loop (icpu, jgrid)
-  !----------------------------------------------------------------------
-  integer :: ilevel
-  integer, dimension(1:nthr) :: head_thr,ngrid_thr,icpu_thr,jgrid_thr,npart_thr
-  integer, dimension(:), allocatable :: npart_grid
-
-  integer :: icpu,ngrid_tot,igrid,jgrid,kgrid,ipart,jpart,next_part,npart1,npart_tot,npart_now,ngrid_now,weight_eql,ithr
-
-  ngrid_tot=0
-  do icpu=1,ncpu
-     ngrid_tot=ngrid_tot+numbl(icpu,ilevel)
-  end do
-
-  allocate(npart_grid(ngrid_tot))
-
-  if(ngrid_tot==0) then
-     ngrid_thr=0
-     return
-  end if
-
-!$omp parallel do private(kgrid)
-  do kgrid=1,ngrid_tot
-     npart_grid(kgrid)=0 ! base weight 1
-  end do
-
-  npart_tot=0
-  kgrid=1
-  npart_now=0
-  ! Count the total number of particles
-  do icpu=1,ncpu
-     igrid=headl(icpu,ilevel)
-     do jgrid=1,numbl(icpu,ilevel)
-        npart1=numbp(igrid)
-        if(npart1>0)then
-           ipart=headp(igrid)
-           ! Loop over particles
-           do jpart=1,npart1
-             if (is_not_tracer(typep(ipart))) then
-                npart_now=npart_now+1
-             end if
-             ipart=nextp(ipart) ! Go to next particle
-           end do
-           ! End loop over particles
-        end if
-        npart_grid(kgrid)=npart_grid(kgrid)+npart_now
-        npart_tot=npart_tot+npart_now
-        kgrid=kgrid+1
-        npart_now=0
-        igrid=next(igrid)
-     end do
-  end do
-
-  ! Calculate rough number of particles per grids
-  weight_eql=(npart_tot+ngrid_tot)/nthr
-
-  head_thr(1)=0
-
-  jgrid_thr(1)=1
-  kgrid=1
-  npart_now=0
-  ngrid_now=0
-
-  ngrid_thr=0
-  npart_thr=0
-
-  ithr=1
-  do icpu=1,ncpu
-     igrid=headl(icpu,ilevel)
-     do jgrid=1,numbl(icpu,ilevel)
-        if(head_thr(1)==0) then
-           head_thr(1)=igrid
-           icpu_thr(1)=icpu
-        end if
-        if(ithr == nthr) then
-           ngrid_thr(ithr)=ngrid_tot
-           npart_thr(ithr)=npart_tot
-           return
-        end if
-        ngrid_now=ngrid_now+1
-        npart_now=npart_now+npart_grid(kgrid)
-        kgrid=kgrid+1
-        igrid=next(igrid)
-        ! Save state and move to next thread
-        if(npart_now+ngrid_now>=weight_eql) then
-
-           ngrid_thr(ithr)=ngrid_now
-           npart_thr(ithr)=npart_now
-
-           ngrid_tot=ngrid_tot-ngrid_now
-           ngrid_now=0
-
-           ithr=ithr+1
-
-           head_thr(ithr)=igrid
-           icpu_thr(ithr)=icpu
-           jgrid_thr(ithr)=jgrid+1
-
-           ! Correct the weight
-           npart_tot=npart_tot-npart_now
-           weight_eql=(npart_tot+ngrid_tot)/(nthr-ithr+1)
-           npart_now=0
-        end if
-     end do
-  end do
-end subroutine cpu_parallel_link_notracer
+end subroutine cpu_parallel_link
 !#########################################################################
 !#########################################################################
 !#########################################################################
@@ -1093,28 +478,26 @@ subroutine cpu_parallel_link_all(ilevel,head_thr,ngrid_thr,icpu_thr,jgrid_thr,np
 
   npart_tot=0
   ! Count the total number of particles
+!$omp parallel private(igrid) reduction(+:npart_tot)
   do icpu=1,ncpu
-     igrid=headl(icpu,ilevel)
+!$omp do
      do jgrid=1,numbl(icpu,ilevel)
-        npart1=numbp(igrid)
-
-        npart_tot=npart_tot+npart1
-
-        igrid=next(igrid)
+        if(icpu==myid)then
+           igrid=active(ilevel)%igrid(jgrid)
+        else
+           igrid=reception(icpu,ilevel)%igrid(jgrid)
+        end if
+        npart_tot=npart_tot+numbp(igrid)
      end do
+!$omp end do nowait
   end do
+!$omp end parallel
 
   ! Calculate rough number of particles per grids
   weight_eql=(npart_tot+ngrid_tot)/nthr
 
-  head_thr(1)=0
-
-  jgrid_thr(1)=1
-  npart_now=0
-  ngrid_now=0
-
-  ngrid_thr=0
-  npart_thr=0
+  head_thr(1)=0; jgrid_thr(1)=1
+  npart_now=0; ngrid_now=0; ngrid_thr=0; npart_thr=0
 
   ithr=1
   do icpu=1,ncpu
@@ -1235,7 +618,7 @@ subroutine cpu_parallel_reception_part(ilevel,icpu_thr,igrid_thr,ngrid_thr,ipcom
   integer :: ilevel
   integer, dimension(1:nthr) :: icpu_thr,igrid_thr,ngrid_thr,ipcom_thr
 
-  integer :: icpu,ithr,ngrid_tot,npart_tot,igrid,kgrid,npart_now,ngrid_now,weight_eql,ncache,ngridm,ipcom,npart1
+  integer :: icpu,ithr,ngrid_tot,npart_tot,igrid,npart_now,ngrid_now,weight_eql,ncache,ngridm,ipcom,npart1
 
   ngrid_tot=0
 !$omp parallel do private(icpu) reduction(+:ngrid_tot)
@@ -1251,14 +634,16 @@ subroutine cpu_parallel_reception_part(ilevel,icpu_thr,igrid_thr,ngrid_thr,ipcom
   end if
 
   npart_tot=0
-  kgrid=1
   ! Count the total number of particles
+!$omp parallel reduction(+:npart_tot)
   do icpu=1,ncpu
+!$omp do
      do igrid=1,reception(icpu,ilevel)%ngrid
         npart_tot=npart_tot+numbp(reception(icpu,ilevel)%igrid(igrid))
-        kgrid=kgrid+1
      end do
+!$omp end do nowait
   end do
+!$omp end parallel
 
   if(npart_tot==0) then
      icpu_thr=1
@@ -1314,6 +699,103 @@ end subroutine cpu_parallel_reception_part
 !#########################################################################
 !#########################################################################
 !#########################################################################
+subroutine get_partmap_notracer(ilevel,npart_grid,ngrid_tot,npart_tot)
+  use amr_commons
+  use pm_commons
+  implicit none
+  integer :: ilevel,icpu,igrid,jgrid,kgrid,ipart,jpart
+  integer :: npart1,npart_now
+  integer,intent(in) :: ngrid_tot
+  integer,dimension(1:ngrid_tot) :: npart_grid
+  integer,intent(out) :: npart_tot
+
+  npart_tot=0
+  ! Count the total number of particles
+!$omp parallel private(igrid,npart1,npart_now,ipart,kgrid) reduction(+:npart_tot)
+  kgrid=0
+  do icpu=1,ncpu
+!$omp do
+     do jgrid=1,numbl(icpu,ilevel)
+        if(icpu==myid)then
+           igrid=active(ilevel)%igrid(jgrid)
+        else
+           igrid=reception(icpu,ilevel)%igrid(jgrid)
+        end if
+        npart1=numbp(igrid)
+        npart_now=0
+        if(npart1>0)then
+           ipart=headp(igrid)
+           ! Loop over particles
+           do jpart=1,npart1
+              if (is_not_tracer(typep(ipart))) then
+                 npart_now=npart_now+1
+              end if
+              ipart=nextp(ipart) ! Go to next particle
+           end do
+           ! End loop over particles
+        end if
+        npart_grid(kgrid+jgrid)=npart_now
+        npart_tot=npart_tot+npart_now
+     end do
+!$omp end do nowait
+     kgrid=kgrid+numbl(icpu,ilevel)
+  end do
+!$omp end parallel
+
+end subroutine get_partmap_notracer
+!#########################################################################
+!#########################################################################
+!#########################################################################
+!#########################################################################
+subroutine get_partmap_cloud(ilevel,npart_grid,ngrid_tot,npart_tot)
+  use amr_commons
+  use pm_commons
+  implicit none
+  integer :: ilevel,icpu,igrid,jgrid,kgrid,ipart,jpart
+  integer :: npart1,npart_now
+  integer,intent(in) :: ngrid_tot
+  integer,dimension(1:ngrid_tot) :: npart_grid
+  integer,intent(out) :: npart_tot
+
+  npart_tot=0
+  ! Count the total number of particles
+!$omp parallel private(igrid,npart1,npart_now,ipart,kgrid) reduction(+:npart_tot)
+  kgrid=0
+  do icpu=1,ncpu
+!$omp do
+     do jgrid=1,numbl(icpu,ilevel)
+        if(icpu==myid)then
+           igrid=active(ilevel)%igrid(jgrid)
+        else
+           igrid=reception(icpu,ilevel)%igrid(jgrid)
+        end if
+        npart1=numbp(igrid)
+        npart_now=0
+        if(npart1>0)then
+           ipart=headp(igrid)
+           ! Loop over particles
+           do jpart=1,npart1
+              if (is_cloud(typep(ipart))) then
+                 npart_now=npart_now+1
+              end if
+              ipart=nextp(ipart) ! Go to next particle
+           end do
+           ! End loop over particles
+        end if
+        npart_grid(kgrid+jgrid)=npart_now
+        npart_tot=npart_tot+npart_now
+     end do
+!$omp end do nowait
+     kgrid=kgrid+numbl(icpu,ilevel)
+  end do
+!$omp end parallel
+
+end subroutine get_partmap_cloud
+!#########################################################################
+!#########################################################################
+!#########################################################################
+!#########################################################################
+
 
 subroutine pthreadLinkedList(ipart,nworks,nthreads,nparticles,ptrhead,nextlink)
   implicit none
