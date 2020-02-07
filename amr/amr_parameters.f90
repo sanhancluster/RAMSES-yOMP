@@ -51,7 +51,7 @@ module amr_parameters
 #else
   integer,parameter::nvector=NVECTOR
 #endif
-  integer::nchunk=1  ! Size of OpenMP chunk size
+  integer::nchunk=2  ! Size of OpenMP chunk size
 
   ! Precompute powers of 2 in the right prec for hilbert curve (MT)
   ! Careful, starts at zero, so that powof2(0) == 1
