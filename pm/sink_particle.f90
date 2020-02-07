@@ -1562,13 +1562,12 @@ subroutine create_cloud_from_sink
   !----------------------------------------------------------------------
 
   real(dp)::scale,dx_min,rr,rmax,rmass
-  integer ::icpu,isink,indp,ii,jj,kk,nx_loc,idim
-  real(dp),dimension(1:ndim)::xrel
+  integer ::icpu,isink,indp,ii,jj,kk,nx_loc,idim,ip
+  real(dp),dimension(1:ndim)::xrel,xcloud
   real(dp),dimension(1:nvector,1:ndim)::xtest
-  integer ,dimension(1:nvector)::ind_grid,cc
-  integer ,dimension(1:nsink)::ind_cloud
+  integer ,dimension(1:nvector)::ind_grid,ind_sink,cc
   integer ,dimension(1:nvector)::ind_grid_test,ind_cell_test,ind_lvl_test
-  logical ,dimension(1:nvector)::ok_true
+  logical ,dimension(1:nvector)::ok_true,is_central
   logical,dimension(1:ndim)::period
   logical::in_box
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
@@ -1588,7 +1587,7 @@ subroutine create_cloud_from_sink
   ! Level 1 linked list
   do icpu=1,ncpu
      if(numbl(icpu,1)>0)then
-        ind_grid(1)=headl(icpu,1)
+        ind_grid=headl(icpu,1)
      endif
   end do
 
@@ -1605,7 +1604,10 @@ subroutine create_cloud_from_sink
   rmass=dble(ir_cloud_massive)*dx_min
 
   ! Create cloud
-!$omp parallel do private(xrel,rr,xtest,in_box,ind_part,indp,cc,ind_grid_test,ind_cell_test,ind_lvl_test) collapse(3)
+!$omp parallel private(xrel,rr,xtest,in_box,ind_part,indp,cc,ind_grid_test,ind_cell_test,ind_lvl_test,xcloud,ip,is_central)
+   ip = 0
+   is_central=.false.
+!$omp do collapse(3)
   do kk=-2*ir_cloud,2*ir_cloud
   do jj=-2*ir_cloud,2*ir_cloud
   do ii=-2*ir_cloud,2*ir_cloud
@@ -1615,46 +1617,93 @@ subroutine create_cloud_from_sink
      rr=sqrt(sum(xrel**2))
      if(rr<=rmax)then
         do isink=1,nsink
-           xtest(1,1:3)=xsink(isink,1:3)+xrel(1:3)
+           xcloud(1:3)=xsink(isink,1:3)+xrel(1:3)
            in_box=.true.
            do idim=1,ndim
-              if (period(idim) .and. xtest(1,idim)>boxlen)xtest(1,idim)=xtest(1,idim)-boxlen
-              if (period(idim) .and. xtest(1,idim)<0.)xtest(1,idim)=xtest(1,idim)+boxlen
-              if (xtest(1,idim)<0.0 .or. xtest(1,idim)>boxlen)in_box=.false.
+              if (period(idim) .and. xcloud(idim)>boxlen)xcloud(idim)=xcloud(idim)-boxlen
+              if (period(idim) .and. xcloud(idim)<0.)xcloud(idim)=xcloud(idim)+boxlen
+              if (xcloud(idim)<0.0 .or. xcloud(idim)>boxlen)in_box=.false.
            end do
-           cc(1)=0
-           if (in_box) then
-              call find_grid_containing(xtest,ind_grid_test,ind_cell_test,ind_lvl_test,1)
-              cc(1) = cpu_map(ind_cell_test(1))
-           end if
-           if(cc(1).eq.myid)then
-              call remove_free(ind_part,1)
-!$omp critical
-              call add_list(ind_part,ind_grid,ok_true,1)
-!$omp end critical
-              indp=ind_part(1)
-              idp(indp)=-isink
-              levelp(indp)=nlevelmax_current
-              mp(indp)=msink(isink)/dble(ncloud_sink)
-              xp(indp,1:3)=xtest(1,1:3)
-              vp(indp,1:3)=vsink(isink,1:3)
-              tp(indp)=tsink(isink)     ! Birth epoch
-              typep(indp)%family = FAM_CLOUD
-              if((ii.eq.0).and.(jj.eq.0).and.(kk.eq.0))then
-                 typep(indp)%tag = TAG_CLOUD_CENTRAL  !Central cloud particle
-              else
-                 typep(indp)%tag = 0
-              endif
+           if(in_box) then
+              ip = ip + 1
+              xtest(ip,:) = xcloud(:)
+              ind_sink(ip) = isink
+              if((ii.eq.0).and.(jj.eq.0).and.(kk.eq.0)) is_central(ip)=.true.
+              if(ip==nvector) then
+                 call create_cloud(xtest,ind_sink,ind_grid,is_central,ip)
+                 ip=0
+                 is_central=.false.
+              end if
            end if
         end do
      end if
   end do
   end do
   end do
+!$omp end do nowait
 
+  if(ip>0) then
+     call create_cloud(xtest,ind_sink,ind_grid,is_central,ip)
+  end if
+!$omp end parallel
 
 #endif
 end subroutine create_cloud_from_sink
+!################################################################
+!################################################################
+!################################################################
+subroutine create_cloud(xtest,ind_sink,ind_grid,is_central,np)
+  use amr_commons
+  use pm_commons
+  use hydro_commons
+  use mpi_mod
+  use utils, only: find_grid_containing
+  implicit none
+  real(dp),dimension(1:nvector,1:ndim),intent(in) :: xtest
+  integer ,dimension(1:nvector),intent(in) :: ind_sink,ind_grid
+  logical ,dimension(1:nvector),intent(in) :: is_central
+  integer ,intent(in) :: np
+  integer ,dimension(1:nvector) :: ind_part,ind_grid_test,ind_cell_test,ind_lvl_test,cc
+  logical ,dimension(1:nvector) :: ok,ok_true
+  integer :: i,j,nnew,indp,isink
+
+  call find_grid_containing(xtest,ind_grid_test,ind_cell_test,ind_lvl_test,np)
+
+  ok=.true.
+  ok_true=.true.
+
+  nnew=0
+  do j=1,np
+     ok(j)=ok(j) .and. cpu_map(ind_cell_test(j))==myid
+     if(ok(j)) nnew=nnew+1
+  end do
+
+  call remove_free(ind_part,nnew)
+!$omp critical
+  call add_list(ind_part,ind_grid,ok_true,nnew)
+!$omp end critical
+  i = 0
+  do j=1,np
+     if(ok(j)) then
+        i = i + 1
+        indp=ind_part(i)
+        isink=ind_sink(j)
+        idp(indp)=-isink
+        levelp(indp)=nlevelmax_current
+        mp(indp)=msink(isink)/dble(ncloud_sink)
+        xp(indp,1:3)=xtest(j,1:3)
+        vp(indp,1:3)=vsink(isink,1:3)
+        tp(indp)=tsink(isink)     ! Birth epoch
+        typep(indp)%family = FAM_CLOUD
+        if(is_central(j))then
+           typep(indp)%tag = TAG_CLOUD_CENTRAL  !Central cloud particle
+        else
+           typep(indp)%tag = 0
+        endif
+     end if
+  end do
+
+end subroutine create_cloud
 !################################################################
 !################################################################
 !################################################################
