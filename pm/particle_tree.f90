@@ -448,7 +448,7 @@ subroutine kill_tree_fine(ilevel)
      ig=0
      ip=0
      ! Loop over grids
-!$omp do private(igrid,npart1,ipart,next_part)
+!$omp do private(igrid,npart1,ipart,next_part) schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
