@@ -1604,7 +1604,7 @@ subroutine create_cloud_from_sink
 !$omp parallel private(ip,is_central,xrel,rr,xcloud,xtest,in_box,ind_sink)
    ip = 0
    is_central=.false.
-!$omp do collapse(3)
+!$omp do collapse(3) schedule(dynamic,nchunk)
   do kk=-2*ir_cloud,2*ir_cloud
   do jj=-2*ir_cloud,2*ir_cloud
   do ii=-2*ir_cloud,2*ir_cloud
@@ -1697,7 +1697,6 @@ subroutine create_cloud(xtest,ind_sink,ind_grid,is_central,np)
         endif
      end if
   end do
-  if(nnew/=i) stop
 
 end subroutine create_cloud
 !################################################################
