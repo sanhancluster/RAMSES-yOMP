@@ -1601,7 +1601,7 @@ subroutine create_cloud_from_sink
   rmass=dble(ir_cloud_massive)*dx_min
 
   ! Create cloud
-!$omp parallel private(ip,is_central,xrel,rr,xcloud,xtest,in_box)
+!$omp parallel private(ip,is_central,xrel,rr,xcloud,xtest,in_box,ind_sink)
    ip = 0
    is_central=.false.
 !$omp do collapse(3)
@@ -1623,7 +1623,7 @@ subroutine create_cloud_from_sink
            end do
            if(in_box) then
               ip = ip + 1
-              xtest(ip,:) = xcloud(:)
+              xtest(ip,1:3) = xcloud(1:3)
               ind_sink(ip) = isink
               if((ii==0).and.(jj==0).and.(kk==0)) is_central(ip)=.true.
               if(ip==nvector) then
