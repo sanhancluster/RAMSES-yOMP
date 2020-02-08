@@ -1676,9 +1676,7 @@ subroutine create_cloud(xtest,ind_sink,ind_grid,is_central,np)
   end do
 
   call remove_free(ind_part,nnew)
-!$omp critical
-  call add_list(ind_part,ind_grid,ok_true,nnew)
-!$omp end critical
+  call add_list_single_critical(ind_part,ind_grid,ok_true,nnew)
   i = 0
   do j=1,np
      if(ok(j)) then
@@ -1699,6 +1697,7 @@ subroutine create_cloud(xtest,ind_sink,ind_grid,is_central,np)
         endif
      end if
   end do
+  if(nnew/=i) stop
 
 end subroutine create_cloud
 !################################################################

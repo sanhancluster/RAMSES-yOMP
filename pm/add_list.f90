@@ -35,7 +35,100 @@ subroutine add_list(ind_part,ind_grid,ok,np)
      end if
   end do
 end subroutine add_list
+!################################################################
+!################################################################
+!################################################################
+!################################################################
+subroutine add_list_single(ind_part,ind_grid,ok,np)
+  use amr_commons
+  use pm_commons
+  implicit none
+  integer, intent(in)::np,ind_grid
+  integer,dimension(1:nvector),intent(in)::ind_part
+  logical,dimension(1:nvector),intent(in)::ok
+  integer::j,tailp_old,tailp_new,headp_new,nadd
 
+  nadd = 0
+  headp_new = 0
+  do j=1,np
+     if(ok(j))then
+        if(headp_new == 0) then
+           headp_new = ind_part(j)
+        end if
+        tailp_new = ind_part(j)
+        nadd = nadd + 1
+     end if
+  end do
+
+  if(nadd > 0) then
+     ! Extend the tail
+     tailp_old = tailp(ind_grid)
+     tailp(ind_grid) = tailp_new
+     if (numbp(ind_grid) <= 0) then
+        headp(ind_grid) = headp_new
+     end if
+     numbp(ind_grid) = numbp(ind_grid) + nadd
+     nextp(tailp_new) = 0
+
+     ! Fill the middle
+     do j=1,np
+        if(ok(j)) then
+           ! Add particle at the tail of its linked list
+           if(tailp_old /= 0) nextp(tailp_old) = ind_part(j)
+           prevp(ind_part(j)) = tailp_old
+           tailp_old = ind_part(j)
+        end if
+     end do
+  end if
+end subroutine add_list_single
+!################################################################
+!################################################################
+!################################################################
+!################################################################
+subroutine add_list_single_critical(ind_part,ind_grid,ok,np)
+  use amr_commons
+  use pm_commons
+  implicit none
+  integer, intent(in)::np,ind_grid
+  integer,dimension(1:nvector),intent(in)::ind_part
+  logical,dimension(1:nvector),intent(in)::ok
+  integer::j,tailp_old,tailp_new,headp_new,nadd
+
+  nadd = 0
+  headp_new = 0
+  do j=1,np
+     if(ok(j))then
+        if(headp_new == 0) then
+           headp_new = ind_part(j)
+        end if
+        tailp_new = ind_part(j)
+        nadd = nadd + 1
+     end if
+  end do
+
+  if(nadd > 0) then
+     ! Extend the tail
+!$omp critical
+     tailp_old = tailp(ind_grid)
+     tailp(ind_grid) = tailp_new
+     if (numbp(ind_grid) <= 0) then
+        headp(ind_grid) = headp_new
+     end if
+     numbp(ind_grid) = numbp(ind_grid) + nadd
+!$omp end critical
+     nextp(tailp_new) = 0
+
+     ! Fill the middle
+     do j=1,np
+        if(ok(j)) then
+           ! Add particle at the tail of its linked list
+           if(tailp_old /= 0) nextp(tailp_old) = ind_part(j)
+           prevp(ind_part(j)) = tailp_old
+           tailp_old = ind_part(j)
+        end if
+     end do
+  end if
+end subroutine add_list_single_critical
 !################################################################
 !################################################################
 !################################################################
@@ -206,60 +299,3 @@ subroutine add_free_cond(ind_part,ok,np)
   npart=npartmax-numbp_free
 !$omp end critical(omp_particle_free)
 end subroutine add_free_cond
-!################################################################
-!################################################################
-!################################################################
-!################################################################
-subroutine add_list_single(ind_part,ind_grid,np)
-  use amr_commons
-  use pm_commons
-  implicit none
-  integer, intent(in)::np,ind_grid
-  integer,dimension(1:np), intent(out)::ind_part
-  integer::j,jstart,ipart,tailp_local
-
-  !
-  ! remove_free + add_list
-  ! Add particles to their linked list of single grid
-  ! Minimized critical regions, thread-safe
-  !
-
-!$omp critical
-  numbp_free=numbp_free-np
-  npart=npartmax-numbp_free
-  if(numbp_free<0)then
-     write(*,*)'No more free memory'
-     write(*,*)'in PE ',myid
-     write(*,*)'Increase npartmax'
-     call clean_stop
-  end if
-  do j=1,np
-     ipart=headp_free
-     ind_part(j)=ipart
-     headp_free=nextp(headp_free)
-  end do
-
-  if (numbp(ind_grid)==0) then
-     headp(ind_grid)=ind_part(1)
-     tailp(ind_grid)=ind_part(1)
-     prevp(ind_part(1))=0
-     nextp(ind_part(1))=0
-     jstart=2
-  else
-     jstart=1
-  end if
-  ! Attach the last particle first
-  tailp_local=tailp(ind_grid)
-  tailp(ind_grid)=ind_part(np)
-  nextp(tailp(ind_grid))=0
-  numbp(ind_grid)=numbp(ind_grid)+np
-!$omp end critical
-
-  ! Fill the middle
-  do j=jstart,np
-     nextp(tailp_local)=ind_part(j)
-     prevp(ind_part(j))=tailp_local
-     tailp_local=ind_part(j)
-  end do
-
-end subroutine add_list_single
