@@ -115,8 +115,8 @@ subroutine add_list_single_critical(ind_part,ind_grid,ok,np)
         headp(ind_grid) = headp_new
      end if
      numbp(ind_grid) = numbp(ind_grid) + nadd
-!$omp end critical
      nextp(tailp_new) = 0
+!$omp end critical
 
      ! Fill the middle
      do j=1,np
