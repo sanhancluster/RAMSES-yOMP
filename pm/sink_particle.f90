@@ -1550,7 +1550,6 @@ subroutine create_cloud_from_sink
   use pm_commons
   use hydro_commons
   use mpi_mod
-  use utils, only: find_grid_containing
   implicit none
   !----------------------------------------------------------------------
   ! This routine creates the whole cloud of particles for each sink,
@@ -1676,7 +1675,7 @@ subroutine create_cloud(xtest,ind_sink,ind_grid,is_central,np)
   end do
 
   call remove_free(ind_part,nnew)
-  call add_list_single_critical(ind_part,ind_grid,ok_true,nnew)
+  call add_list_single_critical(ind_part,ind_grid(1),ok_true,nnew)
   i = 0
   do j=1,np
      if(ok(j)) then
