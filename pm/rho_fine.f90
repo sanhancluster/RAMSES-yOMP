@@ -818,7 +818,9 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
            ok2(j,ind)=ok(j,ind).and.mmm(j)>0.0
         end do
      else
-        ok2(j,ind)=ok(j,ind)
+        do j=1,np
+           ok2(j,ind)=ok(j,ind)
+        end do
      endif
 
      ! Keep only DM particle with a mass below the mass cut
