@@ -111,7 +111,7 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
 #endif
 
   fdust=0d0
-  countmax=10000
+  countmax=100000
   year=3600_dp*24_dp*365_dp
   ! Mesh spacing in that level
   dx=0.5D0**ilevel
