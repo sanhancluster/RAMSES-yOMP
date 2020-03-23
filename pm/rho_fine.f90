@@ -247,6 +247,7 @@ subroutine rho_from_current_level(ilevel)
   use pm_commons
   use hydro_commons
   use poisson_commons
+  use omp_lib
   implicit none
   integer::ilevel
   !------------------------------------------------------------------
@@ -265,11 +266,27 @@ subroutine rho_from_current_level(ilevel)
 
   integer :: counter
 
+  integer,dimension(1:IRandNumSize),save :: ompseed
+  real(dp) :: rand,proba,factor
+  integer :: nrest1,nrest2
+  logical :: ok
+
+#ifdef _OPENMP
+!$omp parallel
+  ! Give slight offsets for each OMP threads
+  ompseed=MOD(localseed+omp_get_thread_num()+1,4096)
+!$omp end parallel
+#else
+  ompseed=MOD(localseed+1,4096)
+#endif
+  call ranf(localseed,rand)
+
   ! Mesh spacing in that level
   dx=0.5D0**ilevel
 
   ! Loop over cpus
-!$omp parallel private(ig,ip,ind_grid,ind_part,ind_grid_part,ind_cell,x0,igrid,npart1,ipart,counter) reduction(+:multipole)
+!$omp parallel private(ig,ip,ind_grid,ind_part,ind_grid_part,ind_cell,x0,igrid,npart1,ipart,counter, &
+!$omp & rand,proba,nrest1,nrest2,ok,factor) reduction(+:multipole)
   do icpu=1,ncpu
      ! Loop over grids
      ig=0
@@ -289,14 +306,32 @@ subroutine rho_from_current_level(ilevel)
            ipart=headp(igrid)
 
            counter = 0
+           nrest2=npartmax_rho
            ! Loop over particles
+           if(ilevel>=cg_levelmin .and. npart1>npartmax_rho)then
+              factor = real(npart1,dp)/npartmax_rho
+              !write(*,*)"ilevel = ",ilevel,"npart = ",npart1,"factor = ",factor
+           else
+              factor = 1d0
+           end if
            do jpart=1,npart1
               if(ig==0)then
                  ig=1
                  ind_grid(ig)=igrid
               end if
+
+              ok=.true.
+              ! If the number of particles in grid is larger than threshold, apply random sampling.
+              if(ilevel>=cg_levelmin .and. npart1>npartmax_rho)then
+                 nrest1=npart1-jpart+1
+                 proba=real(nrest2,dp)/nrest1
+                 call ranf(ompseed,rand)
+                 ok=rand<proba
+              end if
+              if(ok)nrest2=nrest2-1
+
               ! MC Tracer patch
-              if (is_not_tracer(typep(ipart))) then
+              if (is_cloud(typep(ipart)) .or. (is_not_tracer(typep(ipart)) .and. ok)) then
                  ip=ip+1
                  ind_part(ip)=ipart
                  ind_grid_part(ip)=ig
@@ -318,7 +353,7 @@ subroutine rho_from_current_level(ilevel)
 #ifdef TSC
                  call tsc_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel)
 #else
-                 call cic_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel,multipole)
+                 call cic_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel,multipole,factor)
 #endif
                  ip=0
                  ig=0
@@ -327,6 +362,26 @@ subroutine rho_from_current_level(ilevel)
               ipart=nextp(ipart)  ! Go to next particle
            end do
            ! End loop over particles
+
+           if(ilevel>=cg_levelmin .and. npart1>npartmax_rho .and. ip>0)then
+              ! Lower left corner of 3x3x3 grid-cube
+              do idim=1,ndim
+                 do i=1,ig
+                    x0(i,idim)=xg(ind_grid(i),idim)-3.0D0*dx
+                 end do
+              end do
+              do i=1,ig
+                 ind_cell(i)=father(ind_grid(i))
+              end do
+#ifdef TSC
+        call tsc_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel)
+#else
+              call cic_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel,multipole,factor)
+#endif
+              ip=0
+              ig=0
+              counter=0
+           end if
 
            ! Only tracers, remove one cache line
            if (counter == 0 .and. ig > 0) then
@@ -350,7 +405,7 @@ subroutine rho_from_current_level(ilevel)
 #ifdef TSC
         call tsc_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel)
 #else
-        call cic_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel,multipole)
+        call cic_amr(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel,multipole,factor)
 #endif
      end if
 
@@ -557,7 +612,7 @@ end subroutine multipole_from_current_level
 !##############################################################################
 !##############################################################################
 !##############################################################################
-subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp)
+subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp,factor)
   use amr_commons
   use pm_commons
   use poisson_commons
@@ -594,6 +649,8 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
   real(dp),dimension(1:3)::skip_loc
   real(dp),dimension(1:threetondim,1:twotondim)::rho_add,rho_top_add,phi_add
   integer ,dimension(1:threetondim,1:twotondim)::indp_nb
+
+  real(dp)::factor
 
   ! Mesh spacing in that level
   dx=0.5D0**ilevel
@@ -851,14 +908,22 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
         if(cic_levelmax==0.or.ilevel<=cic_levelmax)then
            do j=1,np
               if(ok(j,ind)) then
-                 rho_add(kg(j,ind),icell(j,ind))=rho_add(kg(j,ind),icell(j,ind))+vol2(j,ind)
+                 if(is_cloud(fam(j)))then
+                    rho_add(kg(j,ind),icell(j,ind))=rho_add(kg(j,ind),icell(j,ind))+vol2(j,ind)
+                 else
+                    rho_add(kg(j,ind),icell(j,ind))=rho_add(kg(j,ind),icell(j,ind))+vol2(j,ind)*factor
+                 end if
               end if
            end do
         else if(ilevel>cic_levelmax)then
            do j=1,np
               ! check for non-DM (and non-tracer)
               if ( ok(j,ind) .and. is_not_DM(fam(j)) ) then
-                 rho_add(kg(j,ind),icell(j,ind))=rho_add(kg(j,ind),icell(j,ind))+vol2(j,ind)
+                 if(is_cloud(fam(j)))then
+                    rho_add(kg(j,ind),icell(j,ind))=rho_add(kg(j,ind),icell(j,ind))+vol2(j,ind)
+                 else
+                    rho_add(kg(j,ind),icell(j,ind))=rho_add(kg(j,ind),icell(j,ind))+vol2(j,ind)*factor
+                 end if
               end if
            end do
         end if
@@ -870,7 +935,11 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
            do j=1,np
               ! check for DM
               if ( ok(j,ind) .and. is_DM(fam(j)) ) then
-                 rho_top_add(kg(j,ind),icell(j,ind))=rho_top_add(kg(j,ind),icell(j,ind))+vol2(j,ind)
+                 if(is_cloud(fam(j)))then
+                    rho_top_add(kg(j,ind),icell(j,ind))=rho_top_add(kg(j,ind),icell(j,ind))+vol2(j,ind)
+                 else
+                    rho_top_add(kg(j,ind),icell(j,ind))=rho_top_add(kg(j,ind),icell(j,ind))+vol2(j,ind)*factor
+                 end if
               end if
            end do
         endif
@@ -881,13 +950,21 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
         if(cic_levelmax==0.or.ilevel<cic_levelmax)then
            do j=1,np
               if(ok2(j,ind))then
-                 phi_add(kg(j,ind),icell(j,ind))=phi_add(kg(j,ind),icell(j,ind))+vol3(j,ind)
+                 if(is_cloud(fam(j)))then
+                    phi_add(kg(j,ind),icell(j,ind))=phi_add(kg(j,ind),icell(j,ind))+vol3(j,ind)
+                 else
+                    phi_add(kg(j,ind),icell(j,ind))=phi_add(kg(j,ind),icell(j,ind))+vol3(j,ind)*factor
+                 end if
               end if
            end do
         else if(ilevel>=cic_levelmax)then
            do j=1,np
               if ( ok2(j,ind) .and. is_not_DM(fam(j)) ) then
-                 phi_add(kg(j,ind),icell(j,ind))=phi_add(kg(j,ind),icell(j,ind))+vol3(j,ind)
+                 if(is_cloud(fam(j)))then
+                    phi_add(kg(j,ind),icell(j,ind))=phi_add(kg(j,ind),icell(j,ind))+vol3(j,ind)
+                 else
+                    phi_add(kg(j,ind),icell(j,ind))=phi_add(kg(j,ind),icell(j,ind))+vol3(j,ind)*factor
+                 end if
               end if
            end do
         endif
@@ -949,16 +1026,26 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
         if(cic_levelmax==0.or.ilevel<=cic_levelmax)then
            do j=1,np
               if(ok(j,ind))then
+                 if(is_cloud(fam(j)))then
 !$omp atomic update
-                 rho(indp(j,ind))=rho(indp(j,ind))+vol2(j,ind)
+                    rho(indp(j,ind))=rho(indp(j,ind))+vol2(j,ind)
+                 else
+!$omp atomic update
+                    rho(indp(j,ind))=rho(indp(j,ind))+vol2(j,ind)*factor
+                 end if
               end if
            end do
         else if(ilevel>cic_levelmax)then
            do j=1,np
               ! check for non-DM (and non-tracer)
               if ( ok(j,ind) .and. is_not_DM(fam(j)) ) then
+                 if(is_cloud(fam(j)))then
 !$omp atomic update
-                 rho(indp(j,ind))=rho(indp(j,ind))+vol2(j,ind)
+                    rho(indp(j,ind))=rho(indp(j,ind))+vol2(j,ind)
+                 else
+!$omp atomic update
+                    rho(indp(j,ind))=rho(indp(j,ind))+vol2(j,ind)*factor
+                 end if
               end if
            end do
         endif
@@ -969,8 +1056,13 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
            do j=1,np
               ! check for DM
               if ( ok(j,ind) .and. is_DM(fam(j)) ) then
+                 if(is_cloud(fam(j)))then
 !$omp atomic update
-                 rho_top(indp(j,ind))=rho_top(indp(j,ind))+vol2(j,ind)
+                    rho_top(indp(j,ind))=rho_top(indp(j,ind))+vol2(j,ind)
+                 else
+!$omp atomic update
+                    rho_top(indp(j,ind))=rho_top(indp(j,ind))+vol2(j,ind)*factor
+                 end if
               end if
            end do
         endif
@@ -980,15 +1072,25 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
         if(cic_levelmax==0.or.ilevel<cic_levelmax)then
            do j=1,np
               if(ok2(j,ind))then
+                 if(is_cloud(fam(j)))then
 !$omp atomic update
-                 phi(indp(j,ind))=phi(indp(j,ind))+vol3(j,ind)
+                    phi(indp(j,ind))=phi(indp(j,ind))+vol3(j,ind)
+                 else
+!$omp atomic update
+                    phi(indp(j,ind))=phi(indp(j,ind))+vol3(j,ind)*factor
+                 end if
               end if
            end do
         else if(ilevel>=cic_levelmax)then
            do j=1,np
               if ( ok2(j,ind) .and. is_not_DM(fam(j)) ) then
+                 if(is_cloud(fam(j)))then
 !$omp atomic update
-                 phi(indp(j,ind))=phi(indp(j,ind))+vol3(j,ind)
+                    phi(indp(j,ind))=phi(indp(j,ind))+vol3(j,ind)
+                 else
+!$omp atomic update
+                    phi(indp(j,ind))=phi(indp(j,ind))+vol3(j,ind)*factor
+                 end if
               end if
            end do
         endif

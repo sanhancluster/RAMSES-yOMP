@@ -11,6 +11,8 @@ module pm_parameters
   real(dp)::mstar_lost=0            ! Missing star mass
 
   integer::ntracer_tot=0            ! Total number of tracers
+  integer::npartmax_rho=10000       ! Maximum number of particles in single grid to compute rho
+                                    ! Exceeding grid particles are randomly sampled by this number
 
   ! More sink related parameters, can all be set in namelist file
 
