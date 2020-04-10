@@ -44,7 +44,7 @@ subroutine read_params
        & ,npartmax,nparttot,nexpand,boxlen,nlevel_collapse &
        & ,nsinkmax,levelhold
   namelist/poisson_params/epsilon,gravity_type,gravity_params &
-       & ,cg_levelmin,cic_levelmax
+       & ,cg_levelmin,cic_levelmax,npartmax_rho
   namelist/lightcone_params/thetay_cone,thetaz_cone,zmax_cone
   namelist/movie_params/levelmax_frame,nw_frame,nh_frame,ivar_frame &
        & ,xcentre_frame,ycentre_frame,zcentre_frame,movie_vars &
