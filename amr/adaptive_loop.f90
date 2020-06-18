@@ -16,7 +16,6 @@ subroutine adaptive_loop
   integer::i,ncell
   real(kind=8)::tt1,tt2,muspt,muspt_this_step,wallsec,dumpsec
   real(kind=4)::real_mem,real_mem_tot
-  real(kind=8),save::tstart=0.0
 #endif
   character(len=1000)::filename
   logical::ic_sink=.false.
@@ -239,11 +238,17 @@ subroutine adaptive_loop
         if(walltime_hrs>0d0) then
            wallsec = walltime_hrs*3600.     ! Convert from hours to seconds
            dumpsec = minutes_dump*60.       ! Convert minutes before end to seconds
+           stopsec = early_stop_hrs*3600.
+           end if
            if(wallsec-dumpsec<tt2-tstart) then
               output_now=.true.
               if(myid==1) write(*,*) 'Dumping snapshot before walltime runs out'
               ! Now set walltime to a negative number so we don't keep printing outputs
               walltime_hrs = -1d0
+           endif
+           if(wallsec-stopsec<tt2-tstart) then
+              stop_next=.true.
+              if(myid==1) write(*,*) 'The run will stop at next scheduled dump'
            endif
         endif
         if(wallstep>0 .and. nstep_coarse-nstep_coarse_start>=wallstep) then

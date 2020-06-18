@@ -124,11 +124,14 @@ module amr_parameters
   integer::foutput=1000000    ! Frequency of outputs
   logical::gadget_output=.false. ! Output in gadget format
   logical::output_now=.false. ! write output next step
+  logical::stop_next=.false.  ! write output at next scheduled dump
   real(dp)::walltime_hrs=-1.  ! Wallclock time for submitted job
   real(dp)::minutes_dump=1.   ! Dump an output minutes before walltime ends
+  real(dp)::early_stop_hrs=-1.! Stop at next scheduled dump when walltime remains less than this
   logical::dump_stop=.true.   ! Stop when non-scheduled dump is finished
   integer::foutput_timer=-1   ! Output frequency of timer
-  integer::wallstep=-1       ! Number of step foward to finish
+  integer::wallstep=-1        ! Number of step foward to finish
+  real(dp)::tstart=0.0        ! MPI clock at start
 
   ! Lightcone parameters
   real(dp)::thetay_cone=12.5

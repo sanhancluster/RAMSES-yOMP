@@ -23,7 +23,7 @@ recursive subroutine amr_step(ilevel,icount)
   ! unless you check all consequences first                           !
   !-------------------------------------------------------------------!
   integer::i,idim,ivar
-  logical::ok_defrag,output_now_all
+  logical::ok_defrag,output_now_all,stop_next_all
   logical,save::first_step=.true.
   character(LEN=80)::str
 
@@ -135,6 +135,7 @@ recursive subroutine amr_step(ilevel,icount)
      ! check if any of the processes received a signal for output
      call MPI_BARRIER(MPI_COMM_WORLD,mpi_err)
      call MPI_ALLREDUCE(output_now,output_now_all,1,MPI_LOGICAL,MPI_LOR,MPI_COMM_WORLD,mpi_err)
+     call MPI_ALLREDUCE(stop_next,stop_next_all,1,MPI_LOGICAL,MPI_LOR,MPI_COMM_WORLD,mpi_err)
 #endif
      if(mod(nstep_coarse,foutput)==0.or.aexp>=aout(iout).or.t>=tout(iout).or.output_now_all.EQV..true.)then
                                call timer('io','start')
@@ -159,6 +160,10 @@ recursive subroutine amr_step(ilevel,icount)
            if (dump_stop) then
               call clean_stop
            endif
+        endif
+
+        if(stop_next_all) then
+           call clean_stop
         endif
 
      endif

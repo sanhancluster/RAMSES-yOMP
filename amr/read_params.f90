@@ -39,7 +39,7 @@ subroutine read_params
        & ,dtstop,nthr_cg,magic_number,nchunk
   namelist/output_params/output,noutput,foutput,aout,tout &
        & ,tend,delta_tout,aend,delta_aout,gadget_output,walltime_hrs,minutes_dump &
-       & ,dump_stop,foutput_timer,wallstep
+       & ,early_stop_hrs,dump_stop,foutput_timer,wallstep
   namelist/amr_params/levelmin,levelmax,ngridmax,ngridtot &
        & ,npartmax,nparttot,nexpand,boxlen,nlevel_collapse &
        & ,nsinkmax,levelhold
