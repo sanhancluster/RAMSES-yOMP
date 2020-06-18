@@ -14,7 +14,7 @@ subroutine adaptive_loop
   integer(kind=8)::n_step
   integer::info,tot_pt
   integer::i,ncell
-  real(kind=8)::tt1,tt2,muspt,muspt_this_step,wallsec,dumpsec
+  real(kind=8)::tt1,tt2,muspt,muspt_this_step,wallsec,dumpsec,stopsec
   real(kind=4)::real_mem,real_mem_tot
 #endif
   character(len=1000)::filename
@@ -239,7 +239,6 @@ subroutine adaptive_loop
            wallsec = walltime_hrs*3600.     ! Convert from hours to seconds
            dumpsec = minutes_dump*60.       ! Convert minutes before end to seconds
            stopsec = early_stop_hrs*3600.
-           end if
            if(wallsec-dumpsec<tt2-tstart) then
               output_now=.true.
               if(myid==1) write(*,*) 'Dumping snapshot before walltime runs out'
