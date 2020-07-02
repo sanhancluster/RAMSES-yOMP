@@ -75,17 +75,17 @@ subroutine phi_fine_cg(ilevel,icount)
   !  end while
   !
   !=========================================================
-  integer::i,ind,iter,iskip,itermax,nx_loc,icpu,ngrid,off,off2
-  integer::idx,addr,nact,nrec,ntot,ncache,idim,ig,ih,j,k
+  integer::i,ind,iter,iskip,itermax,nx_loc,icpu,off,off2
+  integer::idx,addr,nact,ntot,ncache,idim,ig,ih,j,k
   integer::countsend,countrecv
   integer,dimension(ncpu)::reqsend,reqrecv
   real(dp)::error,error_ini
   real(dp)::dx2,fourpi,scale,oneoversix,fact,fact2,prefac
-  real(dp)::r2_old=0.,alpha_cg,alpha_cg_old,beta_cg,gamma_cg,gamma_cg_old,delta_cg
+  real(dp)::alpha_cg,alpha_cg_old,beta_cg,gamma_cg,gamma_cg_old,delta_cg
   real(dp), dimension(1:2) :: local,global
-  real(kind=8)::r2,pAp,rhs_norm,residu
+  real(kind=8)::rhs_norm,residu
 #ifndef WITHOUTMPI
-  real(kind=8) :: rhs_norm_all, pAp_all, r2_all
+  real(kind=8) :: rhs_norm_all
 #endif
   integer,dimension(1:3,1:2,1:8)::iii,jjj
   integer,dimension(0:twondim)::igridn=0
@@ -133,7 +133,7 @@ subroutine phi_fine_cg(ilevel,icount)
 !$omp parallel private(iskip,idx) reduction(+:rhs_norm)
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
-!$omp do schedule(static)
+!$omp do
 	 do i=1,active(ilevel)%ngrid
 		idx=active(ilevel)%igrid(i)+iskip
 		rhs_norm=rhs_norm+fact2*(rho(idx)-rho_tot)*(rho(idx)-rho_tot)
@@ -141,6 +141,7 @@ subroutine phi_fine_cg(ilevel,icount)
 !$omp end do nowait
   end do
 !$omp end parallel
+
   ! Compute global norms
 #ifndef WITHOUTMPI
   call MPI_ALLREDUCE(rhs_norm,rhs_norm_all,1,MPI_DOUBLE_PRECISION,MPI_SUM,&
@@ -159,7 +160,9 @@ subroutine phi_fine_cg(ilevel,icount)
    end do
    ntot = ntot * twotondim + nact
 
+!$omp parallel do
    do i=1,ntot
+      f(i,:) = 0d0
       fcg(i,:) = 0d0
       addrl(i) = 0
       nborl(i,:) = 0
@@ -170,16 +173,19 @@ subroutine phi_fine_cg(ilevel,icount)
   ! active comes first, and reception
   ! and copy phi, b, r to linearly addressed array
   !==============================================
+!$omp parallel private(ncache,iskip,idx,addr,off)
    ncache = active(ilevel)%ngrid
    do ind=1,twotondim
       iskip=ncoarse+(ind-1)*ngridmax
+!$omp do
       do i=1,ncache
          idx=active(ilevel)%igrid(i)+iskip
-         addr = (ind-1)*ncache + i
+         addr = (ind-1) * ncache + i
          addrl(idx) = addr
          fcg(addr,1) = phi(idx)
          fcg(addr,2) = rho(idx)
       end do
+!$omp end do nowait
   end do
 
   off = nact
@@ -188,29 +194,31 @@ subroutine phi_fine_cg(ilevel,icount)
      if(ncache>0) then
         do ind=1,twotondim
            iskip = ncoarse+(ind-1)*ngridmax
+!$omp do
            do i=1,ncache
               idx=reception(icpu,ilevel)%igrid(i)+iskip
-              addrl(idx) = off + (ind-1)*ncache + i
+              addrl(idx) = off + (ind-1) * ncache + i
            end do
+!$omp end do nowait
         end do
      end if
-     off = off + ncache*twotondim
+     off = off + ncache * twotondim
   end do
-  ntot = off
+!$omp end parallel
 
   !==============================================
   ! Setup a pointer array for neighbors
   ! and store it into nborl(i,:)
   !==============================================
-  nborl(:,:)=0
+!$omp parallel private(ncache,igrid,off,off2,idx,igridn,j,ig,ih)
   off2 = nact
   do icpu=1,ncpu
      if (icpu==myid) then
         ncache = active(ilevel)%ngrid
-        igrid = active(ilevel)%igrid
+        igrid => active(ilevel)%igrid
      else
         ncache = reception(icpu,ilevel)%ngrid
-        igrid = reception(icpu,ilevel)%igrid
+        igrid => reception(icpu,ilevel)%igrid
      end if
      if(ncache > 0) then
         do ind=1,twotondim
@@ -219,28 +227,28 @@ subroutine phi_fine_cg(ilevel,icount)
            else
               off = off2
            end if
+!$omp do
            do i=1,ncache
               idx = igrid(i)
               igridn(0)=idx
               do j=1,twondim
                  igridn(j) = son(nbor(idx,j))
               end do
-              do j=1,twondim
-                 idim = (j+1)/2
-              end do
               do idim=1,ndim
                  do k=1,2
                     j = (idim-1)*2 + k
-                    ig = igridn(iii(idim,j,ind))
-                    ih = ncoarse+(jjj(idim,j,ind)-1)*ngridmax
+                    ig = iii(idim,k,ind)
+                    ih = ncoarse+(jjj(idim,k,ind)-1)*ngridmax
                     if(igridn(ig)>0) nborl(off + i, j) = addrl(igridn(ig)+ih)
                  end do
               end do
            end do
+!$omp end do nowait
            if (icpu/=myid) off2 = off2 + ncache
         end do
      end if
    end do
+!$omp end parallel
 
   !==============================================
   ! Compute r = b - Ax and store it into f(i,1) (apply linear addressing)
@@ -260,10 +268,12 @@ subroutine phi_fine_cg(ilevel,icount)
   !==============================================
   ! Set u = Minv r and store it into f(i, 2)
   !==============================================
+!$omp parallel private(residu)
+!$omp do
   do i=1,ntot
      residu = 0d0
      do j=1,twondim
-        residu = residu + f(nborl(i, j), 1)
+        if(nborl(i, j)>0) residu = residu + f(nborl(i, j), 1)
      end do
      f(i, 2) = oneoversix*residu + prefac*f(i, 1)
   end do
@@ -271,13 +281,15 @@ subroutine phi_fine_cg(ilevel,icount)
   !==============================================
   ! Set w = Au and store it into f(i, 3)
   !==============================================
+!$omp do
   do i=1, nact
      residu = 0d0
      do j=1,twondim
-        residu = residu + f(nborl(i, j), 2)
+        if(nborl(i, j)>0) residu = residu + f(nborl(i, j), 2)
      end do
      f(i, 3) = oneoversix*residu - f(i, 2)
    end do
+!$omp end parallel
 
   !==============================================
   ! Post receive of ghostzones for w for first iteration
@@ -291,6 +303,7 @@ subroutine phi_fine_cg(ilevel,icount)
   gamma_cg=0.0; delta_cg=0.0
   error=1.0D0; error_ini=1.0D0
   !! Main bottleneck
+
   do while(error>epsilon*error_ini.and.iter<itermax)
 #ifndef WITHOUTMPI
      if (iter>0) then
@@ -307,6 +320,11 @@ subroutine phi_fine_cg(ilevel,icount)
      call send_virtual_linear(f(1,3), ilevel, countsend, reqsend)
 
 #endif
+
+     !====================================
+     ! Compute dot products. gamma_cg = r.u, delta_cg = w.u
+     !====================================
+!$omp parallel do reduction(+:gamma_cg,delta_cg)
      do i=1,nact
         gamma_cg = gamma_cg + f(i, 1)*f(i, 2)
         delta_cg = delta_cg + f(i, 3)*f(i, 2)
@@ -331,7 +349,7 @@ subroutine phi_fine_cg(ilevel,icount)
      !==============================================
      error=DSQRT(gamma_cg/dble(twotondim*numbtot(1,ilevel)))
      if(iter==1)error_ini=error
-     if(verbose)write(*,112)iter,error/rhs_norm,error/error_ini
+     if(myid==1 .and. verbose) write(*,112)iter,error/rhs_norm,error/error_ini,alpha_cg,beta_cg,gamma_cg,delta_cg
 
      !==============================================
      ! Compute alpha, beta factors
@@ -349,10 +367,11 @@ subroutine phi_fine_cg(ilevel,icount)
      !==============================================
      ! Find m= Minv w. Do it in ghostzones too, so that p.m does not have to be synced below
      !==============================================
+!$omp parallel do private(residu)
      do i=1,ntot
         residu = 0d0
         do j=1,twondim
-           residu = residu + f(nborl(i, j), 3)
+           if(nborl(i, j)>0) residu = residu + f(nborl(i, j), 3)
         end do
         fcg(i, 3) = oneoversix*residu + prefac*f(i, 3)
       end do
@@ -363,16 +382,18 @@ subroutine phi_fine_cg(ilevel,icount)
      if (error>epsilon*error_ini.and.iter<itermax) then
         call recv_virtual_linear(f(1,3), nact, ilevel, countrecv, reqrecv)
      end if
+
      gamma_cg_old = gamma_cg
      gamma_cg = 0.0; delta_cg = 0.0
 
      !==============================================
      ! Compute n = A m
      !==============================================
+!$omp parallel do private(residu)
      do i=1,nact
         residu = 0d0
         do j=1,twondim
-           residu = residu + fcg(nborl(i, j), 3)
+           if(nborl(i, j)>0) residu = residu + fcg(nborl(i, j), 3)
         end do
         fcg(i, 4) = oneoversix*residu - fcg(i, 3)
      end do
@@ -380,6 +401,7 @@ subroutine phi_fine_cg(ilevel,icount)
      !====================================
      ! Recurrence relations
      !====================================
+!$omp parallel do
      do i=1,nact
         fcg(i,5) = fcg(i,4) + beta_cg * fcg(i,5) ! z   = n + beta*z
         fcg(i,6) = fcg(i,3) + beta_cg * fcg(i,6) ! q   = m + beta*q
@@ -394,16 +416,21 @@ subroutine phi_fine_cg(ilevel,icount)
   end do
   ! End main iteration loop
 
+  !====================================
+  ! Update phi for active arrays
+  !====================================
   ncache = active(ilevel)%ngrid
+!$omp parallel private(iskip,idx)
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
-     !$omp do simd
+!$omp do
      do i=1,ncache
-        idx=igrid(i)+iskip
+        idx = active(ilevel)%igrid(i)+iskip
         phi(idx) = fcg((ind-1)*ncache + i,1)
      end do
-     !$omp enddo simd nowait
+!$omp end do nowait
   end do
+!$omp end parallel
 
   if(myid==1)write(*,115)ilevel,iter,error/rhs_norm,error/error_ini
   if(iter >= itermax)then
@@ -418,7 +445,7 @@ subroutine phi_fine_cg(ilevel,icount)
   call make_virtual_fine_dp(phi(1),ilevel)
 
 111 format('   Entering phi_fine_cg for level ',I2)
-112 format('   ==> Step=',i5,' Error=',2(1pe10.3,1x))
+112 format('   ==> Step=',i5,' Error=',6(1pe10.3,1x))
 115 format('   ==> Level=',i5,' Step=',i5,' Error=',2(1pe10.3,1x))
 
 end subroutine phi_fine_cg
@@ -437,8 +464,7 @@ subroutine cmp_residual_cg(ilevel,icount)
   ! This routine computes the residual for the Conjugate Gradient
   ! Poisson solver. The residual is stored in f(i,1).
   !------------------------------------------------------------------
-  integer::i,idim,igrid,ngrid,ncache,ind,iskip,nx_loc
-  integer::id1,id2,ig1,ig2,ih1,ih2
+  integer::i,igrid,ngrid,ncache,nx_loc
   real(dp)::dx2,fourpi,scale,oneoversix,fact
   integer,dimension(1:3,1:2,1:8)::iii,jjj
   integer ,dimension(1:nvector)::ind_grid
@@ -484,9 +510,9 @@ subroutine cmprescg1(ilevel,icount,ind_grid,ngrid,iii,jjj,oneoversix,fact)
   ! This routine computes the residual for the Conjugate Gradient
   ! Poisson solver. The residual is stored in f(i,1).
   !------------------------------------------------------------------
-  integer::i,idim,igrid,ngrid,ncache,ind,iskip,nx_loc
+  integer::i,idim,ngrid,ind,iskip
   integer::id1,id2,ig1,ig2,ih1,ih2
-  real(dp)::dx2,fourpi,scale,oneoversix,fact
+  real(dp)::oneoversix,fact
   integer,dimension(1:3,1:2,1:8)::iii,jjj
 
   integer ,dimension(1:nvector)::ind_grid,ind_cell
@@ -579,9 +605,8 @@ subroutine make_initial_phi(ilevel,icount)
   !
   !
   !
-  integer::igrid,ncache,i,ngrid,ind,iskip,idim
-  integer ,dimension(1:nvector)::ind_grid,ind_cell,ind_cell_father
-  real(dp),dimension(1:nvector,1:twotondim)::phi_int
+  integer::igrid,ncache,i,ngrid
+  integer ,dimension(1:nvector)::ind_grid
 
   ncache=active(ilevel)%ngrid
 !$omp parallel do private(igrid,ngrid,ind_grid) num_threads(nthr_cg)
@@ -608,7 +633,7 @@ subroutine makeinitphi1(ilevel,icount,ind_grid,ngrid)
   !
   !
   !
-  integer::igrid,ncache,i,ngrid,ind,iskip,idim,ibound
+  integer::i,ngrid,ind,iskip,idim
   integer ,dimension(1:nvector)::ind_grid,ind_cell,ind_cell_father
   real(dp),dimension(1:nvector,1:twotondim)::phi_int
 
@@ -667,10 +692,9 @@ subroutine make_multipole_phi(ilevel)
   use poisson_commons
   implicit none
   integer::ilevel
-  integer::idim
   integer::i,ncache,igrid,ngrid,ind
-  integer::iskip,nx_loc,ix,iy,iz
-  integer,dimension(1:nvector)::ind_grid,ind_cell
+  integer::nx_loc,ix,iy,iz
+  integer,dimension(1:nvector)::ind_grid
 
   real(dp)::dx,dx_loc,scale,fourpi,boxlen2,eps
   real(dp),dimension(1:3)::skip_loc
@@ -724,17 +748,16 @@ subroutine makemultiphi1(ilevel,ind_grid,ngrid,scale,eps,xc,skip_loc)
   use poisson_commons
   implicit none
   integer::ilevel
-  integer::ibound,boundary_dir,idim,inbor
-  integer::i,ncache,ivar,igrid,ngrid,ind
-  integer::iskip,iskip_ref,gdim,nx_loc,ix,iy,iz
+  integer::idim
+  integer::i,ngrid,ind
+  integer::iskip
   integer,dimension(1:nvector)::ind_grid,ind_cell
 
-  real(dp)::dx,dx_loc,scale,fourpi,boxlen2,eps,r2
+  real(dp)::scale,eps,r2
   real(dp),dimension(1:3)::skip_loc
   real(dp),dimension(1:twotondim,1:3)::xc
   real(dp),dimension(1:nvector)::rr,pp
   real(dp),dimension(1:nvector,1:ndim)::xx
-  real(dp),dimension(1:nvector,1:ndim)::ff
 
   ! Loop over cells
   do ind=1,twotondim
@@ -788,6 +811,7 @@ end subroutine makemultiphi1
 !###########################################################
 subroutine send_virtual_linear(xx, ilevel, countsend, reqsend)
    use amr_commons
+   use poisson_commons, only: addrl
    use mpi_mod
    implicit none
    integer::ilevel
@@ -804,19 +828,23 @@ subroutine send_virtual_linear(xx, ilevel, countsend, reqsend)
 #endif
 
 #ifndef WITHOUTMPI
+!$omp parallel private(ncache,iskip,step,idx)
    do j=1,twotondim
       do icpu=1,ncpu
          ncache=emission(icpu,ilevel)%ngrid
          if (ncache>0) then
             iskip=ncoarse+(j-1)*ngridmax
             step=(j-1)*ncache
+!$omp do
             do i=1,ncache
                idx=emission(icpu,ilevel)%igrid(i)+iskip
-               emission(icpu,ilevel)%u(i+step,1)=xx(idx)
+               emission(icpu,ilevel)%u(i+step,1)=xx(addrl(idx))
             end do
+!$omp end do nowait
          end if
       end do
    end do
+!$omp end parallel
 
    countsend=0
    do icpu=1,ncpu
@@ -844,7 +872,7 @@ subroutine recv_virtual_linear(xx, nact, ilevel, countrecv, reqrecv)
    ! at level ilevel for any double precision array in the AMR grid.
    ! -------------------------------------------------------------------
 #ifndef WITHOUTMPI
-   integer::icpu,j,ncache,nact,off,off2
+   integer::icpu,ncache,nact,off,off2
    integer::countrecv
    integer::info,tag=101
    integer,dimension(ncpu)::reqrecv
