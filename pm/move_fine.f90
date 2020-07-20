@@ -443,25 +443,6 @@ subroutine move1(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,sink_stat_local)
   if(ndim>1)skip_loc(2)=dble(jcoarse_min)
   if(ndim>2)skip_loc(3)=dble(kcoarse_min)
   scale=boxlen/dble(nx_loc)
-  dx_loc=dx*scale
-  vol_loc=dx_loc**3
-
-  ! Finest cell size
-  dx_min=(0.5D0**(nlevelmax-nlevelsheld))*scale
-  vol_min=dx_min**ndim
-  ! Typical ISM mass density from H/cc to code units
-  nISM = n_star
-  nCOM = del_star*omega_b*rhoc/aexp**3*XH/mH
-  nISM = MAX(nCOM,nISM)
-  d0   = nISM/scale_nH
-  ! Star particle mass
-  mstar=MAX(del_star*omega_b*rhoc*XH/mH,n_star)/(scale_nH*aexp**3)*vol_min
-  do i=1,nlevelmax
-     dx_temp=scale*0.5D0**i
-     ! Test is designed so that nlevelmax is activated at aexp ~ 0.8
-     if(d0*(dx_temp/2.0)**ndim.ge.mstar/2d0)nlevelmax_loc=i+1
-  enddo
-  dx_min_loc=scale*0.5d0**nlevelmax_loc
 
   ! Lower left corner of 3x3x3 grid-cube
   do idim=1,ndim
