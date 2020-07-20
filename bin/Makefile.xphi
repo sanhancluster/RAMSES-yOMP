@@ -8,7 +8,7 @@ NPRE = 8
 NENER = 0
 NGROUPS = 0
 NIONS = 0
-METALS = 1
+METALS = 0
 #Extra variables beyond those required by dimensions, or listed above
 NVAR_EXTRA = 0
 SOLVER = hydro
@@ -29,7 +29,7 @@ OPENMP = 1
 # Patches to include (without DICE)
 #PATCH = ../patch/AGNSFSNpatch/AGNspinRT:../patch/AGNSFSNpatch/sfsn
 #PATCH = ../patch/AGNSFSNpatch/sfsn
-PATCH = ../patch/debug
+#PATCH = ../patch/debug
 #############################################################################
 # Compute the right value for NVAR
 NVAR := $(shell echo $$(($(NDIM) + 2 + $(NVAR_EXTRA) + $(NIONS) + $(NENER) + $(REFMASK)+ $(METALS) )) )
@@ -74,7 +74,7 @@ endif
 # --- LONGINT ---------------------------------------------------------------
 ifeq ($(LONGINT),1)
 DEFINES += -DLONGINT
-CEXEC += _longint
+CEXEC += _lint
 endif
 # --- QUADHILBERT -----------------------------------------------------------
 ifeq ($(QUADHILBERT),1)
@@ -139,7 +139,7 @@ F90 = mpiifort -Wl,-z,noexecstack $(OMPFLAG)
 FFLAGS = -cpp $(DEFINES) -O3 -fPIC -free -xMIC-AVX512 -fma -align array64byte -finline-functions -DNOSYSTEM
 
 # --- MPI, ifort DEBUG syntax for Xeon phi ------------------------------
-#F90 = mpiifort -Wl,-z,noexecstack $(OMPFLAG) 
+#F90 = mpiifort -Wl,-z,noexecstack $(OMPFLAG)
 #FFLAGS = -cpp -O0 -g -traceback -fpe0 -ftrapuv -check bounds $(DEFINES) -DNOSYSTEM
 
 # --- MPI, ifort syntax ------------------------------
@@ -184,6 +184,9 @@ MODOBJ += poisson_commons.o hydro_parameters.o hydro_commons.o cooling_module.o 
 ifeq ($(RT),1)
 MODOBJ += rt_parameters.o rt_hydro_commons.o coolrates_module.o \
          rt_spectra.o rt_cooling_module.o rt_flux_module.o
+endif
+ifeq ($(OPENMP),1)
+MODOBJ += omp_utils.o
 endif
 ifeq ($(DICE),1)
 AMROBJ = dice_commons.o
@@ -239,8 +242,9 @@ ramses_aton: $(MODOBJ) $(ATON_MODOBJ) $(AMRLIB) $(ATON_OBJ) ramses.o
 	 rm write_patch.f90
 #############################################################################
 write_gitinfo.o: FORCE
-	 $(F90) $(FFLAGS) -DPATCH=\'$(PATCH)\' -DGITBRANCH=\'$(GITBRANCH)\' -DGITHASH=\'"$(GITHASH)"\' \
- -DGITREPO=\'$(GITREPO)\' -DBUILDDATE=\'"$(BUILDDATE)"\' -c ../amr/write_gitinfo.f90 -o $@
+	 $(F90) $(FFLAGS) -DPATCH='"$(PATCH)"' -DGITBRANCH='"$(GITBRANCH)"' \
+	 -DGITHASH='"$(GITHASH)"' -DGITREPO='"$(GITREPO)"' \
+	 -DBUILDDATE='"$(BUILDDATE)"' -c ../amr/write_gitinfo.f90 -o $@
 write_makefile.o: FORCE
 	 ../utils/scripts/cr_write_makefile.sh $(MAKEFILE_LIST)
 	 $(F90) $(FFLAGS) -c write_makefile.f90 -o $@
