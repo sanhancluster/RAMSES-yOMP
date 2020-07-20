@@ -331,7 +331,7 @@ subroutine userflag_fine(ilevel)
   ! This translates into :
   ! - a constant physical resolution at low redshift (ilevel<=nlevelmax_part+nlevel_collapse)
   ! - a constant comobile resolution at high redshift (ilevel>nlevelmax_part+nlevel_collapse)
-  if(cosmo.and.cooling)then
+  if(cosmo.and.cooling .and. holdback)then
      ! Finest cell size
      dx_min=(0.5D0**(nlevelmax-nlevelsheld))*scale
      ! Test is designed so that nlevelmax is activated at aexp ~ 0.8

@@ -42,7 +42,7 @@ subroutine read_params
        & ,early_stop_hrs,dump_stop,foutput_timer,wallstep
   namelist/amr_params/levelmin,levelmax,ngridmax,ngridtot &
        & ,npartmax,nparttot,nexpand,boxlen,nlevel_collapse &
-       & ,nsinkmax,levelhold
+       & ,nsinkmax,levelhold,holdback
   namelist/poisson_params/epsilon,gravity_type,gravity_params &
        & ,cg_levelmin,cic_levelmax,npartmax_rho
   namelist/lightcone_params/thetay_cone,thetaz_cone,zmax_cone
