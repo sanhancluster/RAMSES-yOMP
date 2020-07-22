@@ -270,6 +270,7 @@ subroutine rho_from_current_level(ilevel)
   real(dp) :: rand,proba,factor
   integer :: nrest1,nrest2
   logical :: ok
+!$omp threadprivate(ompseed)
 
 #ifdef _OPENMP
 !$omp parallel

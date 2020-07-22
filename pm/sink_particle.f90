@@ -1568,10 +1568,6 @@ subroutine create_cloud_from_sink
   logical ,dimension(1:nvector)::ok_true,is_central
   logical,dimension(1:ndim)::period
   logical::in_box
-  real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
-
-  ! Conversion factor from user units to cgs units
-  call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
 
   ok_true=.true.
 
