@@ -140,7 +140,7 @@ subroutine make_sink(ilevel)
   real(dp), dimension(1:nvector, 1:ndim) :: xsink_loc
   integer, dimension(1:nvector) :: ind_sink, ind_tracer
 
-  real(dp) :: vol_cloud
+  real(dp) :: vol_cloud, dx_min
 
   ! OMP
   integer,dimension(1:IRandNumSize),save :: ompseed
@@ -352,7 +352,7 @@ subroutine make_sink(ilevel)
               y=(xg(ind_grid(i),2)+xc(ind,2)-skip_loc(2))*scale
               z=(xg(ind_grid(i),3)+xc(ind,3)-skip_loc(3))*scale
               do isink=1,nsink
-                 if(d_avgptr(isink) > ds_sink .or. m_background(isink,1)/vol_cloud > ds_sink) then
+                 if(drag_part .and. d_avgptr(isink) > ds_sink .or. m_background(isink,1)/vol_cloud > ds_sink) then
                     dxx=x-xsink(isink,1)
                     if(dxx> x_half)then
                        dxx=dxx-x_box
