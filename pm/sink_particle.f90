@@ -140,6 +140,8 @@ subroutine make_sink(ilevel)
   real(dp), dimension(1:nvector, 1:ndim) :: xsink_loc
   integer, dimension(1:nvector) :: ind_sink, ind_tracer
 
+  real(dp) :: vol_cloud
+
   ! OMP
   integer,dimension(1:IRandNumSize),save :: ompseed
   real(dp) :: rand
@@ -163,12 +165,17 @@ subroutine make_sink(ilevel)
   factG=1d0
   if(cosmo)factG=3d0/8d0/pi*omega_m*aexp
 
+  if(drag_part) then
+     dx_min=scale*0.5d0**(nlevelmax-nlevelsheld)/aexp
+     vol_cloud = 4d0/3d0*pi*(DF_ncells*dx_min)**3
+  end if
+
   ! Density threshold for sink particle creation
   dd_sink=n_sink/scale_nH
   if(ns_sink>0)then
-      ds_sink=ns_sink/scale_nH
+     ds_sink=ns_sink/scale_nH
   else
-      ds_sink=dd_sink
+     ds_sink=dd_sink
   end if
   d_star=0d0
   if (star)d_star=n_star/scale_nH
@@ -345,31 +352,33 @@ subroutine make_sink(ilevel)
               y=(xg(ind_grid(i),2)+xc(ind,2)-skip_loc(2))*scale
               z=(xg(ind_grid(i),3)+xc(ind,3)-skip_loc(3))*scale
               do isink=1,nsink
-                 dxx=x-xsink(isink,1)
-                 if(dxx> x_half)then
-                    dxx=dxx-x_box
-                 endif
-                 if(dxx<-x_half)then
-                    dxx=dxx+x_box
-                 endif
-                 dr_sink=dxx*dxx
-                 dyy=y-xsink(isink,2)
-                 if(dyy> y_half)then
-                    dyy=dyy-y_box
-                 endif
-                 if(dyy<-y_half)then
-                    dyy=dyy+y_box
-                 endif
-                 dr_sink=dyy*dyy+dr_sink
-                 dzz=z-xsink(isink,3)
-                 if(dzz> z_half)then
-                    dzz=dzz-z_box
-                 endif
-                 if(dzz<-z_half)then
-                    dzz=dzz+z_box
-                 endif
-                 dr_sink=dzz*dzz+dr_sink
-                 if(dr_sink .le. rmax_sink2)ok(i)=.false.
+                 if(d_avgptr(isink) > ds_sink .or. m_background(isink,1)/vol_cloud > ds_sink) then
+                    dxx=x-xsink(isink,1)
+                    if(dxx> x_half)then
+                       dxx=dxx-x_box
+                    endif
+                    if(dxx<-x_half)then
+                       dxx=dxx+x_box
+                    endif
+                    dr_sink=dxx*dxx
+                    dyy=y-xsink(isink,2)
+                    if(dyy> y_half)then
+                       dyy=dyy-y_box
+                    endif
+                    if(dyy<-y_half)then
+                       dyy=dyy+y_box
+                    endif
+                    dr_sink=dyy*dyy+dr_sink
+                    dzz=z-xsink(isink,3)
+                    if(dzz> z_half)then
+                       dzz=dzz-z_box
+                    endif
+                    if(dzz<-z_half)then
+                       dzz=dzz+z_box
+                    endif
+                    dr_sink=dzz*dzz+dr_sink
+                    if(dr_sink .le. rmax_sink2)ok(i)=.false.
+                 end if
               enddo
            endif
 
