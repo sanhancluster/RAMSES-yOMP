@@ -6064,6 +6064,10 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
   ! End loop over levels
 !$omp end parallel
 
+  dx=0.5D0**nlevelmax
+  dx_loc=dx*scale
+  vol_loc=dx_loc**ndim
+
 !$omp parallel do private(ekk,d,etot,eint,T2_1,T2_2,d_gas,u,v,w) schedule(static)
   do iAGN=1,nAGN
 
