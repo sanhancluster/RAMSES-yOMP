@@ -107,7 +107,7 @@ subroutine read_hydro_params(nml_ok)
        & ,f_bondi,ind_rsink,rAGN,r_gal,rmerge,sigmav_max,star_ratio_floor &
        & ,drag_part,DF_ncells,d_boost,no_accretion,fix_smbh_position &
        & ,eddington_limit,jetfrac,maximum_accretion,finestep_AGN &
-       & ,point_mass_sink
+       & ,point_mass_sink,n_gal
 
   ! Units parameters
   namelist/units_params/units_density,units_time,units_length

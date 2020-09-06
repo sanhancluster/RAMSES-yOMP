@@ -119,7 +119,7 @@ subroutine make_sink(ilevel)
   real(dp)::d_jeans,d_thres,dd_sink,ds_sink
   real(dp)::birth_epoch,rmax_sink2,x_half,y_half,z_half,x_box,y_box,z_box
   real(dp),dimension(1:3)::xbound,skip_loc
-  real(dp)::dx,dx_loc,scale,dxx,dyy,dzz,dr_sink,rmax_sink
+  real(dp)::dx,dx_loc,scale,dxx,dyy,dzz,dr_sink,rmax_sink,d_gal
   real(dp)::factG,pi,d_star,star_ratio
 #ifdef SOLVERmhd
   real(dp)::bx1,bx2,by1,by2,bz1,bz2
@@ -179,6 +179,7 @@ subroutine make_sink(ilevel)
   end if
   d_star=0d0
   if (star)d_star=n_star/scale_nH
+  if (n_gal>0) d_gal=n_gal/scale_nH
 
   ! Mesh spacing in that level
   dx=0.5D0**ilevel
@@ -352,7 +353,7 @@ subroutine make_sink(ilevel)
               y=(xg(ind_grid(i),2)+xc(ind,2)-skip_loc(2))*scale
               z=(xg(ind_grid(i),3)+xc(ind,3)-skip_loc(3))*scale
               do isink=1,nsink
-                 if(drag_part .and. star .and. d_avgptr(isink) > d_star .or. m_background(isink,1)/vol_cloud > d_star) then
+                 if(drag_part .and. n_gal>0 .and. d_avgptr(isink) > d_gal .or. m_background(isink,1)/vol_cloud > d_gal) then
                     dxx=x-xsink(isink,1)
                     if(dxx> x_half)then
                        dxx=dxx-x_box
