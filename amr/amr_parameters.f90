@@ -199,7 +199,7 @@ module amr_parameters
   real(dp)::boost_acc=2.0d0   ! Boost power factor for the accretion rate
   real(dp)::boost_drag=2.0d0  ! Boost power factor for drag force
   real(dp)::r_gal  =1.0d2     ! SMBH sphere radius of influence in kpc
-  real(dp)::n_gal =0.1d0      ! Minimum required background density (gas/star, H/cc) to activate r_gal
+  real(dp)::n_gal =0.1d0      ! Minimum required background density (gas, H/cc) to activate r_gal
   real(dp)::sigmav_max=10d15  ! Maximum relative velocity in the Bondi accretion rate in kpc
   real(dp)::mloadAGN=1d2      ! Mass loading factor of the jet
   real(dp)::f_bondi=1d0       ! Fraction of the Bondi rate

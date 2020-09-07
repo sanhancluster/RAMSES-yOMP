@@ -353,7 +353,7 @@ subroutine make_sink(ilevel)
               y=(xg(ind_grid(i),2)+xc(ind,2)-skip_loc(2))*scale
               z=(xg(ind_grid(i),3)+xc(ind,3)-skip_loc(3))*scale
               do isink=1,nsink
-                 if(drag_part .and. n_gal>0 .and. d_avgptr(isink) > d_gal .or. m_background(isink,1)/vol_cloud > d_gal) then
+                 if(drag_part .and. n_gal>0 .and. d_avgptr(isink) > d_gal .or. m_background(isink,1)/vol_cloud > d_star) then
                     dxx=x-xsink(isink,1)
                     if(dxx> x_half)then
                        dxx=dxx-x_box
