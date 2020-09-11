@@ -178,6 +178,7 @@ subroutine make_sink(ilevel)
      ds_sink=dd_sink
   end if
   d_star=0d0
+  d_gal=0d0
   if (star)d_star=n_star/scale_nH
   if (n_gal>0) d_gal=n_gal/scale_nH
 
@@ -353,7 +354,8 @@ subroutine make_sink(ilevel)
               y=(xg(ind_grid(i),2)+xc(ind,2)-skip_loc(2))*scale
               z=(xg(ind_grid(i),3)+xc(ind,3)-skip_loc(3))*scale
               do isink=1,nsink
-                 if(drag_part .and. n_gal>0 .and. d_avgptr(isink) > d_gal .or. m_background(isink,1)/vol_cloud > d_star) then
+                 if(.not. drag_part .or. (d_avgptr(isink) > d_gal &
+                       & .or. m_background(isink,1)/vol_cloud > d_star)) then
                     dxx=x-xsink(isink,1)
                     if(dxx> x_half)then
                        dxx=dxx-x_box
