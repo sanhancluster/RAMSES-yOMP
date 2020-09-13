@@ -331,7 +331,7 @@ subroutine userflag_fine(ilevel)
   ! This translates into :
   ! - a constant physical resolution at low redshift (ilevel<=nlevelmax_part+nlevel_collapse)
   ! - a constant comobile resolution at high redshift (ilevel>nlevelmax_part+nlevel_collapse)
-  if(cosmo.and.cooling .and. holdback)then
+  if(cosmo.and.cooling .and. holdback .and. jeans_smooth<0)then
      ! Finest cell size
      dx_min=(0.5D0**(nlevelmax-nlevelsheld))*scale
      ! Test is designed so that nlevelmax is activated at aexp ~ 0.8
@@ -339,6 +339,22 @@ subroutine userflag_fine(ilevel)
         if(dx_loc<(4d0**(1d0/ndim))*(dx_min/aexp)) prevent_refine=.true.
      endif
   endif
+
+  if(jeans_smooth>0)
+     if(ilevel.gt.(nlevelmax_part+nlevel_collapse-1))then
+        jeans_refine(ilevel)=1d0
+     else
+        aoff = (aexp-aexp_trans(ilevel))/jeans_smooth
+        if(aoff<=-1.) then ! refinement not started yet
+           jeans_refine(ilevel)=0d0
+           prevent_refine=.true.
+        elseif(aoff<1.) then ! ongoing transition
+           jeans_refine(ilevel)=SIN(aoff*twopi/4.)
+        else ! refinement finished
+           jeans_refine(ilevel)=1d0
+        end if
+     end if
+  end if
 
   if(.not.prevent_refine)then
      if(nlevelmax_current.le.ilevel) nlevelmax_current = ilevel+1

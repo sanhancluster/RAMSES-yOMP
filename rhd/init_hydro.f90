@@ -135,6 +135,10 @@ subroutine init_hydro
      if(verbose)write(*,*)'HYDRO backup files read completed'
   end if
 
+  do i=1,nlevelmax
+     aexp_trans(i) = 0.8d0 / 2d0**(nlevelmax-i)
+  end do
+
 end subroutine init_hydro
 
 
