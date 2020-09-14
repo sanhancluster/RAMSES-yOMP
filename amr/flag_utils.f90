@@ -341,10 +341,10 @@ subroutine userflag_fine(ilevel)
   endif
 
   if(jeans_smooth>0)then
-     if(ilevel.gt.(nlevelmax_part+nlevel_collapse-1))then
+     if(ilevel<=(nlevelmax_part+nlevel_collapse-1))then
         jeans_refine(ilevel)=1d0
      else
-        aoff = (aexp-aexp_trans(ilevel))/jeans_smooth
+        aoff = (aexp-aexp_trans(ilevel+1))/jeans_smooth
         if(aoff<=-1.) then ! refinement not started yet
            jeans_refine(ilevel)=0d0
            prevent_refine=.true.
