@@ -299,7 +299,7 @@ subroutine userflag_fine(ilevel)
 
   logical,dimension(1:nvector)::ok
 
-  real(dp)::dx,dx_loc,scale,dx_min
+  real(dp)::dx,dx_loc,scale,dx_min,aoff
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
   real(dp),dimension(1:3)::skip_loc
   real(dp),dimension(1:twotondim,1:3)::xc
@@ -340,7 +340,7 @@ subroutine userflag_fine(ilevel)
      endif
   endif
 
-  if(jeans_smooth>0)
+  if(jeans_smooth>0)then
      if(ilevel.gt.(nlevelmax_part+nlevel_collapse-1))then
         jeans_refine(ilevel)=1d0
      else
