@@ -534,11 +534,9 @@ subroutine init_amr
      end do
   end if
 
-
   if(hydro) then
-     do i=1,nlevelmax2+1
-        aexp_trans(i) = 0.8d0 / 2d0**(nlevelmax2-i)
+     do i=1,nlevelmax+1
+        aexp_trans(i) = 0.8d0 / 2d0**(nlevelmax-i)
      end do
   end if
-
 end subroutine init_amr
