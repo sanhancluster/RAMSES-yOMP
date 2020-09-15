@@ -59,7 +59,7 @@ module hydro_parameters
 #endif
   real(dp),dimension(1:MAXLEVEL)::jeans_refine=-1.0
 
-  real(dp)::jeans_smooth=-1.0  ! Kernel size (aexp) for smooth level transition
+  real(dp)::trans_smooth=-1.0  ! Kernel size (aexp) for smooth level transition
   real(dp),dimension(1:MAXLEVEL)::aexp_trans=0d0  ! Expansion factor where transistion happens
 
   ! Initial conditions hydro variables

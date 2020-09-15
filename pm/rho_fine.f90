@@ -30,7 +30,7 @@ subroutine rho_fine(ilevel,icount)
   !   number density criterion (quasi Lagrangian mesh).
   !------------------------------------------------------------------
   integer::iskip,icpu,ind,i,nx_loc,ibound
-  real(dp)::dx,d_scale,scale,dx_loc,scalar
+  real(dp)::dx,d_scale,scale,dx_loc,scalar,aoff
 
   if(.not. poisson)return
   if(numbtot(1,ilevel)==0)return
@@ -213,6 +213,23 @@ subroutine rho_fine(ilevel,icount)
      end do
   end do
 
+  if(trans_smooth>0)then
+     if(ilevel<=(nlevelmax_part+nlevel_collapse-1))then
+        m_refine=8d0
+     else
+        aoff = (aexp-aexp_trans(ilevel+1))/trans_smooth
+        if(aoff<=-1.) then ! refinement not started yet
+           m_refine(ilevel)=100d0
+           ! prevent_refine=.true.
+        elseif(aoff<1.) then ! ongoing transition
+           !m_refine=8d0
+           m_refine(ilevel)=100d0-(SIN(aoff*twopi/4.)/2.+0.5)*92.
+        else ! refinement finished
+           m_refine(ilevel)=8d0
+        end if
+     end if
+  end if
+
   !-----------------------------------------
   ! Compute quasi Lagrangian refinement map
   !-----------------------------------------
@@ -309,7 +326,7 @@ subroutine rho_from_current_level(ilevel)
            counter = 0
            nrest2=npartmax_rho
            ! Loop over particles
-           if(ilevel>=cg_levelmin .and. npart1>npartmax_rho)then
+           if(npartmax_rho>0 .and. ilevel>=cg_levelmin .and. npart1>npartmax_rho)then
               factor = real(npart1,dp)/npartmax_rho
               !write(*,*)"ilevel = ",ilevel,"npart = ",npart1,"factor = ",factor
            else
@@ -323,7 +340,7 @@ subroutine rho_from_current_level(ilevel)
 
               ok=.true.
               ! If the number of particles in grid is larger than threshold, apply random sampling.
-              if(ilevel>=cg_levelmin .and. npart1>npartmax_rho)then
+              if(npartmax_rho>0 .and. ilevel>=cg_levelmin .and. npart1>npartmax_rho)then
                  nrest1=npart1-jpart+1
                  proba=real(nrest2,dp)/nrest1
                  call ranf(ompseed,rand)
@@ -364,7 +381,8 @@ subroutine rho_from_current_level(ilevel)
            end do
            ! End loop over particles
 
-           if(ilevel>=cg_levelmin .and. npart1>npartmax_rho .and. ip>0)then
+           ! Remove cache for new probability calculation in the next grid
+           if(npartmax_rho>0 .and. ilevel>=cg_levelmin .and. npart1>npartmax_rho .and. ip>0)then
               ! Lower left corner of 3x3x3 grid-cube
               do idim=1,ndim
                  do i=1,ig
