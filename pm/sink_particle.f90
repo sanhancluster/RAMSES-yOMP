@@ -165,11 +165,6 @@ subroutine make_sink(ilevel)
   factG=1d0
   if(cosmo)factG=3d0/8d0/pi*omega_m*aexp
 
-  if(drag_part) then
-     dx_min=scale*0.5d0**(nlevelmax-nlevelsheld)/aexp
-     vol_cloud = 4d0/3d0*pi*(DF_ncells*dx_min)**3
-  end if
-
   ! Density threshold for sink particle creation
   dd_sink=n_sink/scale_nH
   if(ns_sink>0)then
@@ -192,6 +187,11 @@ subroutine make_sink(ilevel)
   if(ndim>2)skip_loc(3)=dble(kcoarse_min)
   scale=boxlen/dble(nx_loc)
   dx_loc=dx*scale
+
+  if(drag_part) then
+     dx_min=scale*0.5d0**(nlevelmax-nlevelsheld)/aexp
+     vol_cloud = 4d0/3d0*pi*(DF_ncells*dx_min)**3
+  end if
 
   x_half=scale*xbound(1)/2.0; y_half=scale*xbound(2)/2.0; z_half=scale*xbound(3)/2.0
   x_box =scale*xbound(1); y_box =scale*xbound(2); z_box =scale*xbound(3)
