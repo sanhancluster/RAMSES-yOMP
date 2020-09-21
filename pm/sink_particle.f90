@@ -3357,17 +3357,19 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
   if (MC_tracer) then
      acc_cell=0d0
      do j=1,np
-        if(isink/=-idp(ind_part(j))) then
-           write(*,*) 'Error on accrete_bondi', myid, j, isink, -idp(ind_part(j)), ind_part(j)
+        if(ok(j)) then
+           if(isink/=-idp(ind_part(j))) then
+              write(*,*) 'Error on accrete_bondi', myid, j, isink, -idp(ind_part(j)), ind_part(j)
+           end if
+           ! Fix ind_grid if particle does not belong to it anymore
+           if(igrid(j)/=ind_grid(ind_grid_part(j))) then
+              ng=ng+1
+              ind_grid(ng)=igrid(j)
+              ind_grid_part(j)=ng
+           end if
+           acc_cell(ind_grid_part(j),icell(j)) = &
+                 & acc_cell(ind_grid_part(j),icell(j)) + acc_part(j)
         end if
-        ! Fix ind_grid if igrid has been changed
-        if(igrid(j)/=ind_grid(ind_grid_part(j))) then
-           ng=ng+1
-           ind_grid(ng)=igrid(j)
-           ind_grid_part(j)=ng
-        end if
-        acc_cell(ind_grid_part(j),icell(j)) = &
-              & acc_cell(ind_grid_part(j),icell(j)) + acc_part(j)
      end do
      ! MC Tracer
      ! Init local index
