@@ -4874,6 +4874,7 @@ subroutine AGN_feedback
   use poisson_commons, ONLY: cic_levelmax
   use cooling_module, only: twopi
   use sink_particle_tracer, only : prepare_MC_tracer_to_jet
+  use output_amr, only : create_output_dirs
   ! AGNRT
 #ifdef RT
   use rt_parameters,only: rt_AGN, nGroups
@@ -4909,7 +4910,7 @@ subroutine AGN_feedback
   integer::isort,isink,idim,ilun,ii,itype
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,Mfrac,ttsta,ttend
   character(LEN=5)::nchar
-  character(LEN=80)::filename
+  character(LEN=80)::filename,filedir
   real(dp),allocatable,dimension(:)::xdp
   integer  :: nx_loc
   real(dp) :: dx_min, rmax, r2_cloud, vol_cloud
@@ -4964,9 +4965,13 @@ subroutine AGN_feedback
   if(myid==1.and.nsink>0.and.sinkprops.and. (.not.finestep_AGN))then
      if(.not.(nstep_coarse==nstep_coarse_old.and.nstep_coarse>0))then
      call title(nstep_coarse,nchar)
+
+     filedir='SINKPROPS'
+     call create_output_dirs(filedir)
+
      filename='sink_'//TRIM(nchar)//'.dat'
      ilun=ncpu*4+11
-     open(unit=ilun,file=TRIM(filename),form='unformatted')
+     open(unit=ilun,file=TRIM(filedir)//TRIM(filename),form='unformatted')
      write(ilun)nsink     ! Number of sink
      write(ilun)ndim      ! Number of dimensions
      if (cosmo) then

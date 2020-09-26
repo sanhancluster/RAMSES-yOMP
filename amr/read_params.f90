@@ -242,7 +242,10 @@ subroutine read_params
            nrestart = nrestart_seek
         else
            nrestart_seek = nrestart_seek - 1
-        endif    
+        endif
+        if(nrestart_seek <= 0) then
+           nrestart = 0
+        end if
      enddo
   endif
     
