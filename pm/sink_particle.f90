@@ -4952,7 +4952,7 @@ subroutine AGN_feedback
      if(.not.(nstep_coarse==nstep_coarse_old.and.nstep_coarse>0))then
      call title(nstep_coarse,nchar)
 
-     filedir='SINKPROPS'
+     filedir='SINKPROPS/'
      call create_output_dirs(filedir)
 
      filename='sink_'//TRIM(nchar)//'.dat'
