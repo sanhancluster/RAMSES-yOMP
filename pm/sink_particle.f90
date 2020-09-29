@@ -4874,7 +4874,6 @@ subroutine AGN_feedback
   use poisson_commons, ONLY: cic_levelmax
   use cooling_module, only: twopi
   use sink_particle_tracer, only : prepare_MC_tracer_to_jet
-  use output_amr, only : create_output_dirs
   ! AGNRT
 #ifdef RT
   use rt_parameters,only: rt_AGN, nGroups
@@ -4915,6 +4914,7 @@ subroutine AGN_feedback
   integer  :: nx_loc
   real(dp) :: dx_min, rmax, r2_cloud, vol_cloud
   real(dp) :: dx_dm, rmax_dm, r2_dm, vol_dm, onepi, scale
+  logical :: ok
 
   if(.not. hydro)return
   if(ndim.ne.3)return
@@ -4967,7 +4967,8 @@ subroutine AGN_feedback
      call title(nstep_coarse,nchar)
 
      filedir='SINKPROPS/'
-     call create_output_dirs(filedir)
+     inquire(file=filedir, exist=ok)
+     if(.not. ok)call create_output_dirs(filedir)
 
      filename='sink_'//TRIM(nchar)//'.dat'
      ilun=ncpu*4+11
