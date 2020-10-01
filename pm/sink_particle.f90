@@ -293,7 +293,7 @@ subroutine make_sink(ilevel)
   !------------------------------
   ! Determine AGN formation sites
   !------------------------------
-  ! call quenching(ilevel)
+  call quenching(ilevel)
 
   !----------------------------
   ! Compute number of new sinks
@@ -340,7 +340,7 @@ subroutine make_sink(ilevel)
            ! Check if gas is Jeans unstable
            if(d    <d_thres)ok(i)=.false.
            ! Quenching criterion
-           !!!!!!!if(flag2(ind_cell(i))==1)ok(i)=.false.
+           if(flag2(ind_cell(i))==1)ok(i)=.false.
 
            ! ENFORCE MASS CRITERION (MT)
            ! Check if the mass criterion will be met
@@ -4627,7 +4627,7 @@ subroutine quenching(ilevel)
         ind_cell=iskip+igrid
         ! AGN formation sites
         ! if n_star>0.1 H/cc and v_disp>75 km/s
-        if(str_d>0.1.and.MAX(sig_u,sig_v,sig_w)>20.)then
+        if(str_d>0.1.and.MAX(sig_u,sig_v,sig_w)>sig_sink)then
            flag2(ind_cell)=0
         else
            flag2(ind_cell)=1
@@ -4967,8 +4967,8 @@ subroutine AGN_feedback
      call title(nstep_coarse,nchar)
 
      filedir='SINKPROPS/'
-     inquire(file=filedir, exist=ok)
-     if(.not. ok)call create_output_dirs(filedir)
+     inquire(directory=TRIM(filedir), exist=ok)
+     if(.not. ok)call create_output_dirs_nobar(filedir)
 
      filename='sink_'//TRIM(nchar)//'.dat'
      ilun=ncpu*4+11

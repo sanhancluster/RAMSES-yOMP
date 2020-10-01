@@ -693,3 +693,45 @@ subroutine create_output_dirs(filedir)
 
 
 end subroutine create_output_dirs
+!#########################################################################
+!#########################################################################
+!#########################################################################
+!#########################################################################
+subroutine create_output_dirs_nobar(filedir)
+  use mpi_mod
+  use amr_commons
+  implicit none
+  character(LEN=80), intent(in):: filedir
+  character(LEN=80)::filecmd
+#ifdef NOSYSTEM
+  character(LEN=80)::filedirini
+#else
+  integer :: ierr
+#endif
+#ifndef WITHOUTMPI
+  integer :: info
+#endif
+
+
+  filecmd='mkdir -p '//TRIM(filedir)
+
+  if (.not.withoutmkdir) then
+#ifdef NOSYSTEM
+    filedirini = filedir(1:13)
+    call PXFMKDIR(TRIM(filedirini),LEN(TRIM(filedirini)),O'755',info)
+    call PXFMKDIR(TRIM(filedir),LEN(TRIM(filedir)),O'755',info)
+#else
+    ierr=1
+    call EXECUTE_COMMAND_LINE(filecmd,exitstat=ierr,wait=.true.)
+    if(ierr.ne.0 .and. ierr.ne.127)then
+      write(*,*) 'Error - Could not create ',trim(filedir),' error code=',ierr
+#ifndef WITHOUTMPI
+      call MPI_ABORT(MPI_COMM_WORLD,1,info)
+#else
+      stop
+#endif
+    endif
+#endif
+  endif
+
+end subroutine create_output_dirs_nobar
