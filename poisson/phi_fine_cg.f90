@@ -129,7 +129,7 @@ subroutine phi_fine_cg(ilevel,icount)
   !===============================
   ! Compute right-hand side norm (for error)
   !===============================
-  rhs_norm=0.d0
+  rhs_norm=0d0
 !$omp parallel private(iskip,idx) reduction(+:rhs_norm)
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
@@ -151,15 +151,20 @@ subroutine phi_fine_cg(ilevel,icount)
   rhs_norm=DSQRT(rhs_norm/dble(twotondim*numbtot(1,ilevel)))
 
    !==============================================
-   ! Initialize arrays
+   ! Count the number of active and total cells
    !==============================================
    nact = active(ilevel)%ngrid * twotondim
    ntot = 0
    do icpu=1,ncpu
-      ntot = ntot + reception(icpu,ilevel)%ngrid
+      if(icpu /= myid) then
+         ntot = ntot + reception(icpu,ilevel)%ngrid
+      end if
    end do
    ntot = ntot * twotondim + nact
 
+   !==============================================
+   ! Initialize arrays
+   !==============================================
 !$omp parallel do
    do i=1,ntot
       f(i,:) = 0d0
@@ -187,7 +192,7 @@ subroutine phi_fine_cg(ilevel,icount)
       end do
 !$omp end do nowait
   end do
-
+!$omp barrier
   off = nact
   do icpu=1,ncpu
      ncache = reception(icpu,ilevel)%ngrid
@@ -213,7 +218,7 @@ subroutine phi_fine_cg(ilevel,icount)
 !$omp parallel private(ncache,igrid,off,off2,idx,igridn,j,ig,ih)
   off2 = nact
   do icpu=1,ncpu
-     if (icpu==myid) then
+     if (icpu == myid) then
         ncache = active(ilevel)%ngrid
         igrid => active(ilevel)%igrid
      else
