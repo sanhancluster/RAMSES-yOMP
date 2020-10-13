@@ -2957,7 +2957,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
 #ifdef SOLVERmhd
   real(dp)::bx1,bx2,by1,by2,bz1,bz2
 #endif
-  real(dp)::dx,dx_loc,scale,vol_loc,weight,acc_mass
+  real(dp)::dx,dx_loc,scale,vol_loc,weight,acc_mass,vol_cloud
   logical::error
   ! Grid based arrays
   real(dp),dimension(1:nvector,1:ndim)::x0
@@ -3019,6 +3019,9 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
   dx_loc=dx*scale
   vol_loc=dx_loc**ndim
   dx_min=scale*0.5d0**(nlevelmax-nlevelsheld)/aexp
+  if(drag_part) then
+     vol_cloud = 4d0/3d0*pi*(DF_ncells*dx_min)**3
+  end if
 
  ! Lower left corner of 3x3x3 grid-cube
   do idim=1,ndim
