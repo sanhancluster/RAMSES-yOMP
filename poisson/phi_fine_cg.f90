@@ -341,6 +341,7 @@ subroutine phi_fine_cg(ilevel,icount)
      ! Compute global norm
      !==============================================
      local(1) = gamma_cg; local(2) = delta_cg
+     global(:) = 0.0
      call MPI_ALLREDUCE(local,global,2,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,info)
      gamma_cg = global(1); delta_cg = global(2)
 
