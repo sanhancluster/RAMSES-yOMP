@@ -466,7 +466,7 @@ subroutine make_sink(ilevel)
   flag_tmp=flag_tmp_all
   deallocate(x_tmp_all,dens_tmp_all,flag_tmp_all)
 #endif
-!$omp parallel do private(x,dxx,dyy,dzz,dr_sink) schedule(static)
+!$omp parallel do private(x,y,z,dxx,dyy,dzz,dr_sink) schedule(static)
   do i=1,ntot_tmp
      if(flag_tmp(i).eq.1)then
         x=x_tmp(i,1);y=x_tmp(i,2);z=x_tmp(i,3)
@@ -2801,7 +2801,7 @@ subroutine grow_bondi(ilevel)
   end do
 
 
-!$omp parallel private(ig,ip,ind_part,ind_grid,ind_grid_part,igrid,npart1,npart2,ipart,next_part,isink)
+!$omp parallel private(ig,ip,ind_part,ind_grid,ind_grid_part,igrid,npart1,npart2,ipart,next_part,isink,counter)
   do icpu=1,ncpu
      ig=0
      ip=0
