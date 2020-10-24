@@ -36,7 +36,7 @@ subroutine read_params
        & ,nrestart,nrestart_seek,ncontrol,nstepmax,nsubcycle,load_weights,part_univ_cost,exact_timer,nremap,ordering &
        & ,bisec_tol,static,overload,cost_weighting,aton,nrestart_quad,restart_remap &
        & ,static_dm,static_gas,static_stars,convert_birth_times,use_proper_time,remap_pscalar &
-       & ,dtstop,nthr_cg,magic_number,nchunk
+       & ,dtstop,magic_number,nchunk
   namelist/output_params/output,noutput,foutput,aout,tout &
        & ,tend,delta_tout,aend,delta_aout,gadget_output,walltime_hrs,minutes_dump &
        & ,early_stop_hrs,dump_stop,foutput_timer,wallstep
@@ -85,19 +85,6 @@ subroutine read_params
 #ifdef WITHOUTMPI
   ncpu=1
   myid=1
-#endif
-#ifdef _OPENMP
-!$omp parallel private(mythr)
-  mythr=omp_get_thread_num()+1
-  if(mythr==1) then
-     nthr=omp_get_num_threads()
-     if(nthr_cg<=0) then
-        nthr_cg=nthr
-     else
-        nthr_cg = MIN(nthr,nthr_cg)
-     end if
-  end if
-!$omp end parallel
 #endif
   !--------------------------------------------------
   ! Advertise RAMSES

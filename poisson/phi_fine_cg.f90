@@ -169,9 +169,9 @@ subroutine phi_fine_cg(ilevel,icount)
    do i=1,ntot
       f(i,:) = 0d0
       fcg(i,:) = 0d0
-      addrl(i) = 0
       nborl(i,:) = 0
    end do
+   addrl(:) = 0
 
   !==============================================
   ! Setup a pointer array for linear addressing and store it into addrl(i)
@@ -369,6 +369,8 @@ subroutine phi_fine_cg(ilevel,icount)
         alpha_cg = gamma_cg / delta_cg
      endif
 
+     gamma_cg_old = gamma_cg
+     gamma_cg = 0.0; delta_cg = 0.0
 
      !==============================================
      ! Find m= Minv w. Do it in ghostzones too, so that p.m does not have to be synced below
@@ -388,9 +390,6 @@ subroutine phi_fine_cg(ilevel,icount)
      if (error>epsilon*error_ini.and.iter<itermax) then
         call recv_virtual_linear(f(1,3), nact, ilevel, countrecv, reqrecv)
      end if
-
-     gamma_cg_old = gamma_cg
-     gamma_cg = 0.0; delta_cg = 0.0
 
      !==============================================
      ! Compute n = A m
@@ -492,7 +491,7 @@ subroutine cmp_residual_cg(ilevel,icount)
   iii(3,2,1:8)=(/0,0,0,0,6,6,6,6/); jjj(3,2,1:8)=(/5,6,7,8,1,2,3,4/)
 
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) num_threads(nthr_cg)
+!$omp parallel do private(igrid,ngrid,ind_grid)
   do igrid=1,ncache,nvector
       ! Gather nvector grids
       ngrid=MIN(nvector,ncache-igrid+1)
@@ -615,7 +614,7 @@ subroutine make_initial_phi(ilevel,icount)
   integer ,dimension(1:nvector)::ind_grid
 
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) num_threads(nthr_cg)
+!$omp parallel do private(igrid,ngrid,ind_grid)
   do igrid=1,ncache,nvector
       ! Gather nvector grids
       ngrid=MIN(nvector,ncache-igrid+1)
@@ -734,7 +733,7 @@ subroutine make_multipole_phi(ilevel)
 
   ! Loop over myid grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(igrid,ngrid,ind_grid) num_threads(nthr_cg)
+!$omp parallel do private(igrid,ngrid,ind_grid)
   do igrid=1,ncache,nvector
       ! Gather nvector grids
       ngrid=MIN(nvector,ncache-igrid+1)

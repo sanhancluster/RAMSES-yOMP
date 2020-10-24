@@ -597,7 +597,7 @@ subroutine starform1(ind_grid,ngrid)
   use amr_commons
   use hydro_commons
   integer ::ngrid
-  integer ::ind,i,iskip
+  integer ::ind,i,iskip,ivar
   real(dp)::d,u,v,w,e
   integer ,dimension(1:nvector)::ind_grid,ind_cell
 

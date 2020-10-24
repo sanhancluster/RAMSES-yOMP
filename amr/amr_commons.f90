@@ -36,7 +36,6 @@ module amr_commons
   ! MPI variables
   integer::ncpu,ndomain,myid,overload=1
   integer::nthr=1  ! OpenMP number of threads
-  integer::nthr_cg=0  ! OpenMP number of threads for poisson-cg routines
 
   ! Friedman model variables
   integer::n_frw

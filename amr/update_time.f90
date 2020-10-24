@@ -436,6 +436,9 @@ subroutine clean_stop
   if(allocated(phi)) deallocate(phi)
   if(allocated(phi_old)) deallocate(phi_old)
   if(allocated(f)) deallocate(f)
+  if(allocated(fcg)) deallocate(fcg)
+  if(allocated(nborl)) deallocate(nborl)
+  if(allocated(addrl)) deallocate(addrl)
 
 
   ! allocations in init_time.f90

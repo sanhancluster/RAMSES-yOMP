@@ -198,7 +198,7 @@ subroutine move_sink_tracer(ipart, ilevel)
   ! Move the sinks
   integer, intent(in) :: ipart, ilevel
   real(dp), dimension(1:ndim) :: xtmp, xsink_tmp
-  real(dp) :: d2
+  real(dp) :: d2, dx, twodx
   integer :: idim
 
   dx = 0.5**ilevel
