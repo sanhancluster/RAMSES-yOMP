@@ -57,26 +57,26 @@ subroutine adaptive_loop
   if(pic)call init_tree              ! Initialize particle tree
   !HP: create cloud from ic_sink (care with units)
   if (sink)then
-    if (nrestart == 0) then
+     if (nrestart == 0) then
         if(TRIM(initfile(levelmin)).NE.' ')then
-            filename=TRIM(initfile(levelmin))//'/ic_sink'
+           filename=TRIM(initfile(levelmin))//'/ic_sink'
         else
-         filename='ic_sink'
+           filename='ic_sink'
         end if
-    else
+     else
         if(TRIM(initfile(levelmin)).NE.' ')then
-            filename=TRIM(initfile(levelmin))//'/ic_sink_restart'
+           filename=TRIM(initfile(levelmin))//'/ic_sink_restart'
         else
-            filename='ic_sink_restart'
+           filename='ic_sink_restart'
         end if
-    end if
-    inquire(file=filename, exist=ic_sink)
-    if (ic_sink) then
-        if (myid==1) write (*,*) 'Wait for sink cloud creation'
-        call create_cloud_from_sink
-    end if
+        inquire(file=filename, exist=ic_sink)
+        if (ic_sink) then
+           if (myid==1) write (*,*) 'Wait for sink cloud creation'
+           call create_cloud_from_sink
+        end if
+     end if
   end if
- if(nrestart==0)call init_refine_2  ! Build initial AMR grid again  
+  if(nrestart==0)call init_refine_2  ! Build initial AMR grid again
 
 #ifndef WITHOUTMPI
   muspt=0.
