@@ -89,7 +89,6 @@ subroutine phi_fine_cg(ilevel,icount)
 #endif
   integer,dimension(1:3,1:2,1:8)::iii,jjj
   integer,dimension(0:twondim)::igridn=0
-  integer, pointer, dimension(:) :: igrid
 
   if(gravity_type>0)return
   if(numbtot(1,ilevel)==0)return
@@ -165,12 +164,9 @@ subroutine phi_fine_cg(ilevel,icount)
    !==============================================
    ! Initialize arrays
    !==============================================
-!$omp parallel do
-   do i=1,ntot
-      f(i,:) = 0d0
-      fcg(i,:) = 0d0
-      nborl(i,:) = 0
-   end do
+   f(:,:) = 0d0
+   fcg(:,:) = 0d0
+   nborl(:,:) = 0
    addrl(:) = 0
 
   !==============================================
@@ -215,15 +211,13 @@ subroutine phi_fine_cg(ilevel,icount)
   ! Setup a pointer array for neighbors
   ! and store it into nborl(i,:)
   !==============================================
-!$omp parallel private(ncache,igrid,off,off2,idx,igridn,j,ig,ih)
+!$omp parallel private(ncache,off,off2,idx,igridn,j,ig,ih)
   off2 = nact
   do icpu=1,ncpu
      if (icpu == myid) then
         ncache = active(ilevel)%ngrid
-        igrid => active(ilevel)%igrid
      else
         ncache = reception(icpu,ilevel)%ngrid
-        igrid => reception(icpu,ilevel)%igrid
      end if
      if(ncache > 0) then
         do ind=1,twotondim
@@ -234,7 +228,11 @@ subroutine phi_fine_cg(ilevel,icount)
            end if
 !$omp do
            do i=1,ncache
-              idx = igrid(i)
+              if(icpu == myid) then
+                 idx = active(ilevel)%igrid(i)
+              else
+                 idx = reception(icpu,ilevel)%igrid(i)
+              end if
               igridn(0)=idx
               do j=1,twondim
                  igridn(j) = son(nbor(idx,j))
