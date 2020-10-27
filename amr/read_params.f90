@@ -86,6 +86,14 @@ subroutine read_params
   ncpu=1
   myid=1
 #endif
+#ifdef _OPENMP
+!$omp parallel private(mythr)
+  mythr=omp_get_thread_num()+1
+  if(mythr==1) then
+     nthr=omp_get_num_threads()
+  end if
+!$omp end parallel
+#endif
   !--------------------------------------------------
   ! Advertise RAMSES
   !--------------------------------------------------

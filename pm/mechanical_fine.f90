@@ -338,12 +338,12 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,mSN,pSN,mZSN,dteff)
   !-----------------------------------------------------------------------
   ! This routine is called by subroutine mechanical_feedback_fine
   !-----------------------------------------------------------------------
-  integer::i,j,nwco,nwco_here,idim,icell,igrid,ista,iend,ilevel2,ind_cell
+  integer::i,j,k,nwco,nwco_here,idim,icell,igrid,ista,iend,ilevel2,ind_cell
   real(dp)::d,u,v,w,e,z,eth,ekk,Tk,d0,u0,v0,w0,dteff
   real(dp)::dx,dx_loc,scale,vol_loc,nH_cen,tsim_yr,fleftSN
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
   real(dp)::scale_msun,msun2g=2d33
-  real(dp)::skip_loc(1:3),Tk0,ekk0,eth0,etot0
+  real(dp)::skip_loc(1:3),Tk0,ekk0,eth0,etot0,fpos(1:3)
   real(dp),dimension(1:twotondim,1:ndim),save::xc
   ! Grid based arrays
   real(dp),dimension(1:ndim,1:nvector),save::xc2
@@ -402,7 +402,10 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,mSN,pSN,mZSN,dteff)
      ind_cell = ncoarse+ind_grid(i)+(ind_pos_cell(i)-1)*ngridmax
 
      ! redistribute the mass/metals to the central cell
-     call get_icell_from_pos (xc2(1:3,i), ilevel+1, igrid, icell,ilevel2)
+     do k=1,3
+        fpos(k) = xc2(k,i)
+     end do
+     call get_icell_from_pos (fpos, ilevel+1, igrid, icell,ilevel2)
 
      ! Sanity Check
      if((cpu_map(father(igrid)).ne.myid).or.&
@@ -460,7 +463,10 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,mSN,pSN,mZSN,dteff)
 
 
      do j=1,nSNnei
-        call get_icell_from_pos (xc2(1:3,i)+xSNnei(1:3,j)*dx, ilevel+1, igrid, icell,ilevel2)
+        do k=1,3
+           fpos(k) = xc2(k,i)+xSNnei(k,j)*dx
+        end do
+        call get_icell_from_pos (fpos, ilevel+1, igrid, icell,ilevel2)
         if(cpu_map(father(igrid)).eq.myid) then ! if belong to myid
 
            Z_nei = z_ave*0.02 ! For metal=.false.
@@ -629,7 +635,10 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,mSN,pSN,mZSN,dteff)
 
      nwco=0; icpuSNnei=0
      do j=1,nSNnei
-        call get_icell_from_pos (xc2(1:3,i)+xSNnei(1:3,j)*dx, ilevel+1, igrid, icell,ilevel2)
+        do k=1,3
+           fpos(k) = xc2(k,i)+xSNnei(k,j)*dx
+        end do
+        call get_icell_from_pos (fpos, ilevel+1, igrid, icell,ilevel2)
 
         if(cpu_map(father(igrid)).ne.myid) then ! need mpi
            nwco=nwco+1
@@ -796,7 +805,7 @@ subroutine mech_fine_mpi(ilevel)
   use mpi_mod
   implicit none
 #ifndef WITHOUTMPI
-  integer::i,j,info,nSN_tot,icpu,ncpu_send,ncpu_recv,ncc
+  integer::i,j,k,info,nSN_tot,icpu,ncpu_send,ncpu_recv,ncc
   integer::ncell_recv,ncell_send,cpu2send,cpu2recv,tag,np
   integer::isend_sta,irecv_sta,irecv_end
   real(dp),dimension(:,:),allocatable::SNsend,SNrecv,p_solid,ek_solid
@@ -816,6 +825,7 @@ subroutine mech_fine_mpi(ilevel)
   real(dp)::MS100,Mgas,Mdust,dMdust,newMdust  ! Dust (YD)
   integer::igrid,icell,ilevel,ilevel2
   real(dp),dimension(1:twotondim,1:ndim),save::xc
+  real(dp),dimension(1:3)::fpos
   logical,allocatable,dimension(:,:)::snowplough
 !  logical(dp),dimension(1:nvector,1:nSNnei),save ::snowplough
 #if NENER>0
@@ -1005,7 +1015,10 @@ subroutine mech_fine_mpi(ilevel)
 
 
      do j=1,nSNnei
-        call get_icell_from_pos (xSN_i+xSNnei(1:3,j)*dx, ilevel+1, igrid, icell,ilevel2)
+        do k=1,3
+           fpos(k) = xSN_i(k)+xSNnei(k,j)*dx
+        end do
+        call get_icell_from_pos (fpos, ilevel+1, igrid, icell,ilevel2)
         if(cpu_map(father(igrid)).eq.myid) then ! if belong to myid
            Z_nei = z_ave*0.02 ! for metal=.false.
            if(ilevel>ilevel2)then ! touching level-1 cells
@@ -1082,8 +1095,8 @@ subroutine mech_fine_mpi(ilevel)
 
      do j=1,nSNnei
 
-
-        call get_icell_from_pos (xSN_i(1:3)+xSNnei(1:3,j)*dx, ilevel+1, igrid, icell, ilevel2)
+        fpos(1:3) = xSN_i(1:3)+xSNnei(1:3,j)*dx
+        call get_icell_from_pos (fpos, ilevel+1, igrid, icell, ilevel2)
         if(cpu_map(father(igrid))==myid)then
 
            vol_nei = vol_loc*(2d0**ndim)**(ilevel-ilevel2)
