@@ -22,17 +22,16 @@ subroutine phi_fine_cg(ilevel,icount)
   !
   !   http://www.vis.uni-stuttgart.de/~weiskopf/publications/pdp10.pdf (2D preconditioner generalized to 3D in code)
   !
-  ! r     : stored in f(i, 1)
-  ! u     : stored in f(i, 2)
-  ! w     : stored in f(i, 3)
-  ! phi(x): stored in fcg(i, 1)
-  ! rho(b): stored in fcg(i, 2)
-  ! m     : stored in fcg(i, 3)
-  ! n     : stored in fcg(i, 4)
-  ! z     : stored in fcg(i, 5)
-  ! q     : stored in fcg(i, 6)
-  ! s     : stored in fcg(i, 7)
-  ! p     : stored in fcg(i, 8)
+  ! r     : stored in fcg(i, 1)
+  ! u     : stored in fcg(i, 2)
+  ! w     : stored in fcg(i, 3)
+  ! phi(x): stored in fcg(i, 4)
+  ! m     : stored in fcg(i, 5)
+  ! n     : stored in fcg(i, 6)
+  ! z     : stored in fcg(i, 7)
+  ! q     : stored in fcg(i, 8)
+  ! s     : stored in fcg(i, 9)
+  ! p     : stored in fcg(i, 10)
   !
   ! Initial guess for phi: interpolated phi from ilevel-1
   !
@@ -76,7 +75,7 @@ subroutine phi_fine_cg(ilevel,icount)
   !
   !=========================================================
   integer::i,ind,iter,iskip,itermax,nx_loc,icpu,off,off2
-  integer::idx,addr,nact,ntot,ncache,idim,ig,ih,j,k
+  integer::idx,addr,nact,ntot,ncell,ncache,idim,ig,ih,j,k
   integer::countsend,countrecv
   integer,dimension(ncpu)::reqsend,reqrecv
   real(dp)::error,error_ini
@@ -88,7 +87,7 @@ subroutine phi_fine_cg(ilevel,icount)
   real(kind=8) :: rhs_norm_all
 #endif
   integer,dimension(1:3,1:2,1:8)::iii,jjj
-  integer,dimension(0:twondim)::igridn=0
+  integer,dimension(0:twondim)::igridn
 
   if(gravity_type>0)return
   if(numbtot(1,ilevel)==0)return
@@ -123,7 +122,6 @@ subroutine phi_fine_cg(ilevel,icount)
    endif
    call make_virtual_fine_dp(phi(1),ilevel)      ! Update boundaries
    call make_boundary_phi(ilevel)                ! Update physical boundaries
-
 
   !===============================
   ! Compute right-hand side norm (for error)
@@ -160,11 +158,12 @@ subroutine phi_fine_cg(ilevel,icount)
       end if
    end do
    ntot = ntot * twotondim + nact
+   ncell = ncoarse + twotondim * ngridmax
 
    !==============================================
    ! Initialize arrays
    !==============================================
-   f(:,:) = 0d0
+   allocate(fcg(1:ntot,1:10),nborl(1:ntot,1:twotondim),addrl(1:ncell))
    fcg(:,:) = 0d0
    nborl(:,:) = 0
    addrl(:) = 0
@@ -183,8 +182,10 @@ subroutine phi_fine_cg(ilevel,icount)
          idx=active(ilevel)%igrid(i)+iskip
          addr = (ind-1) * ncache + i
          addrl(idx) = addr
-         fcg(addr,1) = phi(idx)
-         fcg(addr,2) = rho(idx)
+         do idim=1,ndim
+            fcg(addr,idim) = f(idx,idim)
+         end do
+         fcg(addr,4) = phi(idx)
       end do
 !$omp end do nowait
   end do
@@ -254,7 +255,7 @@ subroutine phi_fine_cg(ilevel,icount)
 !$omp end parallel
 
   !==============================================
-  ! Compute r = b - Ax and store it into f(i,1) (apply linear addressing)
+  ! Compute r = b - Ax and store it into fcg(i,1) (apply linear addressing)
   ! Interpolate down from paraent grid if no neighbor grid available
   !==============================================
   call cmp_residual_cg(ilevel,icount)
@@ -262,8 +263,8 @@ subroutine phi_fine_cg(ilevel,icount)
   !==============================================
   ! Update boundaries for r
   !==============================================
-  call recv_virtual_linear(f(1,1), nact, ilevel, countrecv, reqrecv)
-  call send_virtual_linear(f(1,1), ilevel, countsend, reqsend)
+  call recv_virtual_linear(fcg(1,1), nact, ilevel, countrecv, reqrecv, ntot)
+  call send_virtual_linear(fcg(1,1), ilevel, countsend, reqsend, ntot)
 #ifndef WITHOUTMPI
   call MPI_WAITALL(countrecv,reqrecv,MPI_STATUSES_IGNORE,info)
 #endif
@@ -276,9 +277,9 @@ subroutine phi_fine_cg(ilevel,icount)
   do i=1,ntot
      residu = 0d0
      do j=1,twondim
-        if(nborl(i, j)>0) residu = residu + f(nborl(i, j), 1)
+        if(nborl(i, j)>0) residu = residu + fcg(nborl(i, j), 1)
      end do
-     f(i, 2) = oneoversix*residu + prefac*f(i, 1)
+     fcg(i, 2) = oneoversix*residu + prefac*fcg(i, 1)
   end do
 
   !==============================================
@@ -288,16 +289,16 @@ subroutine phi_fine_cg(ilevel,icount)
   do i=1, nact
      residu = 0d0
      do j=1,twondim
-        if(nborl(i, j)>0) residu = residu + f(nborl(i, j), 2)
+        if(nborl(i, j)>0) residu = residu + fcg(nborl(i, j), 2)
      end do
-     f(i, 3) = oneoversix*residu - f(i, 2)
+     fcg(i, 3) = oneoversix*residu - fcg(i, 2)
    end do
 !$omp end parallel
 
   !==============================================
   ! Post receive of ghostzones for w for first iteration
   !==============================================
-  call recv_virtual_linear(f(1,3), nact, ilevel, countrecv, reqrecv)
+  call recv_virtual_linear(fcg(1,3), nact, ilevel, countrecv, reqrecv, ntot)
 
   !====================================
   ! Main iteration loop
@@ -320,7 +321,7 @@ subroutine phi_fine_cg(ilevel,icount)
      !==============================================
      ! Gather and send emission array for w
      !==============================================
-     call send_virtual_linear(f(1,3), ilevel, countsend, reqsend)
+     call send_virtual_linear(fcg(1,3), ilevel, countsend, reqsend, ntot)
 
 #endif
 
@@ -329,8 +330,8 @@ subroutine phi_fine_cg(ilevel,icount)
      !====================================
 !$omp parallel do reduction(+:gamma_cg,delta_cg)
      do i=1,nact
-        gamma_cg = gamma_cg + f(i, 1)*f(i, 2)
-        delta_cg = delta_cg + f(i, 3)*f(i, 2)
+        gamma_cg = gamma_cg + fcg(i, 1)*fcg(i, 2)
+        delta_cg = delta_cg + fcg(i, 3)*fcg(i, 2)
      end do
 
      iter=iter+1
@@ -377,16 +378,16 @@ subroutine phi_fine_cg(ilevel,icount)
      do i=1,ntot
         residu = 0d0
         do j=1,twondim
-           if(nborl(i, j)>0) residu = residu + f(nborl(i, j), 3)
+           if(nborl(i, j)>0) residu = residu + fcg(nborl(i, j), 3)
         end do
-        fcg(i, 3) = oneoversix*residu + prefac*f(i, 3)
+        fcg(i, 5) = oneoversix*residu + prefac*fcg(i, 3)
       end do
 
      !==============================================
      ! Post receives for ghostzones of w for use in next iteration
      !==============================================
      if (error>epsilon*error_ini.and.iter<itermax) then
-        call recv_virtual_linear(f(1,3), nact, ilevel, countrecv, reqrecv)
+        call recv_virtual_linear(fcg(1,3), nact, ilevel, countrecv, reqrecv, ntot)
      end if
 
      !==============================================
@@ -396,9 +397,9 @@ subroutine phi_fine_cg(ilevel,icount)
      do i=1,nact
         residu = 0d0
         do j=1,twondim
-           if(nborl(i, j)>0) residu = residu + fcg(nborl(i, j), 3)
+           if(nborl(i, j)>0) residu = residu + fcg(nborl(i, j), 5)
         end do
-        fcg(i, 4) = oneoversix*residu - fcg(i, 3)
+        fcg(i, 6) = oneoversix*residu - fcg(i, 5)
      end do
 
      !====================================
@@ -406,15 +407,15 @@ subroutine phi_fine_cg(ilevel,icount)
      !====================================
 !$omp parallel do
      do i=1,nact
-        fcg(i,5) = fcg(i,4) + beta_cg * fcg(i,5) ! z   = n + beta*z
-        fcg(i,6) = fcg(i,3) + beta_cg * fcg(i,6) ! q   = m + beta*q
-        fcg(i,7) = f(i,3)   + beta_cg * fcg(i,7) ! s   = w + beta*s
-        fcg(i,8) = f(i,2)   + beta_cg * fcg(i,8) ! p   = u + beta*p
+        fcg(i,7)  = fcg(i,6) + beta_cg * fcg(i,7) ! z   = n + beta*z
+        fcg(i,8)  = fcg(i,5) + beta_cg * fcg(i,8) ! q   = m + beta*q
+        fcg(i,9)  = fcg(i,3) + beta_cg * fcg(i,9) ! s   = w + beta*s
+        fcg(i,10) = fcg(i,2) + beta_cg * fcg(i,10) ! p   = u + beta*p
 
-        fcg(i,1) = fcg(i,1) + alpha_cg * fcg(i,8) ! phi = phi + alpha*p
-        f(i,1)   = f(i,1)   - alpha_cg * fcg(i,7) ! r   = r   - alpha*s
-        f(i,2)   = f(i,2)   - alpha_cg * fcg(i,6) ! u   = u   - alpha*q
-        f(i,3)   = f(i,3)   - alpha_cg * fcg(i,5) ! w   = w   - alpha*z
+        fcg(i,4)  = fcg(i,4) + alpha_cg * fcg(i,10) ! phi = phi + alpha*p
+        fcg(i,1)  = fcg(i,1) - alpha_cg * fcg(i,9) ! r   = r   - alpha*s
+        fcg(i,2)  = fcg(i,2) - alpha_cg * fcg(i,8) ! u   = u   - alpha*q
+        fcg(i,3)  = fcg(i,3) - alpha_cg * fcg(i,7) ! w   = w   - alpha*z
      end do
   end do
   ! End main iteration loop
@@ -429,7 +430,7 @@ subroutine phi_fine_cg(ilevel,icount)
 !$omp do
      do i=1,ncache
         idx = active(ilevel)%igrid(i)+iskip
-        phi(idx) = fcg((ind-1)*ncache + i,1)
+        phi(idx) = fcg((ind-1)*ncache + i,4)
      end do
 !$omp end do nowait
   end do
@@ -443,6 +444,7 @@ subroutine phi_fine_cg(ilevel,icount)
 #ifndef WITHOUTMPI
   if (countsend>0) call MPI_WAITALL(countsend,reqsend,MPI_STATUSES_IGNORE,info)
 #endif
+   deallocate(fcg,nborl,addrl)
 
   ! Update boundaries
   call make_virtual_fine_dp(phi(1),ilevel)
@@ -465,7 +467,7 @@ subroutine cmp_residual_cg(ilevel,icount)
   integer::ilevel,icount
   !------------------------------------------------------------------
   ! This routine computes the residual for the Conjugate Gradient
-  ! Poisson solver. The residual is stored in f(i,1).
+  ! Poisson solver. The residual is stored in fcg(i,1).
   !------------------------------------------------------------------
   integer::i,igrid,ngrid,ncache,nx_loc
   real(dp)::dx2,fourpi,scale,oneoversix,fact
@@ -511,7 +513,7 @@ subroutine cmprescg1(ilevel,icount,ind_grid,ngrid,iii,jjj,oneoversix,fact)
   integer::ilevel,icount
   !------------------------------------------------------------------
   ! This routine computes the residual for the Conjugate Gradient
-  ! Poisson solver. The residual is stored in f(i,1).
+  ! Poisson solver. The residual is stored in fcg(i,1).
   !------------------------------------------------------------------
   integer::i,idim,ngrid,ind,iskip
   integer::id1,id2,ig1,ig2,ih1,ih2
@@ -587,9 +589,9 @@ subroutine cmprescg1(ilevel,icount,ind_grid,ngrid,iii,jjj,oneoversix,fact)
 		  residu(i)=residu(i)+fact*(rho(ind_cell(i))-rho_tot)
 	  end do
 
-	  ! Store results in f(i,1)
+	  ! Store results in fcg(i,1)
 	  do i=1,ngrid
-		  f(addrl(ind_cell(i)),1)=residu(i)
+		  fcg(addrl(ind_cell(i)),1)=residu(i)
 	  end do
   end do
   ! End loop over cells
@@ -812,13 +814,13 @@ end subroutine makemultiphi1
 !###########################################################
 !###########################################################
 !###########################################################
-subroutine send_virtual_linear(xx, ilevel, countsend, reqsend)
+subroutine send_virtual_linear(xx, ilevel, countsend, reqsend, ntot)
    use amr_commons
    use poisson_commons, only: addrl
    use mpi_mod
    implicit none
-   integer::ilevel
-   real(dp),dimension(1:ncoarse+ngridmax*twotondim)::xx
+   integer::ilevel, ntot
+   real(dp),dimension(1:ntot)::xx
    ! -------------------------------------------------------------------
    ! This routine communicates virtual boundaries among all cpu's.
    ! at level ilevel for any double precision array in the AMR grid.
@@ -864,12 +866,12 @@ end subroutine send_virtual_linear
 !###########################################################
 !###########################################################
 !###########################################################
-subroutine recv_virtual_linear(xx, nact, ilevel, countrecv, reqrecv)
+subroutine recv_virtual_linear(xx, nact, ilevel, countrecv, reqrecv, ntot)
    use amr_commons
    use mpi_mod
    implicit none
-   integer::ilevel
-   real(dp),dimension(1:ncoarse+ngridmax*twotondim)::xx
+   integer::ilevel,ntot
+   real(dp),dimension(1:ntot)::xx
    ! -------------------------------------------------------------------
    ! This routine communicates virtual boundaries among all cpu's.
    ! at level ilevel for any double precision array in the AMR grid.
