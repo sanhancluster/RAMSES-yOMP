@@ -197,6 +197,7 @@ module amr_parameters
   real(dp)::T2maxAGN=1d10     ! Maximum temperature allowed after AGN energy input
   real(dp)::jetfrac=0.0d0     ! Fraction of accreted mass before releasing jet AGN energy
   real(dp)::Mseed  =1.0d5     ! Mass of the initial sink particle in solar mass
+  real(dp)::Mdragmax=-1.      ! Maximum mass of the sink particle to activate drag boost
   real(dp)::boost_acc=2.0d0   ! Boost power factor for the accretion rate
   real(dp)::boost_drag=2.0d0  ! Boost power factor for drag force
   real(dp)::r_gal  =1.0d2     ! SMBH sphere radius of influence in kpc

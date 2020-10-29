@@ -2973,15 +2973,16 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
   real(dp)::floorB,d_ini,dmsink
   real(dp)::dx_min
   integer ::counter
-  real(dp)::dmom,ekk,dvdrag,vnorm_rel,factor,mach,alpha,cgas,fudge,factG
+  real(dp)::dmom,ekk,dvdrag,vnorm_rel,factor,mach,alpha,cgas,fudge,factG,beta
   real(dp),dimension(1:ndim)::dpdrag,vrel,fdrag
-  real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,pi,d_star
+  real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,pi,d_star,scale_m
   real(dp)::epsilon_r, Deltat, ddt, dvdrag_norm
   ! Temporal arrays
   real(dp)::dMBH_coarse_add,dMEd_coarse_add,dMsmbh_add,msink_add
   real(dp),dimension(1:ndim)::vsink_add
   real(dp),dimension(1:nvector)::acc_part
   real(dp),dimension(1:nvector,1:twotondim)::acc_cell
+  real(dp)::msink_sol
 
 #ifdef RT
   ! AGNRT
@@ -3003,6 +3004,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
 
   ! Conversion factor from user units to cgs units
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
+  scale_m=scale_d*scale_l**3d0
   pi=twopi/2d0
   factG=1d0
   if(cosmo)factG=3d0/8d0/pi*omega_m*aexp
@@ -3303,8 +3305,15 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
               vrel(3)=vp(ind_part(j),3)-w
               vnorm_rel=max(sqrt( vrel(1)**2 + vrel(2)**2 + vrel(3)**2 ), smallc)
               mach=vnorm_rel/cgas
-              if(drag_part .and. d<m_background(isink,1)/vol_cloud) then
-                 alpha = 1d0
+              if(Mdragmax>0d0) then
+                 msink_sol = msink(isink)*scale_m/2d33
+                 if(msink_sol > Mdragmax) then
+                    beta = 0d0
+                 else
+                    beta = (LOG10(Mdragmax/msink_sol) / LOG10(Mdragmax/Mseed))*boost_drag
+                 end if
+                 alpha=max((d/(d_boost/scale_nH))**beta,1d0)
+                 alpha=min(alpha,Mdragmax/msink_sol)
               else
                  alpha=max((d/(d_boost/scale_nH))**boost_drag,1d0)
               end if
