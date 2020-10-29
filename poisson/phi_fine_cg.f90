@@ -263,10 +263,11 @@ subroutine phi_fine_cg(ilevel,icount)
   !==============================================
   ! Update boundaries for r
   !==============================================
-  call recv_virtual_linear(fcg(1,1), nact, ilevel, countrecv, reqrecv, ntot)
+  call recv_virtual_linear(ilevel, countrecv, reqrecv, ntot)
   call send_virtual_linear(fcg(1,1), ilevel, countsend, reqsend, ntot)
 #ifndef WITHOUTMPI
   call MPI_WAITALL(countrecv,reqrecv,MPI_STATUSES_IGNORE,info)
+  if(countrecv>0) call recv_post(fcg(1,1), nact, ilevel, ntot)
 #endif
 
   !==============================================
@@ -298,7 +299,7 @@ subroutine phi_fine_cg(ilevel,icount)
   !==============================================
   ! Post receive of ghostzones for w for first iteration
   !==============================================
-  call recv_virtual_linear(fcg(1,3), nact, ilevel, countrecv, reqrecv, ntot)
+  call recv_virtual_linear(ilevel, countrecv, reqrecv, ntot)
 
   !====================================
   ! Main iteration loop
@@ -347,7 +348,10 @@ subroutine phi_fine_cg(ilevel,icount)
      !==============================================
      ! Wait for full completion of receives for ghostzones of w
      !==============================================
-     if (countrecv>0) call MPI_WAITALL(countrecv,reqrecv,MPI_STATUSES_IGNORE,info)
+     if (countrecv>0) then
+        call MPI_WAITALL(countrecv,reqrecv,MPI_STATUSES_IGNORE,info)
+        call recv_post(fcg(1,3), nact, ilevel, ntot)
+      end if
 
      !==============================================
      ! Compute error
@@ -387,7 +391,7 @@ subroutine phi_fine_cg(ilevel,icount)
      ! Post receives for ghostzones of w for use in next iteration
      !==============================================
      if (error>epsilon*error_ini.and.iter<itermax) then
-        call recv_virtual_linear(fcg(1,3), nact, ilevel, countrecv, reqrecv, ntot)
+        call recv_virtual_linear(ilevel, countrecv, reqrecv, ntot)
      end if
 
      !==============================================
@@ -442,7 +446,10 @@ subroutine phi_fine_cg(ilevel,icount)
   end if
 
 #ifndef WITHOUTMPI
-  if (countsend>0) call MPI_WAITALL(countsend,reqsend,MPI_STATUSES_IGNORE,info)
+  if (countsend>0) then
+     call MPI_WAITALL(countsend,reqsend,MPI_STATUSES_IGNORE,info)
+     call recv_post(fcg(1,3), nact, ilevel, ntot)
+  end if
 #endif
    deallocate(fcg,nborl,addrl)
 
@@ -866,9 +873,40 @@ end subroutine send_virtual_linear
 !###########################################################
 !###########################################################
 !###########################################################
-subroutine recv_virtual_linear(xx, nact, ilevel, countrecv, reqrecv, ntot)
+subroutine recv_virtual_linear(ilevel, countrecv, reqrecv, ntot)
    use amr_commons
    use mpi_mod
+   implicit none
+   integer::ilevel,ntot
+   ! -------------------------------------------------------------------
+   ! This routine communicates virtual boundaries among all cpu's.
+   ! at level ilevel for any double precision array in the AMR grid.
+   ! -------------------------------------------------------------------
+#ifndef WITHOUTMPI
+   integer::icpu,ncache
+   integer::countrecv
+   integer::info,tag=101
+   integer,dimension(ncpu)::reqrecv
+#endif
+
+#ifndef WITHOUTMPI
+   countrecv=0
+   do icpu=1,ncpu
+      ncache=reception(icpu,ilevel)%ngrid
+      if(ncache>0) then
+         countrecv=countrecv+1
+         call MPI_IRECV(reception(icpu,ilevel)%u,ncache*twotondim, &
+               & MPI_DOUBLE_PRECISION,icpu-1,tag,MPI_COMM_WORLD,reqrecv(countrecv),info)
+      end if
+   end do
+#endif
+end subroutine recv_virtual_linear
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
+subroutine recv_post(xx, nact, ilevel, ntot)
+   use amr_commons
    implicit none
    integer::ilevel,ntot
    real(dp),dimension(1:ntot)::xx
@@ -877,24 +915,28 @@ subroutine recv_virtual_linear(xx, nact, ilevel, countrecv, reqrecv, ntot)
    ! at level ilevel for any double precision array in the AMR grid.
    ! -------------------------------------------------------------------
 #ifndef WITHOUTMPI
-   integer::icpu,ncache,nact,off,off2
+   integer::icpu,i,ind,ncache,iskip,step,nact,off
    integer::countrecv
-   integer::info,tag=101
-   integer,dimension(ncpu)::reqrecv
 #endif
 
 #ifndef WITHOUTMPI
-   countrecv=0
+!$omp parallel private(ncache,iskip,step,off)
    off = nact
    do icpu=1,ncpu
-      ncache=reception(icpu,ilevel)%ngrid
+      ncache = reception(icpu,ilevel)%ngrid
       if(ncache>0) then
-         countrecv=countrecv+1
-         off2 = off + ncache*twotondim
-         call MPI_IRECV(xx(off+1:off2),ncache*twotondim, &
-               & MPI_DOUBLE_PRECISION,icpu-1,tag,MPI_COMM_WORLD,reqrecv(countrecv),info)
-         off = off2
+         do ind=1,twotondim
+            iskip = ncoarse+(ind-1)*ngridmax
+            step=(ind-1)*ncache
+!$omp do
+            do i=1,ncache
+               xx(off+step+i) = reception(icpu,ilevel)%u(i+step,1)
+            end do
+!$omp end do
+         end do
+         off = off + ncache * twotondim
       end if
    end do
+!$omp end parallel
 #endif
-end subroutine recv_virtual_linear
+end subroutine recv_post
