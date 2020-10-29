@@ -116,7 +116,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   if (MC_tracer) then
 !$omp parallel do
      do ipart=1,npartmax
-        tmpp(ipart) = 0d0
+        if(tmpp(ipart) > 0d0) tmpp(ipart) = 0d0
      end do
   end if
   ! End MC Tracer

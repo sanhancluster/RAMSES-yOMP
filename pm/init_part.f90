@@ -106,6 +106,7 @@
      allocate(tmpp  (npartmax))
      allocate(partp (npartmax))
      allocate(move_flag(npartmax))
+     tmpp = 0d0
      move_flag = 0
   end if
   allocate(itmpp (npartmax))
