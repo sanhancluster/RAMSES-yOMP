@@ -6,7 +6,7 @@ module poisson_commons
   real(dp),allocatable,dimension(:)   :: rho               ! Density
   real(dp),allocatable,dimension(:)   :: rho_star          ! Star density
   real(dp),allocatable,dimension(:,:) :: f                 ! 3-force
-  real(dp),allocatable,dimension(:,:) :: fcg               ! cg parameters
+  !real(dp),allocatable,dimension(:,:) :: fcg               ! cg parameters
   integer, allocatable,dimension(:)   :: addrl             ! linear addressing
   integer, allocatable,dimension(:,:) :: nborl             ! neighbors in linear addressing
 
