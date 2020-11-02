@@ -119,7 +119,7 @@ subroutine make_sink(ilevel)
   real(dp)::d_jeans,d_thres,dd_sink,ds_sink
   real(dp)::birth_epoch,rmax_sink2,x_half,y_half,z_half,x_box,y_box,z_box
   real(dp),dimension(1:3)::xbound,skip_loc
-  real(dp)::dx,dx_loc,scale,dxx,dyy,dzz,dr_sink,rmax_sink,d_gal
+  real(dp)::dx,dx_loc,scale,dxx,dyy,dzz,dr_sink,rmax_sink,rmin_sink,d_gal
   real(dp)::factG,pi,d_star,star_ratio
 #ifdef SOLVERmhd
   real(dp)::bx1,bx2,by1,by2,bz1,bz2
@@ -160,6 +160,7 @@ subroutine make_sink(ilevel)
   ! Minimum radius to create a new sink from another
   ! (physical kpc -> code units)
   rmax_sink=r_gal*3.08d21/scale_l*aexp
+  rmin_sink=r_bhr*3.08d21/scale_l*aexp
 
   pi=twopi/2d0
   factG=1d0
@@ -195,7 +196,6 @@ subroutine make_sink(ilevel)
 
   x_half=scale*xbound(1)/2.0; y_half=scale*xbound(2)/2.0; z_half=scale*xbound(3)/2.0
   x_box =scale*xbound(1); y_box =scale*xbound(2); z_box =scale*xbound(3)
-  rmax_sink2=rmax_sink**2
 
   ! Birth epoch
   birth_epoch=t
@@ -302,7 +302,7 @@ subroutine make_sink(ilevel)
   ! Loop over grids
   ncache=active(ilevel)%ngrid
 !$omp parallel do private(ngrid,ind_grid,iskip,ind_cell,ok) &
-!$omp & private(d,x,y,z,star_ratio,temp,d_jeans,d_thres,dxx,dyy,dzz,dr_sink) reduction(+:ntot) schedule(static)
+!$omp & private(d,x,y,z,star_ratio,temp,d_jeans,d_thres,dxx,dyy,dzz,dr_sink,rmax_sink2) reduction(+:ntot) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -356,32 +356,35 @@ subroutine make_sink(ilevel)
               do isink=1,nsink
                  if(.not. drag_part .or. (d_avgptr(isink) > d_gal &
                        & .or. m_background(isink,1)/vol_cloud > d_star)) then
-                    dxx=x-xsink(isink,1)
-                    if(dxx> x_half)then
-                       dxx=dxx-x_box
-                    endif
-                    if(dxx<-x_half)then
-                       dxx=dxx+x_box
-                    endif
-                    dr_sink=dxx*dxx
-                    dyy=y-xsink(isink,2)
-                    if(dyy> y_half)then
-                       dyy=dyy-y_box
-                    endif
-                    if(dyy<-y_half)then
-                       dyy=dyy+y_box
-                    endif
-                    dr_sink=dyy*dyy+dr_sink
-                    dzz=z-xsink(isink,3)
-                    if(dzz> z_half)then
-                       dzz=dzz-z_box
-                    endif
-                    if(dzz<-z_half)then
-                       dzz=dzz+z_box
-                    endif
-                    dr_sink=dzz*dzz+dr_sink
-                    if(dr_sink .le. rmax_sink2)ok(i)=.false.
+                    rmax_sink2 = rmax_sink**2
+                 else
+                    rmax_sink2 = rmin_sink**2
                  end if
+                 dxx=x-xsink(isink,1)
+                 if(dxx> x_half)then
+                    dxx=dxx-x_box
+                 endif
+                 if(dxx<-x_half)then
+                    dxx=dxx+x_box
+                 endif
+                 dr_sink=dxx*dxx
+                 dyy=y-xsink(isink,2)
+                 if(dyy> y_half)then
+                    dyy=dyy-y_box
+                 endif
+                 if(dyy<-y_half)then
+                    dyy=dyy+y_box
+                 endif
+                 dr_sink=dyy*dyy+dr_sink
+                 dzz=z-xsink(isink,3)
+                 if(dzz> z_half)then
+                    dzz=dzz-z_box
+                 endif
+                 if(dzz<-z_half)then
+                    dzz=dzz+z_box
+                 endif
+                 dr_sink=dzz*dzz+dr_sink
+                 if(dr_sink .le. rmax_sink2)ok(i)=.false.
               enddo
            endif
 
@@ -424,6 +427,7 @@ subroutine make_sink(ilevel)
      izero_myid=0
   endif
   ninc=0
+  rmax_sink2 = rmax_sink**2
   ! Loop over grids
   ncache=active(ilevel)%ngrid
 !$omp parallel do private(ngrid,ind_grid,iskip,ind_cell,nnew,ninc_omp) schedule(static)
@@ -2973,16 +2977,15 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
   real(dp)::floorB,d_ini,dmsink
   real(dp)::dx_min
   integer ::counter
-  real(dp)::dmom,ekk,dvdrag,vnorm_rel,factor,mach,alpha,cgas,fudge,factG,beta
+  real(dp)::dmom,ekk,dvdrag,vnorm_rel,factor,mach,alpha,cgas,fudge,factG
   real(dp),dimension(1:ndim)::dpdrag,vrel,fdrag
-  real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,pi,d_star,scale_m
+  real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,pi,d_star
   real(dp)::epsilon_r, Deltat, ddt, dvdrag_norm
   ! Temporal arrays
   real(dp)::dMBH_coarse_add,dMEd_coarse_add,dMsmbh_add,msink_add
   real(dp),dimension(1:ndim)::vsink_add
   real(dp),dimension(1:nvector)::acc_part
   real(dp),dimension(1:nvector,1:twotondim)::acc_cell
-  real(dp)::msink_sol
 
 #ifdef RT
   ! AGNRT
@@ -3004,7 +3007,6 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
 
   ! Conversion factor from user units to cgs units
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
-  scale_m=scale_d*scale_l**3d0
   pi=twopi/2d0
   factG=1d0
   if(cosmo)factG=3d0/8d0/pi*omega_m*aexp
@@ -3305,15 +3307,8 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
               vrel(3)=vp(ind_part(j),3)-w
               vnorm_rel=max(sqrt( vrel(1)**2 + vrel(2)**2 + vrel(3)**2 ), smallc)
               mach=vnorm_rel/cgas
-              if(Mdragmax>0d0) then
-                 msink_sol = msink(isink)*scale_m/2d33
-                 if(msink_sol > Mdragmax) then
-                    beta = 0d0
-                 else
-                    beta = (LOG10(Mdragmax/msink_sol) / LOG10(Mdragmax/Mseed))*boost_drag
-                 end if
-                 alpha=max((d/(d_boost/scale_nH))**beta,1d0)
-                 alpha=min(alpha,Mdragmax/msink_sol)
+              if(drag_part .and. d<m_background(isink,1)/vol_cloud) then
+                 alpha = 1d0
               else
                  alpha=max((d/(d_boost/scale_nH))**boost_drag,1d0)
               end if
