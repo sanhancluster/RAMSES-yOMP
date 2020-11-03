@@ -187,6 +187,11 @@ subroutine phi_fine_cg(ilevel,icount)
   !==============================================
    call cmp_A_cg(ilevel,2,3)
 
+  !==============================================
+  ! Post receive of ghostzones for w for first iteration
+  !==============================================
+  call recv_virtual(ilevel, countrecv, reqrecv)
+
   !====================================
   ! Main iteration loop
   !====================================
@@ -196,6 +201,20 @@ subroutine phi_fine_cg(ilevel,icount)
   !! Main bottleneck
 
   do while(error>epsilon*error_ini.and.iter<itermax)
+#ifndef WITHOUTMPI
+     if (iter>0) then
+        !==============================================
+        ! Post update of ghostzones for w
+        !==============================================
+        ! Wait for full completion of sends from last iteration before filling emission array again
+        if (countsend>0) call MPI_WAITALL(countsend,reqsend,MPI_STATUSES_IGNORE,info)
+     end if
+
+     !==============================================
+     ! Gather and send emission array for w
+     !==============================================
+     call send_virtual(f(1,3), ilevel, countsend, reqsend)
+#endif
 
      !====================================
      ! Compute dot products. gamma_cg = r.u, delta_cg = w.u
@@ -222,12 +241,14 @@ subroutine phi_fine_cg(ilevel,icount)
      global(:) = 0.0
      call MPI_ALLREDUCE(local,global,2,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,info)
      gamma_cg = global(1); delta_cg = global(2)
-#ifndef WITHOUTMPI
+
      !==============================================
-     ! Gather and send emission array for w
+     ! Wait for full completion of receives for ghostzones of w
      !==============================================
-     call make_virtual_fine_dp(f(1,3),ilevel)
-#endif
+     if (countrecv>0) then
+        call MPI_WAITALL(countrecv,reqrecv,MPI_STATUSES_IGNORE,info)
+        call recv_post(f(1,3), ilevel)
+      end if
 
      !==============================================
      ! Compute error
@@ -255,6 +276,13 @@ subroutine phi_fine_cg(ilevel,icount)
      ! Find m= Minv w. Do it in ghostzones too, so that p.m does not have to be synced below
      !==============================================
      call cmp_Minv_cg(ilevel,3,4)
+
+      !==============================================
+      ! Post receives for ghostzones of w for use in next iteration
+      !==============================================
+      if (error>epsilon*error_ini.and.iter<itermax) then
+         call recv_virtual(ilevel, countrecv, reqrecv)
+      end if
 
      !==============================================
      ! Compute n = A m
@@ -291,6 +319,8 @@ subroutine phi_fine_cg(ilevel,icount)
      if(myid==1)write(*,*)'Poisson failed to converge...'
   end if
   !deallocate(f,nborl,addrl)
+
+   if (countsend>0) call MPI_WAITALL(countsend,reqsend,MPI_STATUSES_IGNORE,info)
 
   ! Update boundaries
   call make_virtual_fine_dp(phi(1),ilevel)
@@ -929,3 +959,121 @@ end subroutine makemultiphi1
 !###########################################################
 !###########################################################
 !###########################################################
+subroutine send_virtual(xx, ilevel, countsend, reqsend)
+   use amr_commons
+   use poisson_commons
+   use mpi_mod
+   implicit none
+   integer::ilevel
+   real(dp),dimension(1:ncoarse+twotondim*ngridmax)::xx
+   ! -------------------------------------------------------------------
+   ! This routine communicates virtual boundaries among all cpu's.
+   ! at level ilevel for any double precision array in the AMR grid.
+   ! -------------------------------------------------------------------
+#ifndef WITHOUTMPI
+   integer::icpu,i,j,ncache,iskip,step,idx
+   integer::countsend
+   integer::info,tag=101
+   integer,dimension(ncpu)::reqsend
+#endif
+
+#ifndef WITHOUTMPI
+!$omp parallel private(ncache,iskip,step,idx)
+   do j=1,twotondim
+      do icpu=1,ncpu
+         ncache=emission(icpu,ilevel)%ngrid
+         if (ncache>0) then
+            iskip=ncoarse+(j-1)*ngridmax
+            step=(j-1)*ncache
+!$omp do
+            do i=1,ncache
+               idx=emission(icpu,ilevel)%igrid(i)+iskip
+               emission(icpu,ilevel)%u(i+step,1)=xx(idx)
+            end do
+!$omp end do nowait
+         end if
+      end do
+   end do
+!$omp end parallel
+
+   countsend=0
+   do icpu=1,ncpu
+      ncache=emission(icpu,ilevel)%ngrid
+      if(ncache>0) then
+         countsend=countsend+1
+         call MPI_ISEND(emission(icpu,ilevel)%u,ncache*twotondim, &
+               & MPI_DOUBLE_PRECISION,icpu-1,tag,MPI_COMM_WORLD,reqsend(countsend),info)
+      end if
+   end do
+#endif
+end subroutine send_virtual
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
+subroutine recv_virtual(ilevel, countrecv, reqrecv)
+   use amr_commons
+   use mpi_mod
+   implicit none
+   integer::ilevel
+   ! -------------------------------------------------------------------
+   ! This routine communicates virtual boundaries among all cpu's.
+   ! at level ilevel for any double precision array in the AMR grid.
+   ! -------------------------------------------------------------------
+#ifndef WITHOUTMPI
+   integer::icpu,ncache
+   integer::countrecv
+   integer::info,tag=101
+   integer,dimension(ncpu)::reqrecv
+#endif
+
+#ifndef WITHOUTMPI
+   countrecv=0
+   do icpu=1,ncpu
+      ncache=reception(icpu,ilevel)%ngrid
+      if(ncache>0) then
+         countrecv=countrecv+1
+         call MPI_IRECV(reception(icpu,ilevel)%u,ncache*twotondim, &
+               & MPI_DOUBLE_PRECISION,icpu-1,tag,MPI_COMM_WORLD,reqrecv(countrecv),info)
+      end if
+   end do
+#endif
+end subroutine recv_virtual
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
+subroutine recv_post(xx, ilevel)
+   use amr_commons
+   implicit none
+   integer::ilevel
+   real(dp),dimension(1:ncoarse+twotondim*ngridmax)::xx
+   ! -------------------------------------------------------------------
+   ! This routine communicates virtual boundaries among all cpu's.
+   ! at level ilevel for any double precision array in the AMR grid.
+   ! -------------------------------------------------------------------
+#ifndef WITHOUTMPI
+   integer::icpu,i,j,ncache,iskip,step,idx
+   integer::countrecv
+#endif
+
+#ifndef WITHOUTMPI
+!$omp parallel private(ncache,iskip,step,idx)
+   do j=1,twotondim
+      iskip = ncoarse+(j-1)*ngridmax
+      do icpu=1,ncpu
+         ncache = reception(icpu,ilevel)%ngrid
+         step=(j-1)*ncache
+         if(ncache>0) then
+!$omp do
+            do i=1,ncache
+               idx = reception(icpu,ilevel)%igrid(i)+iskip
+               xx(idx) = reception(icpu,ilevel)%u(i+step,1)
+            end do
+!$omp end do nowait
+         end if
+      end do
+   end do
+!$omp end parallel
+#endif
+end subroutine recv_post
