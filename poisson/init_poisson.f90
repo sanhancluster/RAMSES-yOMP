@@ -28,8 +28,8 @@ subroutine init_poisson
   allocate(phi_old (1:ncell))
   allocate(f   (1:ncell,1:10))
   !allocate(fcg (1:ncell,1:10))
-  !allocate(addrl(1:ncell))
-  !allocate(nborl(1:ncell,1:twondim))
+  allocate(addrl(1:ncell))
+  allocate(nborl(1:ncell,1:twondim))
   rho=0.0D0; rho_star=0d0; phi=0.0D0; f=0.0D0
   if(cic_levelmax>0)then
      allocate(rho_top(1:ncell))
