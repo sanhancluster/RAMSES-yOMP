@@ -163,7 +163,6 @@ subroutine phi_fine_cg(ilevel,icount)
    !==============================================
    ! Initialize arrays
    !==============================================
-   !allocate(f(1:ntot,1:10),nborl(1:ntot,1:twotondim),addrl(1:ncell))
    f(1:ntot,:) = 0d0
    nborl(1:ntot,:) = 0
    addrl(1:ncell) = 0
@@ -171,7 +170,7 @@ subroutine phi_fine_cg(ilevel,icount)
   !==============================================
   ! Setup a pointer array for linear addressing and store it into addrl(i)
   ! active comes first, and reception
-  ! and copy phi, b, r to linearly addressed array
+  ! and copy phi to linearly addressed array
   !==============================================
 !$omp parallel private(ncache,iskip,idx,addr,off)
    ncache = active(ilevel)%ngrid
@@ -182,14 +181,11 @@ subroutine phi_fine_cg(ilevel,icount)
          idx=active(ilevel)%igrid(i)+iskip
          addr = (ind-1) * ncache + i
          addrl(idx) = addr
-         !do idim=1,ndim
-         !  f(addr,idim) = f(idx,idim)
-         !end do
          f(addr,4) = phi(idx)
       end do
 !$omp end do nowait
   end do
-!$omp barrier
+
   off = nact
   do icpu=1,ncpu
      ncache = reception(icpu,ilevel)%ngrid
@@ -263,8 +259,8 @@ subroutine phi_fine_cg(ilevel,icount)
   !==============================================
   ! Update boundaries for r
   !==============================================
-  call recv_virtual_linear(f(1,1), nact, ilevel, countrecv, reqrecv, ntot)
-  call send_virtual_linear(f(1,1), ilevel, countsend, reqsend, ntot)
+  call recv_virtual_linear(f(1,1), nact, ilevel, countrecv, reqrecv)
+  call send_virtual_linear(f(1,1), ilevel, countsend, reqsend)
 
   if(countrecv>0) call MPI_WAITALL(countrecv,reqrecv,MPI_STATUSES_IGNORE,info)
   if(countsend>0) call MPI_WAITALL(countsend,reqsend,MPI_STATUSES_IGNORE,info)
@@ -298,7 +294,7 @@ subroutine phi_fine_cg(ilevel,icount)
   !==============================================
   ! Post receive of ghostzones for w for first iteration
   !==============================================
-  call recv_virtual_linear(f(1,3), nact, ilevel, countrecv, reqrecv, ntot)
+  call recv_virtual_linear(f(1,3), nact, ilevel, countrecv, reqrecv)
 
   !====================================
   ! Main iteration loop
@@ -321,7 +317,7 @@ subroutine phi_fine_cg(ilevel,icount)
      !==============================================
      ! Gather and send emission array for w
      !==============================================
-     call send_virtual_linear(f(1,3), ilevel, countsend, reqsend, ntot)
+     call send_virtual_linear(f(1,3), ilevel, countsend, reqsend)
 
 #endif
 
@@ -387,7 +383,7 @@ subroutine phi_fine_cg(ilevel,icount)
      ! Post receives for ghostzones of w for use in next iteration
      !==============================================
      if (error>epsilon*error_ini.and.iter<itermax) then
-        call recv_virtual_linear(f(1,3), nact, ilevel, countrecv, reqrecv, ntot)
+        call recv_virtual_linear(f(1,3), nact, ilevel, countrecv, reqrecv)
      end if
 
      !==============================================
@@ -812,12 +808,12 @@ end subroutine makemultiphi1
 !###########################################################
 !###########################################################
 !###########################################################
-subroutine send_virtual_linear(xx, ilevel, countsend, reqsend, ntot)
+subroutine send_virtual_linear(xx, ilevel, countsend, reqsend)
    use amr_commons
    use poisson_commons, only: addrl
    use mpi_mod
    implicit none
-   integer::ilevel, ntot
+   integer::ilevel
    real(dp),dimension(1:ncoarse+twotondim*ngridmax)::xx
    ! -------------------------------------------------------------------
    ! This routine communicates virtual boundaries among all cpu's.
@@ -864,11 +860,11 @@ end subroutine send_virtual_linear
 !###########################################################
 !###########################################################
 !###########################################################
-subroutine recv_virtual_linear(xx, nact, ilevel, countrecv, reqrecv, ntot)
+subroutine recv_virtual_linear(xx, nact, ilevel, countrecv, reqrecv)
    use amr_commons
    use mpi_mod
    implicit none
-   integer::ilevel,ntot
+   integer::ilevel
    real(dp),dimension(1:ncoarse+twotondim*ngridmax)::xx
    ! -------------------------------------------------------------------
    ! This routine communicates virtual boundaries among all cpu's.
