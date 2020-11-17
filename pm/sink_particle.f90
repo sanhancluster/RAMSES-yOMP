@@ -4978,8 +4978,7 @@ subroutine AGN_feedback
      call title(nstep_coarse,nchar)
 
      filedir='SINKPROPS/'
-     inquire(directory=TRIM(filedir), exist=ok)
-     if(.not. ok)call create_output_dirs_nobar(filedir)
+     call create_output_dirs_nobar(filedir)
 
      filename='sink_'//TRIM(nchar)//'.dat'
      ilun=ncpu*4+11
