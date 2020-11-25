@@ -191,6 +191,7 @@ module amr_parameters
   real(dp)::sn_trelax=0.D0    ! Blocks SN until t>sn_trelax
   real(dp)::f_ekAGN=1.0D0     ! AGN kinetic energy fraction (only between 0 and 1)
   real(dp)::rAGN   =0.0D0     ! AGN superbubble radius in kpc
+  real(dp)::rAGN_dx=1.0D0     ! AGN superbubble radius in cell size
   real(dp)::eAGN_K =1d0       ! AGN energy efficiency in Radio mode
   real(dp)::eAGN_T =0.15d0    ! AGN energy efficiency in Quasar mode
   real(dp)::TAGN   =0.0d0     ! AGN temperature floor for energy release in Quasar mode

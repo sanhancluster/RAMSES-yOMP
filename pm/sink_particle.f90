@@ -5391,7 +5391,7 @@ subroutine average_AGN(xAGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiveAGN,jAGN,vol_
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
 
   ! Maximum radius of the ejecta
-  rmax=MAX(1d0*dx_min*scale_l/aexp,rAGN*3.08d21)
+  rmax=MAX(rAGN_dx*dx_min*scale_l/aexp,rAGN*3.08d21)
   rmax=rmax/scale_l
   rmax2=rmax*rmax
 
@@ -5753,7 +5753,7 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
   T2maxAGNz=T2maxAGN*aexp
 
   ! Maximum radius of the ejecta
-  rmax=MAX(1d0*dx_min*scale_l/aexp,rAGN*3.08d21)
+  rmax=MAX(rAGN_dx*dx_min*scale_l/aexp,rAGN*3.08d21)
   rmax=rmax/scale_l
   rmax2=rmax*rmax
 
@@ -6258,7 +6258,7 @@ subroutine getAGNonmyid(isink_myid,nsink_myid)
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
 
   ! Maximum radius of the ejecta
-  drsink=2d0*MAX(1d0*dx_min*scale_l/aexp,rAGN*3.08d21)
+  drsink=2d0*MAX(rAGN_dx*dx_min*scale_l/aexp,rAGN*3.08d21)
   drsink=drsink/scale_l
   !-----------------------
   ! Map parameters
