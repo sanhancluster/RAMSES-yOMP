@@ -18,6 +18,7 @@ subroutine init_hydro
   character(LEN=80)::fileloc
   character(LEN=5)::nchar,ncharcpu
   integer,parameter::tag=1108
+  logical::ok
 #if NENER>0
   integer::irad
 #endif
@@ -196,11 +197,12 @@ subroutine init_hydro
                  ! Read passive scalars
                  do ivar=ndim+3+nener,max(nvar2,nvar)
                     if(remap_pscalar(ivar-ndim-2).gt.-1) read(ilun)xx
+                    if(remap_pscalar(ivar-ndim-2).gt.0) ok=.true.
                     if(ivar.gt.nvar)then
                        continue
                     endif
                     do i=1,ncache
-                       if(remap_pscalar(ivar-ndim-2).gt.0)then
+                       if(ok)then
                           uold(ind_grid(i)+iskip,remap_pscalar(ivar-ndim-2))=xx(i)*max(uold(ind_grid(i)+iskip,1),smallr)
                        else if(remap_pscalar(ivar-ndim-2).lt.0) then
                           uold(ind_grid(i)+iskip,abs(remap_pscalar(ivar-ndim-2)))=0d0
