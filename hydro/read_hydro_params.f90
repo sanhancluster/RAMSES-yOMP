@@ -104,10 +104,10 @@ subroutine read_hydro_params(nml_ok)
   namelist/smbh_params/agn,smbh,sink_AGN,bondi,drag,spin_bh,force_exact_mseed &
        & ,bhspinmerge,vrel_merge,random_jet,mad_jet,selfgrav,Mseed,n_sink,ns_sink &
        & ,eAGN_K,eAGN_T,X_floor,boost_acc,boost_drag,T2maxAGN,TAGN,mloadAGN &
-       & ,f_bondi,ind_rsink,rAGN,r_gal,r_bhr,rmerge,sigmav_max,star_ratio_floor &
+       & ,f_bondi,ind_rsink,rAGN,rAGN_dx,r_gal,r_bhr,rmerge,sigmav_max,star_ratio_floor &
        & ,drag_part,DF_ncells,d_boost,no_accretion,fix_smbh_position &
        & ,eddington_limit,jetfrac,maximum_accretion,finestep_AGN &
-       & ,point_mass_sink,n_gal,sig_sink,Mdragmax
+       & ,point_mass_sink,n_gal,sig_sink
 
   ! Units parameters
   namelist/units_params/units_density,units_time,units_length
