@@ -8,16 +8,16 @@ NPRE = 8
 NENER = 0
 NGROUPS = 0
 NIONS = 0
-METALS = 0
+METALS = 1
 #Extra variables beyond those required by dimensions, or listed above
-NVAR_EXTRA = 0
+NVAR_EXTRA = 1
 SOLVER = hydro
 #############################################################################
 # Options
 GRACKLE = 0
 RT = 0
 DICE = 0
-REFMASK = 0
+REFMASK = 1
 LONGINT = 0
 QUADHILBERT = 0
 # Set to 1 to use old MPI include statements instead of more recent `use mpi`.
@@ -128,7 +128,7 @@ PATCH := $(subst $(SPACE),:,$(PATCH))
 
 # --- MPI, ifort syntax ------------------------------
 F90 = mpiifort $(OMPFLAG)
-FFLAGS = -cpp -O3 -xAVX -fpp $(DEFINES) -DNOSYSTEM
+FFLAGS = -cpp -O3 -fpp -xAVX $(DEFINES) -DNOSYSTEM
 
 # --- MPI, ifort syntax, additional checks -----------
 #F90 = mpiifort $(OMPFLAG)
