@@ -4196,8 +4196,24 @@ subroutine rhostar_from_current_level(ilevel)
   integer,dimension(1:nvector)::ind_part,ind_grid_part
   real(dp),dimension(1:nvector,1:ndim)::x0
 
+  real(dp),parameter::msun2g=2d33
+  real(dp),parameter::myr2s=3.1536000d+13
+  real(dp)::tquench,current_time
+  real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,
+
   ! Mesh spacing in that level
   dx=0.5D0**ilevel
+  call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
+
+  if (use_proper_time)then
+     tquench = t_que*myr2s/(scale_t/aexp**2)
+     current_time=texp
+     dteff = dteff*aexp**2
+  else
+     tquench = t_sne*myr2s/scale_t
+     current_time=t
+  endif
+  tquench = current_time - tquench
 
   ! Loop over cpus
 !$omp parallel private(ig,ip,ind_cell,ind_part,ind_grid,ind_grid_part,x0,igrid,npart1,ipart,local_count)
@@ -4227,7 +4243,7 @@ subroutine rhostar_from_current_level(ilevel)
               end if
 
               ! Select only stars
-              if (is_star(typep(ipart))) then
+              if (is_star(typep(ipart)) .and. tp(ipart)<tquench) then
                  local_count = local_count + 1
                  ip=ip+1
                  ind_part(ip)=ipart
@@ -4582,6 +4598,8 @@ subroutine quenching(ilevel)
   ! Gather star particles only.
 
   ! Loop over grids
+!$omp parallel do private(igrid,npart1,npart2,str_d,tot_m,ave_u,ave_v,ave_w,sig_u,sig_v,sig_w &
+!$omp & ipart,next_part,iskip,ind_cell)
   do i=1,active(ilevel)%ngrid
      igrid=active(ilevel)%igrid(i)
      ! Number of particles in the grid
@@ -4637,8 +4655,8 @@ subroutine quenching(ilevel)
         iskip=ncoarse+(ind-1)*ngridmax
         ind_cell=iskip+igrid
         ! AGN formation sites
-        ! if n_star>0.1 H/cc and v_disp>75 km/s
-        if(str_d>0.1.and.MAX(sig_u,sig_v,sig_w)>sig_sink)then
+        ! v_disp > sig_sink km/s
+        if(MAX(sig_u,sig_v,sig_w)>sig_sink)then
            flag2(ind_cell)=0
         else
            flag2(ind_cell)=1
