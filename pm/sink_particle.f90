@@ -4199,7 +4199,7 @@ subroutine rhostar_from_current_level(ilevel)
   real(dp),parameter::msun2g=2d33
   real(dp),parameter::myr2s=3.1536000d+13
   real(dp)::tquench,current_time
-  real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,
+  real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
 
   ! Mesh spacing in that level
   dx=0.5D0**ilevel
