@@ -4598,7 +4598,7 @@ subroutine quenching(ilevel)
   ! Gather star particles only.
 
   ! Loop over grids
-!$omp parallel do private(igrid,npart1,npart2,str_d,tot_m,ave_u,ave_v,ave_w,sig_u,sig_v,sig_w &
+!$omp parallel do private(igrid,npart1,npart2,str_d,tot_m,ave_u,ave_v,ave_w,sig_u,sig_v,sig_w, &
 !$omp & ipart,next_part,iskip,ind_cell)
   do i=1,active(ilevel)%ngrid
      igrid=active(ilevel)%igrid(i)
