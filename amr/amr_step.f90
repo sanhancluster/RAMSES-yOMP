@@ -287,10 +287,10 @@ recursive subroutine amr_step(ilevel,icount)
         ! Density threshold and/or Bondi accretion onto sink particle
         if(sink)then
            if(bondi .or. maximum_accretion) then
-                               call timer('sinks - drag','start')
-              if (drag_part) call get_drag_part(ilevel)  ! HP
                                call timer('sinks - grow','start')
               call grow_bondi(ilevel)
+                               call timer('sinks - drag','start')
+              if (drag_part) call get_drag_part(ilevel)  ! HP
            else
               call grow_jeans(ilevel)
            endif
