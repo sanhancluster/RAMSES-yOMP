@@ -3313,6 +3313,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
                  alpha=max((d/(d_boost/scale_nH))**boost_drag,1d0)
               end if
               factor=alpha * fudge * d*msink(isink)/cgas**2 / vnorm_rel
+              ! Drag force as a function of the Mach number, see Chapon+ 2013, Ostriker 1999
               ! TODO: deal with very low mach number
               if(mach.le.0.950d0)factor=factor/mach**2*(0.5d0*log((1d0+mach)/(1d0-mach))-mach)
               if(mach.ge.1.007d0)factor=factor/mach**2*(0.5d0*log(mach**2-1d0)+3.2d0)

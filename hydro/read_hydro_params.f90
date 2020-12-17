@@ -87,7 +87,8 @@ subroutine read_hydro_params(nml_ok)
        & ,A_SN,A_SN_geen,expN_SN,E_SNII,M_SNII,SF_kick_kms,SN_dT2_min &
        & ,log_mfb,log_mfb_mega,mechanical_feedback,mechanical_geen &
        & ,nsn2mass,porosity,sn2_real_delay,sn_IC,sn_trelax &
-       & ,ir_feedback,ir_eff,t_diss,t_sne,mass_star_max,mass_sne_min
+       & ,ir_feedback,ir_eff,t_diss,t_sne,mass_star_max,mass_sne_min &
+       & ,stellar_winds
 
   ! Cooling / basic chemistry parameters
   namelist/cooling_params/cooling,metal,isothermal,haardt_madau,J21 &

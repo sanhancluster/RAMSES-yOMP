@@ -262,6 +262,7 @@ module amr_parameters
   logical ::momentum_feedback=.false.
   logical :: drag_part = .false. !activate the friction from stars/DM (HP)
   logical :: holdback = .true. ! Activate strict hold-back method to preserve max physical resolution
+  logical :: stellar_winds = .false.
 
   ! Output times
   real(dp),dimension(1:MAXOUT)::aout=1.1       ! Output expansion factors

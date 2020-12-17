@@ -377,6 +377,9 @@ recursive subroutine amr_step(ilevel,icount)
   endif
 #endif
 
+  ! Stellar winds from stars
+  if(hydro.and.star.and.stellar_winds) call stellar_winds_fine(ilevel)
+
   !-----------
   ! Hydro step
   !-----------
