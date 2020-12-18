@@ -74,7 +74,7 @@ subroutine star_formation(ilevel)
   integer::irad
 #endif
 #ifdef NCHEM
-  real(dp),dimension(1:nchem) :: chem1=0.0
+  real(dp),dimension(1:nchem) :: chem1
   integer::iche
 #endif
   ! Initial kick
@@ -86,6 +86,8 @@ subroutine star_formation(ilevel)
 
   common /omp_star_formation/ xc,skip_loc,scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,d0,mstar,dstar,nISM,trel, &
         & birth_epoch,factG,dx_loc,scale,vol_loc
+
+  chem1 = 0d0
 
   if(numbtot(1,ilevel)==0) return
   if(.not. hydro)return

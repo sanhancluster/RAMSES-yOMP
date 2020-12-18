@@ -53,6 +53,14 @@ module amr_parameters
 #endif
   integer::nchunk=2  ! Size of OpenMP chunk size
 
+#ifndef NCHEM
+  integer,parameter :: nchem=0
+  character(len=8),dimension(1:1) :: chem_list
+#else
+  integer,parameter :: nchem=NCHEM
+  character(len=8),dimension(1:NCHEM) :: chem_list
+#endif
+
   ! Precompute powers of 2 in the right prec for hilbert curve (MT)
   ! Careful, starts at zero, so that powof2(0) == 1
   real(qdp),parameter,dimension(0:ndim*32-1) :: powof2 = (/ (2.0_qdp**ipower, ipower=0,ndim*32-1) /)
@@ -262,8 +270,10 @@ module amr_parameters
   logical ::momentum_feedback=.false.
   logical :: drag_part = .false. !activate the friction from stars/DM (HP)
   logical :: holdback = .true. ! Activate strict hold-back method to preserve max physical resolution
+
   logical :: stellar_winds = .false.
   character(len=128) :: stellar_winds_file = 'none'
+  real :: mass_loss_boost = 0d0
 
   ! Output times
   real(dp),dimension(1:MAXOUT)::aout=1.1       ! Output expansion factors
@@ -420,6 +430,5 @@ module amr_parameters
 !!$  real(dp)::n_gmc=1D-1
   ! Star particle mass in units of the number of SN:
   integer ::nsn2mass=-1
-
 
 end module amr_parameters

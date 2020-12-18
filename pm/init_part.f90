@@ -143,6 +143,9 @@
         allocate(zp(npartmax))
         zp=0.0
      end if
+     if(nchem>0)then
+        allocate(chp(npartmax,1:nchem))
+     end if
      if(use_initial_mass)then
         allocate(mp0(npartmax))
         mp0=0.0

@@ -209,12 +209,8 @@ subroutine stellar_winds_fine(ilevel)
               ! Save next particle   <--- Very important !!!
               next_part=nextp(ipart)
               ! Select star particles
-              if(use_particle_type) then
-                 ok_star = abs(ityp(ipart)).eq.2
-              else
-                 ok_star = tp(ipart).ne.0
-              endif
-              if(ok_star)then 
+              ok_star = is_star(typep(ipart))
+              if(ok_star)then
                  npart2=npart2+1
               endif
               ipart=next_part  ! Go to next particle
@@ -231,11 +227,7 @@ subroutine stellar_winds_fine(ilevel)
               ! Save next particle   <--- Very important !!!
               next_part=nextp(ipart)
               ! Select only star particles
-              if(use_particle_type)then
-                 ok_star = abs(ityp(ipart)).eq.2
-              else
-                 ok_star = tp(ipart).ne.0
-              endif
+              ok_star = is_star(typep(ipart))
               if(ok_star)then
                  if(ig==0)then
                     ig=1
