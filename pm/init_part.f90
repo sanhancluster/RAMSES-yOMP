@@ -21,7 +21,7 @@
   ! Read particles positions and velocities from grafic files
   !------------------------------------------------------------
   integer::npart2,ndim2,ncpu2
-  integer::ipart,jpart,ipart_old,ilevel,idim
+  integer::ipart,jpart,ipart_old,ilevel,idim,ichem
   integer::i,j,igrid,ncache,ngrid,iskip
   integer::ind,ix,iy,iz,ilun,icpu
   integer::i1,i2,i3
@@ -274,6 +274,12 @@
            read(ilun)xdp
            mp0(1:npart2)=xdp
         endif
+        if(nchem>0)then
+           do ichem=1,nchem
+              read(ilun)xdp
+              chp(1:npart2,ichem)=xdp
+           end do
+        endif
         deallocate(xdp)
      end if
 
@@ -474,6 +480,7 @@
   end if
 
   if(sink)call init_sink
+  if(star .and. stellar_winds)call init_stellar_winds
 
 
 contains

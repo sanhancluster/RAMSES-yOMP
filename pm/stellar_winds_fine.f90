@@ -603,25 +603,25 @@ end subroutine cmp_stellar_wind_props
 !################################################################
 !################################################################
 !################################################################
-!subroutine binary_search(database,xtarget,ndata,i)
-!   use amr_commons,ONLY:dp
-!   implicit none 
-!   integer::i,j,k
-!   integer,intent(in)::ndata
-!   real(dp),intent(in)::database(1:ndata),xtarget
-!
-!   i=1  
-!   j=ndata
-!   do   
-!     k=(i+j)/2
-!     if (xtarget<database(k)) then 
-!         j=k  
-!     else 
-!         i=k  
-!     end if
-!     if (i+1>=j) exit 
-!   end do
-!
-!end subroutine binary_search
+subroutine binary_search(database,xtarget,ndata,i)
+   use amr_commons,ONLY:dp
+   implicit none
+   integer::i,j,k
+   integer,intent(in)::ndata
+   real(dp),intent(in)::database(1:ndata),xtarget
+
+   i=1
+   j=ndata
+   do
+     k=(i+j)/2
+     if (xtarget<database(k)) then
+         j=k
+     else
+         i=k
+     end if
+     if (i+1>=j) exit
+   end do
+
+end subroutine binary_search
 
 
