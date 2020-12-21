@@ -28,6 +28,7 @@
   integer::i1_min=0,i1_max=0,i2_min=0,i2_max=0,i3_min=0,i3_max=0
   integer::buf_count,indglob
   real(dp)::dx,xx1,xx2,xx3,vv1,vv2,vv3,mm1
+  integer(1)::ff1,tt1
   real(dp)::min_mdm_cpu,min_mdm_all
   real(dp),dimension(1:twotondim,1:3)::xc
   integer ,dimension(1:nvector)::ind_grid,ind_cell,ii
@@ -1124,7 +1125,7 @@ contains
           if(myid==1)then
              jpart=0
              do i=1,nvector
-                read(10,*,end=100)xx1,xx2,xx3,vv1,vv2,vv3,mm1
+                read(10,*,end=100)xx1,xx2,xx3,vv1,vv2,vv3,mm1,ff1,tt1
                 jpart=jpart+1
                 indglob=indglob+1
                 xx(i,1)=xx1+boxlen/2.0
@@ -1135,8 +1136,8 @@ contains
                 vv(i,3)=vv3
                 mm(i  )=mm1
                 ii(i  )=indglob
-                tmppart%family = FAM_DM
-                tmppart%tag    = 0
+                tmppart%family = ff1
+                tmppart%tag    = tt1
                 pp(i  )=part2int(tmppart)
              end do
 100          continue
