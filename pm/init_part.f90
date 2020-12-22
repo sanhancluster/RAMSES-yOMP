@@ -1125,7 +1125,7 @@ contains
           if(myid==1)then
              jpart=0
              do i=1,nvector
-                read(10,*,end=100)xx1,xx2,xx3,vv1,vv2,vv3,mm1,ff1,tt1
+                read(10,*,end=100)xx1,xx2,xx3,vv1,vv2,vv3,mm1,ff1
                 jpart=jpart+1
                 indglob=indglob+1
                 xx(i,1)=xx1+boxlen/2.0
@@ -1137,7 +1137,7 @@ contains
                 mm(i  )=mm1
                 ii(i  )=indglob
                 tmppart%family = ff1
-                tmppart%tag    = tt1
+                tmppart%tag    = 1
                 pp(i  )=part2int(tmppart)
              end do
 100          continue
@@ -1173,6 +1173,11 @@ contains
                 ! Get back the particle type from the communicated
                 ! shortened integer
                 typep(ipart) = int2part(pp(i))
+                if(is_star(typep(ipart)))then
+                   tp(i  )=0d0
+                   zp(i  )=0d0
+                   nstar_tot=nstar_tot+1
+                end if
                 if(use_initial_mass) mp0(ipart) = mm(i)
 #ifndef WITHOUTMPI
              endif
