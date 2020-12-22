@@ -93,6 +93,7 @@ subroutine star_formation(ilevel)
   if(.not. hydro)return
   if(ndim.ne.3)return
   if(static)return
+  if(eps_star==0d0)return
 
   if(verbose)write(*,*)' Entering star_formation'
 
