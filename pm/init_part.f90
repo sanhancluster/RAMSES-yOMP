@@ -144,9 +144,11 @@
         allocate(zp(npartmax))
         zp=0.0
      end if
+#ifdef NCHEM
      if(nchem>0)then
         allocate(chp(npartmax,1:nchem))
      end if
+#endif
      if(use_initial_mass)then
         allocate(mp0(npartmax))
         mp0=0.0
@@ -275,12 +277,14 @@
            read(ilun)xdp
            mp0(1:npart2)=xdp
         endif
+#ifdef NCHEM
         if(nchem>0)then
            do ichem=1,nchem
               read(ilun)xdp
               chp(1:npart2,ichem)=xdp
            end do
         endif
+#endif
         deallocate(xdp)
      end if
 
@@ -1135,7 +1139,7 @@ contains
           if(myid==1)then
              jpart=0
              do i=1,nvector
-                read(10,*,end=100)xx1,xx2,xx3,vv1,vv2,vv3,mm1,ff1
+                read(10,*,end=100)xx1,xx2,xx3,vv1,vv2,vv3,mm1,ff1,tt1
                 jpart=jpart+1
                 indglob=indglob+1
                 xx(i,1)=xx1+boxlen/2.0
@@ -1147,7 +1151,7 @@ contains
                 mm(i  )=mm1
                 ii(i  )=indglob
                 tmppart%family = ff1
-                tmppart%tag    = 1
+                tmppart%tag    = tt1
                 pp(i  )=part2int(tmppart)
              end do
 100          continue

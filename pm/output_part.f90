@@ -228,6 +228,7 @@ subroutine backup_part(filename, filename_desc)
         call generic_dump("initial_mass", ivar, xdp, unit_out, dump_info, unit_info)
      endif
      ! Write chemistry
+#ifdef NCHEM
      if (nchem>0) then
         do ichem = 1, nchem
            ipart = 0
@@ -237,10 +238,11 @@ subroutine backup_part(filename, filename_desc)
                  xdp(ipart) = chp(i,ichem)
               end if
            end do
-           call generic_dump("chemistry_"//str(ichem), ivar, xdp, unit_out, dump_info, unit_info)
+           call title(ichem, nchar)
+           call generic_dump("chemistry_"//TRIM(nchar), ivar, xdp, unit_out, dump_info, unit_info)
         end do
      end if
-
+#endif
      deallocate(xdp)
   end if
 

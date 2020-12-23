@@ -87,8 +87,6 @@ subroutine star_formation(ilevel)
   common /omp_star_formation/ xc,skip_loc,scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,d0,mstar,dstar,nISM,trel, &
         & birth_epoch,factG,dx_loc,scale,vol_loc
 
-  chem1 = 0d0
-
   if(numbtot(1,ilevel)==0) return
   if(.not. hydro)return
   if(ndim.ne.3)return
@@ -401,6 +399,7 @@ subroutine star_formation(ilevel)
            if(metal) then
               zg=uold(ind_cell_new(i),imetal)
 #ifdef NCHEM
+              chem1 = 0d0
               do iche=1,nchem
                  chem1(iche) = uold(ind_cell_new(i),ichem+iche-1)
               enddo

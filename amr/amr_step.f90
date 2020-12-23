@@ -378,6 +378,7 @@ recursive subroutine amr_step(ilevel,icount)
 #endif
 
   ! Stellar winds from stars
+                               call timer('star - winds','start')
   if(hydro.and.star.and.stellar_winds) call stellar_winds_fine(ilevel)
 
   !-----------
