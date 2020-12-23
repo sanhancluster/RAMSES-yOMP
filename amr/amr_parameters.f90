@@ -121,7 +121,8 @@ module amr_parameters
   integer::ncontrol=1         ! Write control variables
   integer::nremap=0           ! Load balancing frequency (0: never)
   integer,allocatable,dimension(:)::remap_pscalar
-  real(dp)::dtstop=0          ! Halt the simulation when dt is smaller than this value
+  real(dp)::dtstop=0d0        ! Halt the simulation when dt is smaller than this value
+  real(dp)::dtmax=-1d0        ! Maximum allowed dt for the simulation
 
   ! Output parameters
   logical::output=.true.      ! Write output files
