@@ -181,26 +181,55 @@ subroutine stellar_winds_fine(ilevel)
   ! 1) double-check that only stars have tp.ne.0
   ! 2) set use_initial_mass=.true.
   !------------------------------------------------------------------------
-  integer::igrid,jgrid,ipart,jpart,next_part
+  integer::igrid,jgrid,ipart,jpart,next_part,i,ngrid,iskip,ind,ivar,ipvar
   integer::ig,ip,npart1,npart2,icpu
-  integer,dimension(1:nvector),save::ind_grid,ind_part,ind_grid_part
+  integer,dimension(1:nvector)::ind_grid,ind_part,ind_grid_part,ind_cell
   logical::ok_star
 
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
   if(ndim.ne.3) return
 
+  ! Update the rest of the passive scales so that the fractional quantities are not changed
+  ipvar=ichem+nchem
+  ncache=active(ilevel)%ngrid
+!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell)
+  do igrid=1,ncache,nvector
+     ngrid=MIN(nvector,ncache-igrid+1)
+     do i=1,ngrid
+        ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
+     end do
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
+        do i=1,ngrid
+           ind_cell(i)=iskip+ind_grid(i)
+        end do
+        do i=1,ngrid
+           do ivar=ipvar,nvar
+              unew(ind_cell(j),ivar) = unew(ind_cell(j),ivar)/unew(ind_cell(j),1)
+           end do
+        end do
+     end do
+  end do
+
   ! Gather star particles only.
   ! Loop over cpus
+!$omp parallel private(igrid,ig,ip,npart1,npart2,ipart,next_part,ok_star,ind_grid,ind_part,ind_grid_part)
   do icpu=1,ncpu
-     igrid=headl(icpu,ilevel)
      ig=0
      ip=0
      ! Loop over grids
+!$omp do
      do jgrid=1,numbl(icpu,ilevel)
+        if(icpu==myid)then
+           igrid=active(ilevel)%igrid(jgrid)
+        else
+           igrid=reception(icpu,ilevel)%igrid(jgrid)
+        end if
+
         npart1=numbp(igrid)  ! Number of particles in the grid
         npart2=0
-        
+
         ! Count star particles
         if(npart1>0)then
            ipart=headp(igrid)
@@ -246,12 +275,33 @@ subroutine stellar_winds_fine(ilevel)
            end do
            ! End loop over particles
         end if
-        igrid=next(igrid)   ! Go to next grid
      end do
+!$omp end do nowait
      ! End loop over grids
      if(ip>0)call stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
   end do 
+!$omp end parallel
   ! End loop over cpus
+
+  ! Update the rest of the passive scales so that the fractional quantities are not changed
+!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell)
+  do igrid=1,ncache,nvector
+     ngrid=MIN(nvector,ncache-igrid+1)
+     do i=1,ngrid
+        ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
+     end do
+     do ind=1,twotondim
+        iskip=ncoarse+(ind-1)*ngridmax
+        do i=1,ngrid
+           ind_cell(i)=iskip+ind_grid(i)
+        end do
+        do i=1,ngrid
+           do ivar=ipvar,nvar
+              unew(ind_cell(i),ivar) = unew(ind_cell(j),ivar)*unew(ind_cell(j),1)
+           end do
+        end do
+     end do
+  end do
 
 111 format('   Entering stlelar winds for level ',I2)
 
@@ -278,19 +328,19 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   real(dp)::dx,dx_loc,scale,birth_time
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
   ! Grid based arrays
-  real(dp),dimension(1:nvector,1:ndim),save::x0
-  integer ,dimension(1:nvector),save::ind_cell
-  integer ,dimension(1:nvector,1:threetondim),save::nbors_father_cells
-  integer ,dimension(1:nvector,1:twotondim),save::nbors_father_grids
+  real(dp),dimension(1:nvector,1:ndim)::x0
+  integer ,dimension(1:nvector)::ind_cell
+  integer ,dimension(1:nvector,1:threetondim)::nbors_father_cells
+  integer ,dimension(1:nvector,1:twotondim)::nbors_father_grids
   ! Particle based arrays
-  logical,dimension(1:nvector),save::ok
-  real(dp),dimension(1:nvector),save::mloss,mzloss,ethermal,ekinetic,dteff
-  real(dp),dimension(1:nvector),save::vol_loc
-  real(dp),dimension(1:nvector,1:ndim),save::x
-  integer ,dimension(1:nvector,1:ndim),save::id,igd,icd
-  integer ,dimension(1:nvector),save::igrid,icell,indp,kg
+  logical,dimension(1:nvector)::ok
+  real(dp),dimension(1:nvector)::mloss,mzloss,ethermal,ekinetic,dteff
+  real(dp),dimension(1:nvector)::vol_loc
+  real(dp),dimension(1:nvector,1:ndim)::x
+  integer ,dimension(1:nvector,1:ndim)::id,igd,icd
+  integer ,dimension(1:nvector)::igrid,icell,indp,kg
   real(dp),dimension(1:3)::skip_loc
-  real(dp)::msun2g=2d33
+  real(dp)::msun2g
   ! stellar library
   real(dp)::mejecta,dfmloss,dfmzloss,log_deloss_erg
   real(dp)::mstar_ini,mstar_ini_msun,zstar
@@ -298,11 +348,11 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   real(dp)::dfmloss_spec(1:nchem)
   real(dp),dimension(1:nchem,1:nvector)::mloss_spec
   ! fractional abundances ; for ionisation fraction and ref, etc
-  real(dp),dimension(1:nvector,1:NVAR),save::fractions
-  integer::i_fractions
+  real(dp),dimension(1:nvar)::uadd
+  integer::indp_now
 
+  msun2g=2d33
   ! starting index for passive variables except for imetal and chem
-  i_fractions = imetal+nchem+1
 
   ! Conversion factor from user units to cgs units
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
@@ -419,13 +469,6 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
      mloss_spec(:,j)=0d0
   end do
 
-  ! Store the fractional quantites that we don't want to change
-  do ivar=i_fractions,nvar 
-     do j=1,np
-        fractions(j,ivar) = unew(indp(j),ivar)/unew(indp(j),1)
-     end do
-  end do
-
   ! Compute stellar mass loss and thermal feedback due to stellar winds
   do j=1,np
 
@@ -458,43 +501,49 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   end do
 
   ! Update hydro variables due to feedback
+  uadd=0d0
+  indp_now=0
   do j=1,np
+     if(indp(j)/=indp_now)
+        do ivar=1,ichem+nchem-1
+!$omp atomic update
+           unew(indp_now,ivar)=unew(indp_now,ivar)+uadd(ivar)
+        end do
+        uadd=0d0
+        indp_now=indp(j)
+     end if
+
      ! Specific kinetic energy of the star
      ekinetic(j)=0.5*(vp(ind_part(j),1)**2 &
           &          +vp(ind_part(j),2)**2 &
           &          +vp(ind_part(j),3)**2)
+     uadd(1)=uadd(1)+mloss(j)
+     uadd(2)=uadd(2)+mloss(j)*vp(ind_part(j),1)
+     uadd(3)=uadd(3)+mloss(j)*vp(ind_part(j),2)
+     uadd(4)=uadd(4)+mloss(j)*vp(ind_part(j),3)
+     uadd(5)=uadd(5)+mloss(j)*ekinetic(j)+ ethermal(j)
 
-     ! Update hydro variable in NGP cell
-     unew(indp(j),1)=unew(indp(j),1)+mloss(j)
-     unew(indp(j),2)=unew(indp(j),2)+mloss(j)*vp(ind_part(j),1)
-     unew(indp(j),3)=unew(indp(j),3)+mloss(j)*vp(ind_part(j),2)
-     unew(indp(j),4)=unew(indp(j),4)+mloss(j)*vp(ind_part(j),3)
-     unew(indp(j),5)=unew(indp(j),5)+mloss(j)*ekinetic(j)+ ethermal(j)  
-  end do
-
-  ! Add metals
-  if(metal)then
-     do j=1,np
-        unew(indp(j),imetal)=unew(indp(j),imetal)+mzloss(j)
-     end do
-  endif
-
-  ! Add individual species
-  if(nchem>0)then
-     do ich=1,nchem
+     ! Add metals
+     if(metal)then
         do j=1,np
-           unew(indp(j),ichem+ich-1)=unew(indp(j),ichem+ich-1)+mloss_spec(ich,j)
+           uadd(imetal)=uadd(imetal)+mzloss(j)
         end do
-     end do
-  endif
+     endif
 
-  ! Update the rest of the passive scales so that the fractional quantities are not changed
-  do j=1,np
-     do ivar=i_fractions,nvar 
-        unew(indp(j),ivar) = fractions(j,ivar) * unew(indp(j),1)
-     end do
+     ! Add individual species
+     if(nchem>0)then
+        do ich=1,nchem
+           do j=1,np
+              uadd(ichem+ich-1)=uadd(ichem+ich-1)+mloss_spec(ich,j)
+           end do
+        end do
+     endif
   end do
- 
+  do ivar=1,ichem+nchem-1
+!$omp atomic update
+     unew(indp_now,ivar)=unew(indp_now,ivar)+uadd(ivar)
+  end do
+
 end subroutine stellar_winds_dump
 !################################################################
 !################################################################
