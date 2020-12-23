@@ -531,6 +531,10 @@ subroutine read_hydro_params(nml_ok)
      imetal=ipar
      ipar=ipar+1
   endif
+  if(nchem>0)then
+     ichem=ipar
+     ipar=ipar+nchem
+  end if
   if(dust)then
      idust=ipar
      ipar=ipar+1
@@ -559,6 +563,7 @@ subroutine read_hydro_params(nml_ok)
      write(*,*) '   inener   = ',inener
 #endif
      if(metal)           write(*,*) '   imetal   = ',imetal
+     if(nchem>0)         write(*,*) '   ichems   = ',ichem,'-',ichem+nchem-1
      if(dust)            write(*,*) '   idust    = ',idust
      if(delayed_cooling) write(*,*) '   idelay   = ',idelay
      if(sf_virial .and. sf_model /= 6)then
@@ -571,7 +576,7 @@ subroutine read_hydro_params(nml_ok)
 #ifdef RT
      if(rt) write(*,*) '   iIons    = ',ichem
 #endif
-     if(ivar_refine>0)write(*,*) '   refmask  = ',ivar_refine
+     if(ivar_refine>0)   write(*,*) '   refmask  = ',ivar_refine
      write(*,'(A50)')"__________________________________________________"
   endif
 

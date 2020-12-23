@@ -21,7 +21,7 @@
   ! Read particles positions and velocities from grafic files
   !------------------------------------------------------------
   integer::npart2,ndim2,ncpu2
-  integer::ipart,jpart,ipart_old,ilevel,idim,ichem
+  integer::ipart,jpart,ipart_old,ilevel,idim,ivar
   integer::i,j,igrid,ncache,ngrid,iskip
   integer::ind,ix,iy,iz,ilun,icpu
   integer::i1,i2,i3
@@ -279,9 +279,9 @@
         endif
 #ifdef NCHEM
         if(nchem>0)then
-           do ichem=1,nchem
+           do ivar=1,nchem
               read(ilun)xdp
-              chp(1:npart2,ichem)=xdp
+              chp(1:npart2,ivar)=xdp
            end do
         endif
 #endif
