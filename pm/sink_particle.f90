@@ -2573,7 +2573,10 @@ subroutine average_density(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   c2gas(1:np)=0.0D0
   do ind=1,twotondim
      do j=1,np
-        dgas(j)=dgas(j)+uold(indp(j,ind),1)*vol(j,ind)
+        ! prevent accretion when the cloud is outside zoom-in region
+        if(ivar_refine <= 0 .or. uold(indp(j,ind),ivar_refine)/uold(indp(j,ind),1) > var_cut_refine)then
+           dgas(j)=dgas(j)+uold(indp(j,ind),1)*vol(j,ind)
+        end if
         d=max(uold(indp(j,ind),1), smallr)
         u=uold(indp(j,ind),2)/d
         v=uold(indp(j,ind),3)/d
