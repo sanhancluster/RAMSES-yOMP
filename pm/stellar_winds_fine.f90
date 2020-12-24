@@ -171,6 +171,7 @@ end subroutine init_stellar_winds
 subroutine stellar_winds_fine(ilevel)
   use amr_commons
   use pm_commons
+  use hydro_commons
   implicit none
   integer::ilevel
   !------------------------------------------------------------------------
@@ -181,7 +182,7 @@ subroutine stellar_winds_fine(ilevel)
   ! 1) double-check that only stars have tp.ne.0
   ! 2) set use_initial_mass=.true.
   !------------------------------------------------------------------------
-  integer::igrid,jgrid,ipart,jpart,next_part,i,ngrid,iskip,ind,ivar,ipvar
+  integer::igrid,jgrid,ipart,jpart,next_part,i,ngrid,iskip,ind,ivar,ipvar,ncache
   integer::ig,ip,npart1,npart2,icpu
   integer,dimension(1:nvector)::ind_grid,ind_part,ind_grid_part,ind_cell
   logical::ok_star
@@ -206,7 +207,7 @@ subroutine stellar_winds_fine(ilevel)
         end do
         do i=1,ngrid
            do ivar=ipvar,nvar
-              unew(ind_cell(j),ivar) = unew(ind_cell(j),ivar)/unew(ind_cell(j),1)
+              unew(ind_cell(i),ivar) = unew(ind_cell(i),ivar)/unew(ind_cell(i),1)
            end do
         end do
      end do
@@ -297,7 +298,7 @@ subroutine stellar_winds_fine(ilevel)
         end do
         do i=1,ngrid
            do ivar=ipvar,nvar
-              unew(ind_cell(i),ivar) = unew(ind_cell(j),ivar)*unew(ind_cell(j),1)
+              unew(ind_cell(i),ivar) = unew(ind_cell(i),ivar)*unew(ind_cell(i),1)
            end do
         end do
      end do
@@ -483,9 +484,11 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
      ! Stellar mass loss
      mejecta= mstar_ini*dfmloss  ! dfmloss: mass loss fraction during dteff(j)
      mloss(j)=mloss(j)+mejecta/vol_loc(j)
-     ! Thermal energy
-     unit_e_code = mstar_ini_msun*(10d0**dble(log_deloss_erg)/dble(msun2g)/scale_v**2)
-     ethermal(j)=ethermal(j)+unit_e_code*(mejecta/vol_loc(j))
+     if(.not. no_wind_energy)then
+        ! Thermal energy
+        unit_e_code = mstar_ini_msun*(10d0**dble(log_deloss_erg)/dble(msun2g)/scale_v**2)
+        ethermal(j)=ethermal(j)+unit_e_code*(mejecta/vol_loc(j))
+     end if
      ! Metallicity
      if(metal)then
         mzloss(j)=mzloss(j)+mstar_ini*dfmzloss/vol_loc(j)
@@ -504,7 +507,7 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   uadd=0d0
   indp_now=0
   do j=1,np
-     if(indp(j)/=indp_now)
+     if(indp(j)/=indp_now) then
         do ivar=1,ichem+nchem-1
 !$omp atomic update
            unew(indp_now,ivar)=unew(indp_now,ivar)+uadd(ivar)
@@ -525,17 +528,13 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
 
      ! Add metals
      if(metal)then
-        do j=1,np
-           uadd(imetal)=uadd(imetal)+mzloss(j)
-        end do
+        uadd(imetal)=uadd(imetal)+mzloss(j)
      endif
 
      ! Add individual species
      if(nchem>0)then
         do ich=1,nchem
-           do j=1,np
-              uadd(ichem+ich-1)=uadd(ichem+ich-1)+mloss_spec(ich,j)
-           end do
+           uadd(ichem+ich-1)=uadd(ichem+ich-1)+mloss_spec(ich,j)
         end do
      endif
   end do

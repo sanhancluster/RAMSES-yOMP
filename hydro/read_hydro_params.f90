@@ -89,7 +89,7 @@ subroutine read_hydro_params(nml_ok)
        & ,nsn2mass,porosity,sn2_real_delay,sn_IC,sn_trelax &
        & ,ir_feedback,ir_eff,t_diss,t_sne,mass_star_max,mass_sne_min &
        & ,stellar_winds,stellar_winds_file,chem_list,mass_loss_boost &
-       & ,use_initial_mass
+       & ,use_initial_mass,no_wind_energy
 
   ! Cooling / basic chemistry parameters
   namelist/cooling_params/cooling,metal,isothermal,haardt_madau,J21 &
