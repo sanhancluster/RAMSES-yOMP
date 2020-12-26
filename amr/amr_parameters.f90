@@ -272,10 +272,18 @@ module amr_parameters
   logical :: drag_part = .false. !activate the friction from stars/DM (HP)
   logical :: holdback = .true. ! Activate strict hold-back method to preserve max physical resolution
 
+  ! SN Type II
+  logical ::variable_yield_SNII=.false.  ! TypeII yields are computed according to metallicities based on starburst99
+
+  ! Stellar winds
   logical :: stellar_winds = .false. !Activate stellar winds
   logical :: no_wind_energy = .false. !Deactivate energy output from stellar winds
   character(len=128) :: stellar_winds_file = 'none'
   real :: mass_loss_boost = 0d0
+
+  ! SN Type Ia
+  logical ::snIa=.false.
+  real(dp)::A_snIa=0.05
 
   ! Output times
   real(dp),dimension(1:MAXOUT)::aout=1.1       ! Output expansion factors
@@ -400,15 +408,13 @@ module amr_parameters
   logical ::sn2_real_delay=.false.
   logical ::use_initial_mass=.false. ! read/write initial mass of particles
   ! Activate mechanical feedback (cannot use with star_particle_winds):
-  integer :: mechanical_feedback=0
+  integer :: mechanical_feedback=2
   logical :: mechanical_geen = .false.
   logical :: log_mfb=.false.
   logical :: log_mfb_mega=.false.
   real(dp) :: A_SN=3d5
   real(dp) :: expN_SN=-2d0/17d0
   real(dp) :: A_SN_geen = 5d5
-  real(dp) :: expN_SN_boost = -0.15    ! parameter needed to make sure
-  real(dp) :: expE_SN_boost = 16./17.  ! that pSN_geen = A_SN_Geen during an adiabatic phase
   real(dp) :: porosity = 1.0d0
 
   ! Trick to fill a spherical region with passive scalar
