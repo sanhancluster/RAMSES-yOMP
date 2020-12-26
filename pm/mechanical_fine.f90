@@ -137,7 +137,6 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                  mass0 = mp0(ipart)*scale_msun
               else
                  mass0 = mp (ipart)*scale_msun
-                 if(idp(ipart)>0) mass0 = mass0 / (1d0 - eta_sn)
               endif
 
 #ifdef POP3
@@ -149,14 +148,14 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                  nsnII_star=0d0
                  if(sn2_real_delay)then
                     ! if tp is younger than t_sne
-                    if (idp(ipart).le.0.and.tp(ipart).ge.tyoung) then
+                    if (is_star_active(typep(ipart)).and.tp(ipart).ge.tyoung) then
                        call get_number_of_sn2  (tp(ipart), dteff, zp(ipart), idp(ipart),&
                                 & mass0, nsnII_star, done_star)
                        if(nsnII_star>0)ok=.true.
                     endif
                  else ! single SN event
                     ! if tp is older than t_sne
-                    if (idp(ipart).le.0.and.tp(ipart).le.tyoung)then
+                    if (is_star_active(typep(ipart)).and.tp(ipart).le.tyoung)then
                        ok=.true.
                        ! number of sn is not necessarily an integer
                        nsnII_star = mass0*eta_sn/M_SNII
@@ -215,9 +214,9 @@ subroutine mechanical_feedback_fine(ilevel,icount)
 
                     ! mark if we are done with this particle
                     if(sn2_real_delay) then
-                       if(done_star) idp(ipart)=-idp(ipart) ! only if all SNe exploded
+                       if(done_star) typep(ipart)%tag = 0 ! only if all SNe exploded
                     else
-                       idp(ipart)=-idp(ipart)
+                       typep(ipart)%tag = 0
                     endif
 
                     ! Record-keeping of local density at SN events (joki):
@@ -476,7 +475,7 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
      if(mechanical_geen.and.rt) rStrom(i) = (3d0*nphSN(i)/4./3.141592/2.6d-13/nH_cen**2d0)**(1d0/3d0)/3.08d18 ! [pc]
 
      if(log_mfb)then
-398     format('MFB = ',f7.3,1x,f7.3,1x,f5.1,1x,f5.3,1x,f9.5,1x,f7.3)
+398     format('MFB = ',f7.3,1x,f7.3,1x,f7.1,1x,f5.3,1x,f9.5,1x,f7.3)
         write(*,398) log10(d*scale_nH),log10(Tk),sngl(num_sn),floadSN(i),1./aexp-1,log10(dx_loc*scale_l/3.08d18)
      endif
 
