@@ -497,7 +497,7 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
      if(nchem>0)then
         do ich=1,nchem
            mloss_spec(ich,j)=mloss_spec(ich,j)+mstar_ini*dfmloss_spec(ich)/vol_loc(j)
-        end do 
+        end do
      endif
      ! Reduce star particle mass
      mp(ind_part(j))=mp(ind_part(j))-mejecta

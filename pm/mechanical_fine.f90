@@ -61,6 +61,15 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   allocate(L_star(1:nSEDgroups))
 #endif
 
+  ! MC Tracer =================================================
+  real(dp)::rand
+  real(dp)::new_xp(1:ndim)
+  integer :: irand
+  ! End MC Tracer =============================================
+
+  integer,dimension(1:IRandNumSize),save :: ompseed
+!$omp threadprivate(ompseed)
+
   if(icount==2) return
   if(.not.hydro) return
   if(ndim.ne.3)  return
@@ -108,11 +117,14 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   snII_freq = eta_sn / M_SNII
 
   ! Loop over cpus
+!!$omp parallel private(ip,ind_grid,ind_pos_cell,mSNe,pSNe,mZSNe) default(none)
   do icpu=1,ncpu
      igrid=headl(icpu,ilevel)
      ip=0
 
      ! Loop over grids
+!!$omp do private(igrid,npart1,npart2,ipart,next_part,x0,mz8,p8,n8,nph8,mch8,ok,ind_son,ind,iskip,ind_cell,mejecta) &
+!!$omp & reduction(+:nSNc) schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         npart1=numbp(igrid)  ! Number of particles in the grid
         npart2=0
@@ -273,24 +285,80 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                  nsnII_tot = nsnII_tot + nsnII_star
 
                  if(ip==nvector)then
+!!$omp critical
                     call mech_fine(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
+!!$omp end critical
                     ip=0
                  endif
               endif
            enddo
-
-
         end if
         igrid=next(igrid)   ! Go to next grid
      end do ! End loop over grids
-
+!!$omp end do nowait
      if (ip>0) then
+!!$omp critical
         call mech_fine(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
+!!$omp end critical
         ip=0
      endif
 
   end do ! End loop over cpus
 
+!!$omp barrier
+  do icpu=1,ncpu
+     if (MC_tracer) then
+        ! MC Tracer =================================================
+        ! Loop over grids
+!!$omp do private(igrid,npart1,ipart,next_part,rand,irand,new_xp)
+        do jgrid = 1, numbl(icpu, ilevel)
+           if(icpu==myid)then
+              igrid=active(ilevel)%igrid(jgrid)
+           else
+              igrid=reception(icpu,ilevel)%igrid(jgrid)
+           end if
+           npart1 = numbp(igrid)  ! Number of particles in the grid
+           ipart = headp(igrid)
+
+           ! Loop over tracer particles
+           do jpart = 1, npart1
+              next_part=nextp(ipart)
+
+              if (is_star_tracer(typep(ipart))) then
+                 ! Detach particle if required
+                 call ranf(ompseed, rand)
+
+                 ! Detach particles
+                 if (rand < tmpp(partp(ipart))) then
+                    typep(ipart)%family = FAM_TRACER_GAS
+
+                    ! Change here to tag the particle with the star id
+                    typep(ipart)%tag = typep(ipart)%tag + 1
+
+                    move_flag(ipart) = 1
+
+                    ! Detached, now decide where to move it
+                    call ranf(ompseed, rand)
+
+                    do idim = 1, ndim
+                       ! Draw number between 1 and nSNnei
+                       irand = floor(rand * nSNnei) + 1
+                       new_xp(idim) = xSNnei(idim, irand)*dx
+                    end do
+
+                    do idim = 1, ndim
+                       xp(ipart, idim) = xp(ipart, idim) + new_xp(idim)
+                    end do
+                 end if
+              end if
+              ipart = next_part ! Go to next particle
+           end do ! End loop over particles
+        end do ! End loop over grids
+!!$omp end do nowait
+        ! End MC Tracer =============================================
+     end if
+  end do ! End loop over cpus
+!!$omp end parallel
 
 #ifndef WITHOUTMPI
   nSNc_mpi=0; nsnII_mpi=0d0
