@@ -27,7 +27,7 @@
   integer::i1,i2,i3
   integer::i1_min=0,i1_max=0,i2_min=0,i2_max=0,i3_min=0,i3_max=0
   integer::buf_count,indglob
-  real(dp)::dx,xx1,xx2,xx3,vv1,vv2,vv3,mm1,zz1
+  real(dp)::dx,xx1,xx2,xx3,vv1,vv2,vv3,mm1,zz1,ttp1
   integer(1)::ff1,tt1
   real(dp)::min_mdm_cpu,min_mdm_all
   real(dp),dimension(1:twotondim,1:3)::xc
@@ -43,7 +43,7 @@
   real(dp),allocatable,dimension(:,:,:)::init_array,init_array_x
   integer(i8b),allocatable,dimension(:,:,:)::init_array_id
   real(kind=8),dimension(1:nvector,1:3)::xx,vv
-  real(kind=8),dimension(1:nvector)::mm,zz
+  real(kind=8),dimension(1:nvector)::mm,zz,ttp
   type(part_t)::tmppart
   real(kind=8)::dispmax=0.0
 #ifndef WITHOUTMPI
@@ -1139,7 +1139,7 @@ contains
           if(myid==1)then
              jpart=0
              do i=1,nvector
-                read(10,*,end=100)xx1,xx2,xx3,vv1,vv2,vv3,mm1,zz1,ff1,tt1
+                read(10,*,end=100)xx1,xx2,xx3,vv1,vv2,vv3,mm1,zz1,ttp1,ff1,tt1
                 jpart=jpart+1
                 indglob=indglob+1
                 xx(i,1)=xx1+boxlen/2.0
@@ -1150,6 +1150,7 @@ contains
                 vv(i,3)=vv3
                 mm(i  )=mm1
                 zz(i  )=zz1
+                ttp(i )=ttp1
                 ii(i  )=indglob
                 tmppart%family = ff1
                 tmppart%tag    = tt1
@@ -1166,6 +1167,7 @@ contains
           call MPI_BCAST(ii,nvector  ,MPI_INTEGER         ,0,MPI_COMM_WORLD,info)
           call MPI_BCAST(pp,nvector  ,MPI_INTEGER         ,0,MPI_COMM_WORLD,info)
           call MPI_BCAST(zz,nvector  ,MPI_INTEGER         ,0,MPI_COMM_WORLD,info)
+          call MPI_BCAST(ttp,nvector ,MPI_INTEGER         ,0,MPI_COMM_WORLD,info)
           call MPI_BCAST(eof,1       ,MPI_LOGICAL         ,0,MPI_COMM_WORLD,info)
           call MPI_BCAST(jpart,1     ,MPI_INTEGER         ,0,MPI_COMM_WORLD,info)
           call cmp_cpumap(xx,cc,jpart)
@@ -1190,7 +1192,7 @@ contains
                 ! shortened integer
                 typep(ipart) = int2part(pp(i))
                 if(is_star(typep(ipart)))then
-                   tp(ipart)=0d0
+                   tp(ipart)=ttp(i)
                    zp(ipart)=zz(i)
                    nstar_tot=nstar_tot+1
                 end if

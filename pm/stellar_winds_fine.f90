@@ -634,42 +634,7 @@ subroutine cmp_stellar_wind_props (birth_time,dteff, zstar,dfmloss, log_deloss_e
       dfmloss_spec(ich) = 10d0**cm2  - 10d0**cm1
    end do
 
-   ! For Chabrier IMF
-   if(mass_loss_boost>1)then
-      dfmloss = dfmloss * mass_loss_boost
-      dfmzloss = dfmloss * mass_loss_boost
-      do ich=1,nchem
-         dfmloss_spec(ich) = dfmloss_spec(ich) * mass_loss_boost
-      end do
-   endif
-  
 !777 format(f5.2,1x,f5.2,1x,5(e15.7,1x))
 !   write(*,777) log_age1, log_age2, dfmloss, dfmzloss, log_deloss_erg,ce1,ce2
 
 end subroutine cmp_stellar_wind_props
-!################################################################
-!################################################################
-!################################################################
-!################################################################
-subroutine binary_search(database,xtarget,ndata,i)
-   use amr_commons,ONLY:dp
-   implicit none
-   integer::i,j,k
-   integer,intent(in)::ndata
-   real(dp),intent(in)::database(1:ndata),xtarget
-
-   i=1
-   j=ndata
-   do
-     k=(i+j)/2
-     if (xtarget<database(k)) then
-         j=k
-     else
-         i=k
-     end if
-     if (i+1>=j) exit
-   end do
-
-end subroutine binary_search
-
-

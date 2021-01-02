@@ -1,7 +1,3 @@
-! This replaced mechanical_fine_1510.f90 on 14 Nov 2015
-! Minor fixed to thermal injection and accounting for NENER and
-! ionisation fractions
-! Taysun added chem (Jun 2016)
 !####################################################################
 !####################################################################
 !####################################################################
@@ -23,7 +19,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   ! and inject momentum and energy to the surroundings of the young stars.
   ! This routine is called every fine time step.
   ! ind_pos_cell: position of the cell within an oct
-  ! m8,mz8,nph8: temporary variable necessary for an oct to add up
+  ! m8,mz8,nph8: temporary variable necessary for an oct to add up 
   !              the mass, metal, etc. on a cell by cell basis
   ! mejecta: mass of the ejecta from SNe
   ! Zejecta: metallicity of the ejecta (not yield)
@@ -37,7 +33,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   integer::ind,ind_son,ind_cell,ilevel,iskip,info
   integer::nSNc,nSNc_mpi
   integer,dimension(1:nvector),save::ind_grid,ind_pos_cell
-  real(dp)::nsnII_star,mass0,nsnII_tot,nsnII_mpi
+  real(dp)::nsnII_star,mass0,mass_t,nsnII_tot,nsnII_mpi
   real(dp)::tyoung,current_time,dteff
   real(dp)::skip_loc(1:3),scale,dx,dx_loc,vol_loc,x0(1:3)
   real(dp),dimension(1:twotondim,1:ndim),save::xc
@@ -48,8 +44,9 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   real(dp),dimension(1:nvector,1:3),save::pSNe
   real(dp),dimension(1:nvector,1:nchem),save::mchSNe
   real(dp),dimension(1:twotondim,1:nchem),save::mch8 ! SNe
-  real(dp)::mejecta,mejecta_ch(1:nchem),Zejecta,mfrac_snII,M_SN_var,snII_freq
-  real(dp),parameter::msun2g=2d33
+  real(dp)::mejecta,mejecta_ch(1:nchem),Zejecta,mfrac_snII
+  real(dp)::snII_freq_noboost, M_SNII_var=0.0
+  real(dp),parameter::msun2g=1.989d33
   real(dp),parameter::myr2s=3.1536000d+13
   real(dp)::ttsta,ttend
   logical::ok,done_star
@@ -61,15 +58,6 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   allocate(L_star(1:nSEDgroups))
 #endif
 
-  ! MC Tracer =================================================
-  real(dp)::rand
-  real(dp)::new_xp(1:ndim)
-  integer :: irand
-  ! End MC Tracer =============================================
-
-  integer,dimension(1:IRandNumSize),save :: ompseed
-!$omp threadprivate(ompseed)
-
   if(icount==2) return
   if(.not.hydro) return
   if(ndim.ne.3)  return
@@ -78,7 +66,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
 
 #ifndef WITHOUTMPI
   if(myid.eq.1) ttsta=MPI_WTIME(info)
-#endif
+#endif 
   nSNc=0; nsnII_tot=0d0
 
   ! Conversion factor from user units to cgs units
@@ -86,7 +74,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   scale_msun = scale_l**3*scale_d/msun2g
 
   ! Mesh spacing in that level
-  call mesh_info (ilevel,skip_loc,scale,dx,dx_loc,vol_loc,xc)
+  call mesh_info (ilevel,skip_loc,scale,dx,dx_loc,vol_loc,xc) 
 
   ! To filter out old particles and compute individual time steps
   ! NB: the time step is always the coarser level time step, since no feedback for icount=2
@@ -97,11 +85,11 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   endif
 
   if (use_proper_time)then
-     tyoung = t_sne*myr2s/(scale_t/aexp**2)
+     tyoung = t_sne*myr2s/(scale_t/aexp**2) 
      current_time=texp
      dteff = dteff*aexp**2
   else
-     tyoung = t_sne*myr2s/scale_t
+     tyoung = t_sne*myr2s/scale_t 
      current_time=t
   endif
   tyoung = current_time - tyoung
@@ -114,17 +102,23 @@ subroutine mechanical_feedback_fine(ilevel,icount)
 #endif
 
   ! Type II Supernova frequency per Msun
-  snII_freq = eta_sn / M_SNII
+  snII_freq_noboost = eta_sn / M_SNII
+
+  if (snII_freq<0) then
+     snII_freq = snII_freq_noboost
+  endif
+
+  if(.not.SNII_zdep_yield) then
+      M_SNII_var = M_SNII * (snII_freq_noboost / snII_freq)  
+      ! boostx5 -> M_SNII_var~20/5=4 Msun
+  endif
 
   ! Loop over cpus
-!!$omp parallel private(ip,ind_grid,ind_pos_cell,mSNe,pSNe,mZSNe) default(none)
   do icpu=1,ncpu
      igrid=headl(icpu,ilevel)
      ip=0
 
      ! Loop over grids
-!!$omp do private(igrid,npart1,npart2,ipart,next_part,x0,mz8,p8,n8,nph8,mch8,ok,ind_son,ind,iskip,ind_cell,mejecta) &
-!!$omp & reduction(+:nSNc) schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         npart1=numbp(igrid)  ! Number of particles in the grid
         npart2=0
@@ -132,25 +126,17 @@ subroutine mechanical_feedback_fine(ilevel,icount)
         ! Count star particles
         if(npart1>0)then
            do idim=1,ndim
-              x0(idim) = xg(igrid,idim) -dx -skip_loc(idim)
+              x0(idim) = xg(igrid,idim) -dx -skip_loc(idim) 
            end do
-
+ 
            ipart=headp(igrid)
 
            m8=0d0;mz8=0d0;p8=0d0;n8=0d0;nph8=0d0;mch8=0d0
-
+    
            ! Loop over particles
            do jpart=1,npart1
               ! Save next particle   <--- Very important !!!
               next_part=nextp(ipart)
-              ok=.false.
-
-              if(use_initial_mass) then
-                 mass0 = mp0(ipart)*scale_msun
-              else
-                 mass0 = mp (ipart)*scale_msun
-              endif
-
 #ifdef POP3
               if(pop3 .and. (zp(ipart).lt.Zcrit_pop3) ) then
                  ok=.false. ! this will be done elsewhere
@@ -158,19 +144,53 @@ subroutine mechanical_feedback_fine(ilevel,icount)
               else
 #endif
                  nsnII_star=0d0
-                 if(sn2_real_delay)then
-                    ! if tp is younger than t_sne
-                    if (is_star_active(typep(ipart)).and.tp(ipart).ge.tyoung) then
-                       call get_number_of_sn2  (tp(ipart), dteff, zp(ipart), idp(ipart),&
-                                & mass0, nsnII_star, done_star)
-                       if(nsnII_star>0)ok=.true.
+
+                 ! active star particles?
+                 ok = is_star_active(typep(ipart))    ! SanHan: check this out
+
+                 if(ok)then
+                    ! initial mass
+                    if(use_initial_mass) then
+                       mass0 = mp0(ipart)*scale_msun
+                    else
+                       mass0 = mp (ipart)*scale_msun
                     endif
-                 else ! single SN event
-                    ! if tp is older than t_sne
-                    if (is_star_active(typep(ipart)).and.tp(ipart).le.tyoung)then
-                       ok=.true.
-                       ! number of sn is not necessarily an integer
-                       nsnII_star = mass0*eta_sn/M_SNII
+                    mass_t = mp (ipart)*scale_msun
+ 
+
+                    ok=.false.
+                    if(sn2_real_delay)then
+                       if(tp(ipart).ge.tyoung)then  ! if younger than t_sne
+
+                          if(SNII_zdep_yield)then
+                             call SNII_yield (zp(ipart), mfrac_snII, Zejecta, Zejecta_chem_II)
+                             ! Adjust M_SNII mass not to double-count the mass loss from massive stars
+                             M_SNII_var = mfrac_snII / snII_freq ! ex) 0.1 / 0.01 = 10 Msun
+                          else
+                             Zejecta = zp(ipart)+(1d0-zp(ipart))*yield
+                          endif
+
+                          call get_number_of_sn2  (tp(ipart), dteff, zp(ipart), idp(ipart),&
+                                & mass0, mass_t, M_SNII_var, nsnII_star, done_star)
+                          if(nsnII_star>0)ok=.true.
+
+                       endif
+
+                    else ! single SN event
+                       if(tp(ipart).le.tyoung)then   ! if older than t_sne
+                          ok=.true.
+
+                          if(SNII_zdep_yield)then
+                             call SNII_yield (zp(ipart), mfrac_snII, Zejecta, Zejecta_chem_II)
+                             ! Adjust M_SNII mass not to double-count the mass loss from massive stars
+                             M_SNII_var = mfrac_snII / snII_freq ! ex) 0.1 / 0.05 = 2 Msun
+                          else
+                             Zejecta = zp(ipart)+(1d0-zp(ipart))*yield
+                          endif
+
+                          ! number of sn doesn't have to be an integer
+                          nsnII_star = mass0*snII_freq
+                       endif
                     endif
                  endif
 #ifdef POP3
@@ -183,7 +203,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                  do idim=1,ndim
                     ind = int((xp(ipart,idim)/scale - x0(idim))/dx)
                     ind_son=ind_son+ind*2**(idim-1)
-                 end do
+                 end do 
                  iskip=ncoarse+(ind_son-1)*ngridmax
                  ind_cell=iskip+igrid
                  if(son(ind_cell)==0)then  ! leaf cell
@@ -191,19 +211,8 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                     !----------------------------------
                     ! For Type II explosions
                     !----------------------------------
-                    M_SN_var = M_SNII
-                    if(metal) then
-                       if(variable_yield_SNII)then
-                          call SNII_yield (zp(ipart), mfrac_snII, Zejecta, Zejecta_chem_II)
-                          ! Adjust M_SNII mass not to double-count the mass loss from massive stars
-                          M_SN_var = mass_loss_boost * mfrac_snII / snII_freq ! ex) 0.1 / 0.01 = 10 Msun
-                       else
-                          Zejecta = zp(ipart)+(1d0-zp(ipart))*yield
-                       endif
-                    endif
-
                     ! total ejecta mass in code units
-                    mejecta = M_SN_var/scale_msun*nsnII_star
+                    mejecta = M_SNII_var/scale_msun*nsnII_star
 
                     ! number of SNII
                     n8(ind_son) = n8(ind_son) + nsnII_star
@@ -219,29 +228,26 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                     endif
                     do ich=1,nchem
                        mch8(ind_son,ich) = mch8(ind_son,ich) + mejecta*Zejecta_chem_II(ich)
-                    end do
+                    end do 
 
                     ! subtract the mass return
                     mp(ipart)=mp(ipart)-mejecta
 
                     ! mark if we are done with this particle
                     if(sn2_real_delay) then
-                       if(done_star) typep(ipart)%tag = 0 ! only if all SNe exploded
+                       if(done_star)then ! only if all SNe exploded
+                          idp(ipart)=abs(idp(ipart)) 
+                          typep(ipart)%tag = 0 
+                       endif 
                     else
-                       typep(ipart)%tag = 0
+                       idp(ipart)=abs(idp(ipart))
+                       typep(ipart)%tag = 0 
                     endif
-
-                    ! Record-keeping of local density at SN events (joki):
-                    if(write_stellar_densities) then
-                       st_n_SN(ipart) = uold(ind_cell,1)
-                       st_e_SN(ipart) = nsnII_star  ! eta_sn/(10.*2d33) * mp(ipart) * scale_d * scale_l**3 ! fixed by Taysun
-                    endif
-
-
+                  
 #ifdef RT
                     ! Enhanced momentum due to pre-processing of the ISM due to radiation
                     if(rt.and.mechanical_geen) then
-                       ! Let's count the total number of ionising photons per sec
+                       ! Let's count the total number of ionising photons per sec 
                        call getAgeGyr(tp(ipart), age)
                        if(metal) Z_star=zp(ipart)
                        Z_star=max(Z_star,10.d-5)
@@ -261,14 +267,14 @@ subroutine mechanical_feedback_fine(ilevel,icount)
               ipart=next_part  ! Go to next particle
            end do
            ! End loop over particles
-
+    
            do ind=1,twotondim
               if (abs(n8(ind))>0d0)then
                  ip=ip+1
                  ind_grid(ip)=igrid
                  ind_pos_cell(ip)=ind
-
-                 ! collect information
+     
+                 ! collect information 
                  nSNe(ip)=n8(ind)
                  mSNe(ip)=m8(ind)
                  mZSNe(ip)=mz8(ind)
@@ -279,86 +285,30 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                  do ich=1,nchem
                     mchSNe(ip,ich)=mch8(ind,ich)
                  end do
-
+   
                  ! statistics
                  nSNc=nSNc+1
                  nsnII_tot = nsnII_tot + nsnII_star
-
+ 
                  if(ip==nvector)then
-!!$omp critical
                     call mech_fine(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
-!!$omp end critical
                     ip=0
-                 endif
+                 endif 
               endif
            enddo
+    
+    
         end if
         igrid=next(igrid)   ! Go to next grid
      end do ! End loop over grids
-!!$omp end do nowait
+    
      if (ip>0) then
-!!$omp critical
         call mech_fine(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
-!!$omp end critical
         ip=0
      endif
 
   end do ! End loop over cpus
 
-!!$omp barrier
-  do icpu=1,ncpu
-     if (MC_tracer) then
-        ! MC Tracer =================================================
-        ! Loop over grids
-!!$omp do private(igrid,npart1,ipart,next_part,rand,irand,new_xp)
-        do jgrid = 1, numbl(icpu, ilevel)
-           if(icpu==myid)then
-              igrid=active(ilevel)%igrid(jgrid)
-           else
-              igrid=reception(icpu,ilevel)%igrid(jgrid)
-           end if
-           npart1 = numbp(igrid)  ! Number of particles in the grid
-           ipart = headp(igrid)
-
-           ! Loop over tracer particles
-           do jpart = 1, npart1
-              next_part=nextp(ipart)
-
-              if (is_star_tracer(typep(ipart))) then
-                 ! Detach particle if required
-                 call ranf(ompseed, rand)
-
-                 ! Detach particles
-                 if (rand < tmpp(partp(ipart))) then
-                    typep(ipart)%family = FAM_TRACER_GAS
-
-                    ! Change here to tag the particle with the star id
-                    typep(ipart)%tag = typep(ipart)%tag + 1
-
-                    move_flag(ipart) = 1
-
-                    ! Detached, now decide where to move it
-                    call ranf(ompseed, rand)
-
-                    do idim = 1, ndim
-                       ! Draw number between 1 and nSNnei
-                       irand = floor(rand * nSNnei) + 1
-                       new_xp(idim) = xSNnei(idim, irand)*dx
-                    end do
-
-                    do idim = 1, ndim
-                       xp(ipart, idim) = xp(ipart, idim) + new_xp(idim)
-                    end do
-                 end if
-              end if
-              ipart = next_part ! Go to next particle
-           end do ! End loop over particles
-        end do ! End loop over grids
-!!$omp end do nowait
-        ! End MC Tracer =============================================
-     end if
-  end do ! End loop over cpus
-!!$omp end parallel
 
 #ifndef WITHOUTMPI
   nSNc_mpi=0; nsnII_mpi=0d0
@@ -368,12 +318,16 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   call MPI_ALLREDUCE(nsnII_tot,nsnII_mpi,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,info)
   nSNc = nSNc_mpi
   nsnII_tot = nSNII_mpi
-  if(myid.eq.1.and.nSNc>0.and.log_mfb) then
-     ttend=MPI_WTIME(info)
-     write(*,*) '--------------------------------------'
-     write(*,*) 'Time elapsed in mechanical_fine [sec]:', sngl(ttend-ttsta), nSNc, sngl(nsnII_tot)
-     write(*,*) '--------------------------------------'
-  endif
+!  if(myid.eq.1.and.nSNc>0.and.log_mfb) then
+!     ttend=MPI_WTIME(info)
+!     write(*,*) '--------------------------------------'
+!     write(*,*) 'Time elapsed in mechanical_fine [sec]:', sngl(ttend-ttsta), nSNc, sngl(nsnII_tot) 
+!     write(*,*) '--------------------------------------'
+!  endif
+#endif
+
+#ifdef RT
+   deallocate(L_star)
 #endif
 
 end subroutine mechanical_feedback_fine
@@ -385,26 +339,22 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
   use pm_commons
   use hydro_commons
   use mechanical_commons
-#ifdef RT
-  use rt_parameters, ONLY:iIons,nIons
-#endif
   implicit none
   integer::np,ilevel ! actually the number of cells
-  integer,dimension(1:nvector)::ind_grid,ind_pos_cell
+  integer,dimension(1:nvector)::ind_grid,ind_pos_cell,icellvec
   real(dp),dimension(1:nvector)::nSN,mSN,mZSN,floadSN,nphSN
   real(dp),dimension(1:nvector)::mloadSN,mZloadSN,eloadSN
   real(dp),dimension(1:nvector,1:3)::pSN,ploadSN
   real(dp),dimension(1:nvector,1:nchem)::mchSN,mchloadSN
   !-----------------------------------------------------------------------
-  ! This routine is called by subroutine mechanical_feedback_fine
+  ! This routine is called by subroutine mechanical_feedback_fine 
   !-----------------------------------------------------------------------
-  integer,dimension(nvector)::icellvec
   integer::i,j,nwco,nwco_here,idim,icell,igrid,ista,iend,ilevel2
   integer::ind_cell,ncell,irad,ii,ich
   real(dp)::d,u,v,w,e,z,eth,ekk,Tk,d0,u0,v0,w0,dteff
   real(dp)::dx,dx_loc,scale,vol_loc,nH_cen,fleftSN
-  real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
-  real(dp)::scale_msun,msun2g=2d33
+  real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_kms
+  real(dp)::scale_msun,msun2g=1.989d33
   real(dp)::skip_loc(1:3),Tk0,ekk0,eth0,etot0,T2min
   real(dp),dimension(1:twotondim,1:ndim),save::xc
   ! Grid based arrays
@@ -412,28 +362,32 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
   real(dp),dimension(1:nvector,1:nSNnei), save::p_solid,ek_solid
   real(dp)::d_nei,Z_nei,Z_neisol,dm_ejecta,vol_nei
   real(dp)::mload,vload,Zload=0d0,f_esn2
-  real(dp)::num_sn,nH_nei,Zdepen=1d0,f_w_cell,f_w_crit
+  real(dp)::num_sn,nH_nei,f_w_cell,f_w_crit
   real(dp)::t_rad,r_rad,r_shell,m_cen,ekk_ej
   real(dp)::uavg,vavg,wavg,ul,vl,wl,ur,vr,wr
-  real(dp)::d1,d2,d3,d4,d5,d6,dtot,pvar(1:ndim+3+512)
+  real(dp)::d1,d2,d3,d4,d5,d6,dtot,pvar(1:nvarMHD)
   real(dp)::vturb,vth,Mach,sig_s2,dratio,mload_cen
-#ifdef RT
-  real(dp),dimension(1:nIons),save::xion
-#endif
   ! For stars affecting across the boundary of a cpu
   integer, dimension(1:nSNnei),save::icpuSNnei
   integer ,dimension(1:nvector,0:twondim):: ind_nbor
-  logical(dp),dimension(1:nvector,1:nSNnei),save ::snowplough
+  logical,dimension(1:nvector,1:nSNnei),save ::snowplough
   real(dp),dimension(1:nvector)::rStrom ! in pc
   real(dp)::dx_loc_pc,psn_tr,chi_tr,psn_thor98,psn_geen15,fthor
-  real(dp)::km2cm=1d5,M_SN_var,boost_geen_ad=0d0,p_hydro,vload_rad,f_wrt_snow
+  real(dp)::km2cm=1d5,M_SNII_var,boost_geen_ad=0d0,p_hydro,vload_rad,f_wrt_snow
   ! chemical abundance
   real(dp),dimension(1:nchem)::chload,z_ch
-  real(dp)::frac_ref ! refinement variable in fraction
+  ! fractional abundances ; for ionisation fraction and ref, etc
+  real(dp),dimension(1:NVAR),save::fractions ! not compatible with delayed cooling
+  integer::i_fractions
+  real(dp)::emag
+
+  ! starting index for passive variables except for imetal and chem
+  i_fractions = imetal+nchem+1
 
   ! Conversion factor from user units to cgs units
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
   scale_msun = scale_l**3*scale_d/msun2g
+  scale_kms  = scale_v/1d5
 
   ! Mesh variables
   call mesh_info (ilevel,skip_loc,scale,dx,dx_loc,vol_loc,xc)
@@ -444,14 +398,14 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
   do i=1,np
      do idim=1,ndim
         xc2(idim,i)=xg(ind_grid(i),idim)-skip_loc(idim)+xc(ind_pos_cell(i),idim)
-     end do
+     end do 
   end do
 
   !======================================================================
-  ! Determine p_solid before redistributing mass
-  !   (momentum along some solid angle or cell)
+  ! Determine p_solid before redistributing mass 
+  !   (momentum along some solid angle or cell) 
   ! - This way is desirable when two adjacent SNe explode simulataenously.
-  ! - if the neighboring cell does not belong to myid, this will be done
+  ! - if the neighboring cell does not belong to myid, this will be done 
   !      in mech_fine_mpi
   !======================================================================
   p_solid=0d0;ek_solid=0d0;snowplough=.false.
@@ -465,39 +419,63 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
      ! Sanity Check
      if((cpu_map(father(igrid)).ne.myid).or.&
         (ilevel.ne.ilevel2).or.&
-        (ind_cell.ne.icell))     then
+        (ind_cell.ne.icell))     then 
         print *,'>>> fatal error in mech_fine'
         print *, cpu_map(father(igrid)),myid
         print *, ilevel, ilevel2
         print *, ind_cell, icell
-        print *, i, np, ncoarse, ind_grid(i), ind_pos_cell(i), ngridmax
-        print *, xc2(1:3,i)
-        print *, xg(ind_grid(i),1:3)
-        print *, xc(ind_pos_cell(i),1:3)
-        stop
+        stop 
      endif
-
+ 
      num_sn    = nSN(i) ! doesn't have to be an integer
-     M_SN_var = mSN(i)*scale_msun / num_sn
+     M_SNII_var = mSN(i)*scale_msun / num_sn
      nH_cen    = uold(icell,1)*scale_nH
      m_cen     = uold(icell,1)*vol_loc*scale_msun
 
+     emag=0.0d0
+#ifdef SOLVERmhd
+     do idim=1,ndim
+        emag=emag+0.125d0*(uold(icell,idim+ndim+2)+uold(icell,idim+nvar))**2
+     enddo
+#endif
      d   = uold(icell,1)
      u   = uold(icell,2)/d
      v   = uold(icell,3)/d
      w   = uold(icell,4)/d
      e   = uold(icell,5)
-     e   = e-0.5d0*d*(u**2+v**2+w**2)
+     e   = e-0.5d0*d*(u**2+v**2+w**2) - emag
 #if NENER>0
      do irad=1,nener
-        e = e - uold(icell,ndim+2+irad)
+        e = e - uold(icell,ndim+2+irad) 
      end do
 #endif
-     Tk  = e/d*scale_T2*(gamma-1.0)*0.6
-
+     Tk  = e/d*scale_T2*(gamma-1.0)
      if(Tk<0)then
         print *,'TKERR : mech fbk (pre-call): TK<0', TK,icell
-        stop
+        print *,'nH [H/cc]= ',d*scale_nH
+        print *,'u  [km/s]= ',u*scale_v/1d5
+        print *,'v  [km/s]= ',v*scale_v/1d5
+        print *,'w  [km/s]= ',w*scale_v/1d5
+!        stop
+     endif
+
+     ! For stability - T<0 seems to happen if strong shock occurs 
+     ! due to mechanical feedback
+     T2min=T2_star*(d*scale_nH/n_star)**(g_star-1.0)
+     if(Tk<T2min)then
+        e=T2min*d/scale_T2/(gamma-1.0)*1.2195
+        uold(icell,5) = 0.5d0*d*(u**2+v**2+w**2) + e + emag
+#if NENER>0
+        do irad=1,nener
+           uold(icell,5) = uold(icell,5) + uold(icell,ndim+2+irad)
+        end do
+#endif
+     endif
+    
+     if(metal)then
+        z   = uold(icell,imetal)/d
+     else
+        z   = z_ave*0.02
      endif
 
      !==========================================
@@ -511,10 +489,10 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
         ncell = 1
         icellvec(1) = icell
         call getnbor(icellvec,ind_nbor,ncell,ilevel)
-        u0 = uold(icell        ,2)
-        v0 = uold(icell        ,3)
-        w0 = uold(icell        ,4)
-        ul = uold(ind_nbor(1,1),2)-u0
+        u0 = uold(icell        ,2) 
+        v0 = uold(icell        ,3) 
+        w0 = uold(icell        ,4) 
+        ul = uold(ind_nbor(1,1),2)-u0 
         ur = uold(ind_nbor(1,2),2)-u0
         vl = uold(ind_nbor(1,3),3)-v0
         vr = uold(ind_nbor(1,4),3)-v0
@@ -522,9 +500,9 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
         wr = uold(ind_nbor(1,6),4)-w0
         vturb = sqrt(ul**2 + ur**2 + vl**2 + vr**2 + wl**2 + wr**2)
         vturb = vturb*scale_v ! cm/s
-
+    
         Mach  = vturb/vth
-
+ 
         ! get volume-filling density for beta=infty (non-MHD gas), b=0.4 (a stochastic mixture of forcing modes)
         sig_s2 = log(1d0 + (0.4*Mach)**2d0)
         ! s = -0.5*sig_s2;   s = ln(rho/rho0)
@@ -540,11 +518,11 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
      ! estimate Stromgren sphere (relevant to RHD simulations only)
      ! (mechanical_geen=.true)
      !==========================================
-     if(mechanical_geen.and.rt) rStrom(i) = (3d0*nphSN(i)/4./3.141592/2.6d-13/nH_cen**2d0)**(1d0/3d0)/3.08d18 ! [pc]
+     if(mechanical_geen.and.rt) rStrom(i) = (3d0*nphSN(i)/4./3.141592/2.6d-13/nH_cen**2d0)**(1d0/3d0)/3.08d18 ! [pc] 
 
      if(log_mfb)then
-398     format('MFB = ',f7.3,1x,f7.3,1x,f7.1,1x,f5.3,1x,f9.5,1x,f7.3)
-        write(*,398) log10(d*scale_nH),log10(Tk),sngl(num_sn),floadSN(i),1./aexp-1,log10(dx_loc*scale_l/3.08d18)
+398     format('MFB z= ',f9.5,' N= ',f7.1,' nH,T,Z= ',3(f7.3,1x),' dx= ',f9.5)
+        write(*,398) 1./aexp-1,num_sn,log10(d*scale_nH),log10(Tk),log10(z/0.02),log10(dx_loc*scale_l/3.08d18)
      endif
 
      dm_ejecta = f_LOAD*mSN(i)/dble(nSNnei)  ! per solid angle
@@ -552,13 +530,13 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
      if(metal) Zload = (f_LOAD*mZSN(i) + uold(icell,imetal)*vol_loc*floadSN(i))/mload
      do ich=1,nchem
         chload(ich) = (f_LOAD*mchSN(i,ich) + uold(icell,ichem+ich-1)*vol_loc*floadSN(i))/mload
-     end do
-
+     end do 
+ 
      do j=1,nSNnei
         call get_icell_from_pos (xc2(1:3,i)+xSNnei(1:3,j)*dx, ilevel+1, igrid, icell,ilevel2)
         if(cpu_map(father(igrid)).eq.myid) then ! if belong to myid
 
-           Z_nei = z_ave*0.02 ! For metal=.false.
+           Z_nei = z_ave*0.02 ! For metal=.false. 
            if(ilevel>ilevel2)then ! touching level-1 cells
               d_nei     = unew(icell,1)
               if(metal) Z_nei = unew(icell,imetal)/d_nei
@@ -570,14 +548,13 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
            f_w_cell  = (mload/dble(nSNnei) + d_nei*vol_loc/8d0)/dm_ejecta - 1d0
            nH_nei    = d_nei*scale_nH*dratio
            Z_neisol  = max(0.01, Z_nei/0.02)
-           Zdepen    = Z_neisol**(expZ_SN*2d0)
 
            ! transition mass loading factor (momentum conserving phase)
            ! psn_tr = sqrt(2*chi_tr*Nsn*Esn*Msn*fe)
            ! chi_tr = (1+f_w_crit)
            psn_thor98   = A_SN * num_sn**(expE_SN) * nH_nei**(expN_SN) * Z_neisol**(expZ_SN)  !km/s Msun
-           psn_tr       = psn_thor98
-           if(mechanical_geen)then
+           psn_tr       = psn_thor98 
+           if(mechanical_geen)then 
               ! For snowplough phase, psn_tr will do the job
               psn_geen15 = A_SN_Geen * num_sn**(expE_SN)* Z_neisol**(expZ_SN)  !km/s Msun
 
@@ -592,18 +569,18 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
               ! For adiabatic phase
               ! psn_tr =  A_SN * (E51 * boost_geen)**expE_SN_boost * nH_nei**(expN_SN_boost) * Z_neisol**(expZ_SN)
               !        =  p_hydro * boost_geen**expE_SN_boost
-              p_hydro = A_SN * num_sn**(expN_SN_boost) * nH_nei**(expN_SN_boost) * Z_neisol**(expZ_SN)
+              p_hydro = A_SN * num_sn**(expE_SN_boost) * nH_nei**(expN_SN_boost) * Z_neisol**(expZ_SN)
               boost_geen_ad = (psn_tr / p_hydro)**(1d0/expE_SN_boost)
               boost_geen_ad = max(boost_geen_ad-1d0,0.0)
            endif
 
-           chi_tr   = psn_tr**2d0 / (2d0 * num_sn * (E_SNII/msun2g/km2cm**2d0) * M_SN_var * f_ESN)
+           chi_tr   = psn_tr**2d0 / (2d0 * num_sn**2d0 * (E_SNII/msun2g/km2cm**2d0) * M_SNII_var * f_ESN)
            !          (Msun*km/s)^2                 (Msun *km2/s2)              (Msun)
            f_w_crit = max(chi_tr-1d0, 0d0)
 
            !f_w_crit = (A_SN/1d4)**2d0/(f_ESN*M_SNII)*num_sn**((expE_SN-1d0)*2d0)*nH_nei**(expN_SN*2d0)*Zdepen - 1d0
            !f_w_crit = max(0d0,f_w_crit)
-           vload_rad = dsqrt(2d0*f_ESN*E_SNII*(1d0+f_w_crit)/(M_SN_var*msun2g))/scale_v/(1d0+f_w_cell)/f_LOAD/f_PCAN
+           vload_rad = dsqrt(2d0*f_ESN*E_SNII*(1d0+f_w_crit)/(M_SNII_var*msun2g))/scale_v/(1d0+f_w_cell)/f_LOAD/f_PCAN
            if(f_w_cell.ge.f_w_crit)then ! radiative phase
               ! ptot = sqrt(2*chi_tr*Mejtot*(fe*Esntot))
               ! vload = ptot/(chi*Mejtot) = sqrt(2*chi_tr*fe*Esntot/Mejtot)/chi = sqrt(2*chi_tr*fe*Esn/Mej)/chi
@@ -613,7 +590,7 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
               ! ptot = sqrt(2*chi*Mejtot*(fe*Esntot))
               ! vload = ptot/(chi*Mejtot) = sqrt(2*fe*Esntot/chi/Mejtot) = sqrt(2*fe*Esn/chi/Mej)
               f_esn2 = 1d0-(1d0-f_ESN)*f_w_cell/f_w_crit ! to smoothly correct the adibatic to the radiative phase
-              vload = dsqrt(2d0*f_esn2*E_SNII/(1d0+f_w_cell)/(M_SN_var*msun2g))/scale_v/f_LOAD
+              vload = dsqrt(2d0*f_esn2*E_SNII/(1d0+f_w_cell)/(M_SNII_var*msun2g))/scale_v/f_LOAD
               if(mechanical_geen) then
                  !f_wrt_snow = (f_esn2 - f_ESN)/(1d0-f_ESN)
                  f_wrt_snow = 2d0-2d0/(1d0+exp(-f_w_cell/f_w_crit/0.3)) ! 0.3 is obtained by calibrating
@@ -635,7 +612,7 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
             endif
 
         endif
-
+        
      enddo ! loop over neighboring cells
   enddo ! loop over SN cells
 
@@ -654,16 +631,20 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
         e = e - uold(icell,ndim+2+irad)
      enddo
 #endif
-     ekk   = 0.5*d*(u**2 + v**2 + w**2)
-     eth   = e - ekk  ! thermal pressure
-#ifdef RT
-     do ii=0,nIons-1
-        xion(ii+1) = uold(icell,iIons+ii)/d
-     end do
+     emag=0.0d0
+#ifdef SOLVERmhd
+     do idim=1,ndim
+        emag=emag+0.125d0*(uold(icell,idim+ndim+2)+uold(icell,idim+nvar))**2
+     enddo
 #endif
-     if(ivar_refine>5) then
-        frac_ref = uold(icell,ivar_refine)/d
-     endif
+
+     ekk   = 0.5*d*(u**2 + v**2 + w**2)
+     eth   = e - ekk - emag  ! thermal pressure 
+
+     ! ionisation fractions, ref, etc.
+     do ii=i_fractions,nvar
+        fractions(ii) = uold(icell,ii)/d
+     end do
 
      mloadSN (i) = mSN (i)*f_LOAD + d*vol_loc*floadSN(i)
      if(metal)then
@@ -674,7 +655,7 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
      do ich=1,nchem
         z_ch(ich) = uold(icell,ichem+ich-1)/d
         mchloadSN(i,ich) = mchSN(i,ich)*f_LOAD + d*z_ch(ich)*vol_loc*floadSN(i)
-     end do
+     end do 
 
      ! original momentum by star + gas entrained from the SN cell
      ploadSN(i,1) = pSN(i,1)*f_LOAD + vol_loc*d*u*floadSN(i)
@@ -683,33 +664,30 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
 
      ! update the hydro variable
      fleftSN = 1d0 - floadSN(i)
-     uold(icell,1) = uold(icell,1)*fleftSN + mSN(i)  /vol_loc*f_LEFT
+     uold(icell,1) = uold(icell,1)*fleftSN + mSN(i)  /vol_loc*f_LEFT 
      uold(icell,2) = uold(icell,2)*fleftSN + pSN(i,1)/vol_loc*f_LEFT  ! rho*v, not v
-     uold(icell,3) = uold(icell,3)*fleftSN + pSN(i,2)/vol_loc*f_LEFT
+     uold(icell,3) = uold(icell,3)*fleftSN + pSN(i,2)/vol_loc*f_LEFT 
      uold(icell,4) = uold(icell,4)*fleftSN + pSN(i,3)/vol_loc*f_LEFT
+
      if(metal)then
         uold(icell,imetal) = mZSN(i)/vol_loc*f_LEFT + d*z*fleftSN
      endif
      do ich=1,nchem
         uold(icell,ichem+ich-1) = mchSN(i,ich)/vol_loc*f_LEFT + d*z_ch(ich)*fleftSN
      end do
-#ifdef RT
-     do ii=0,nIons-1
-        uold(icell,iIons+ii) = xion(ii+1) * uold(icell,1)
+     do ii=i_fractions,nvar
+        uold(icell,ii) = fractions(ii) * uold(icell,1)
      end do
-#endif
-     if(ivar_refine>5) then
-        uold(icell,ivar_refine) = frac_ref * uold(icell,1)
-     endif
 
      ! original kinetic energy of the gas entrained
-     eloadSN(i) = ekk*vol_loc*floadSN(i)
+     eloadSN(i) = ekk*vol_loc*floadSN(i) 
 
      ! original thermal energy of the gas entrained (including the non-thermal part)
      eloadSN(i) = eloadSN(i) + eth*vol_loc*floadSN(i)
 
      ! reduce total energy as we are distributing it to the neighbours
-     uold(icell,5) = uold(icell,5)*fleftSN
+     !uold(icell,5) = uold(icell,5)*fleftSN 
+     uold(icell,5) = uold(icell,5) - (ekk+eth)*floadSN(i)
 
      ! add the contribution from the original kinetic energy of SN particle
      d = mSN(i)/vol_loc
@@ -717,11 +695,11 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
      v = pSN(i,2)/mSN(i)
      w = pSN(i,3)/mSN(i)
      uold(icell,5) = uold(icell,5) + 0.5d0*d*(u**2 + v**2 + w**2)*f_LEFT
-
+    
      ! add the contribution from the original kinetic energy of SN to outflow
      eloadSN(i) = eloadSN(i) + 0.5d0*mSN(i)*(u**2 + v**2 + w**2)*f_LOAD
 
-     ! update ek_solid
+     ! update ek_solid     
      ek_solid(i,:) = ek_solid(i,:) + eloadSN(i)/dble(nSNnei)
 
   enddo  ! loop over SN cell
@@ -737,7 +715,7 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
      nwco=0; icpuSNnei=0
      do j=1,nSNnei
         call get_icell_from_pos (xc2(1:3,i)+xSNnei(1:3,j)*dx, ilevel+1, igrid, icell,ilevel2)
-
+ 
         if(cpu_map(father(igrid)).ne.myid) then ! need mpi
            nwco=nwco+1
            icpuSNnei(nwco)=cpu_map(father(igrid))
@@ -745,47 +723,37 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
            vol_nei = vol_loc*(2d0**ndim)**(ilevel-ilevel2)
            pvar(:) = 0d0 ! temporary primitive variable
            if(ilevel>ilevel2)then ! touching level-1 cells
-              pvar(1:5) = unew(icell,1:5)
-              if(metal) pvar(imetal) = unew(icell,imetal)
-              do ich=1,nchem
-                 pvar(ichem+ich-1) = unew(icell, ichem+ich-1)
-              end do
-#if NENER>0
-              do irad=1,nener
-                 pvar(ndim+2+irad) = unew(icell,ndim+2+irad)
-              enddo
-#endif
+              pvar(1:nvarMHD) = unew(icell,1:nvarMHD)
            else
-              pvar(1:5) = uold(icell,1:5)
-              if(metal) pvar(imetal) = uold(icell,imetal)
-              do ich=1,nchem
-                 pvar(ichem+ich-1) = uold(icell, ichem+ich-1)
-              end do
-#if NENER>0
-              do irad=1,nener
-                 pvar(ndim+2+irad) = uold(icell,ndim+2+irad)
-              enddo
-#endif
-           endif
+              pvar(1:nvarMHD) = uold(icell,1:nvarMHD)
+           endif 
+           do ii=i_fractions,nvar ! fractional quantities that we don't want to change
+              fractions(ii) = pvar(ii)/pvar(1)
+           end do
 
+           emag=0.0d0
+#ifdef SOLVERmhd
+           do idim=1,ndim
+              emag=emag+0.125d0*(pvar(idim+ndim+2)+pvar(idim+nvar))**2
+           enddo
+#endif
            d0=pvar(1)
            u0=pvar(2)/d0
            v0=pvar(3)/d0
            w0=pvar(4)/d0
            ekk0=0.5d0*d0*(u0**2+v0**2+w0**2)
-           eth0=pvar(5)-ekk0
+           eth0=pvar(5)-ekk0-emag
 #if NENER>0
            do irad=1,nener
               eth0=eth0-pvar(ndim+2+irad)
            end do
 #endif
            ! For stability
-           Tk0 =eth0/d0*scale_T2*(gamma-1)
-           T2min=T2_star*(d0*scale_nH/n_star)**g_star
+           Tk0 =eth0/d0*scale_T2*(gamma-1.0)
+           T2min=T2_star*(d0*scale_nH/n_star)**(g_star-1.0)
            if(Tk0<T2min)then
-              eth0=T2min*d0/scale_T2/(gamma-1)
-           endif
-
+              eth0=T2min*d0/scale_T2/(gamma-1.0)
+           endif 
 
            d= mloadSN(i  )/dble(nSNnei)/vol_nei
            u=(ploadSN(i,1)/dble(nSNnei)+p_solid(i,j)*vSNnei(1,j))/vol_nei/d
@@ -795,8 +763,8 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
            pvar(2)=pvar(2)+d*u
            pvar(3)=pvar(3)+d*v
            pvar(4)=pvar(4)+d*w
-           ekk_ej = 0.5*d*(u**2 + v**2 + w**2)
-           etot0  = eth0+ekk0+ek_solid(i,j)/vol_nei ! additional energy from SNe+entrained gas
+           ekk_ej = 0.5*d*(u**2 + v**2 + w**2)   
+           etot0  = eth0+ekk0+emag+ek_solid(i,j)/vol_nei ! additional energy from SNe+entrained gas
 
            ! the minimum thermal energy input floor
            d   = pvar(1)
@@ -804,99 +772,47 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
            v   = pvar(3)/d
            w   = pvar(4)/d
            ekk = 0.5*d*(u**2 + v**2 + w**2)
+           pvar(5) = max(etot0, ekk+eth0+emag)
 
-           pvar(5) = max(etot0, ekk+eth0)
-
-           Tk = (pvar(5)-ekk)/d*scale_T2*(gamma-1)*0.6
+           ! sanity check
+           Tk = (pvar(5)-ekk-emag)/d*scale_T2*(gamma-1)
            if(Tk<0)then
-              print *, 'TKERR: mech (post-call): Tk<0 =',sngl(Tk),sngl(d*scale_nH),sngl(Tk0),ilevel2
+              print *,'TKERR: mech (post-call): Tk<0 =',Tk
+              print *,'nH [H/cc]= ',d*scale_nH
+              print *,'u  [km/s]= ',u*scale_v/1d5
+              print *,'v  [km/s]= ',v*scale_v/1d5
+              print *,'w  [km/s]= ',w*scale_v/1d5
+              print *,'T0 [K]   = ',Tk0
               stop
-           endif
+           endif 
 
 #if NENER>0
            do irad=1,nener
               pvar(5) = pvar(5) + pvar(ndim+2+irad)
            end do
 #endif
-
            if(metal)then
                pvar(imetal)=pvar(imetal)+mzloadSN(i)/dble(nSNnei)/vol_nei
            end if
            do ich=1,nchem
                pvar(ichem+ich-1)=pvar(ichem+ich-1)+mchloadSN(i,ich)/dble(nSNnei)/vol_nei
            end do
+           do ii=i_fractions,nvar
+               pvar(ii)=fractions(ii)*pvar(1)
+           end do
 
            ! update the hydro variable
            if(ilevel>ilevel2)then ! touching level-1 cells
-
-              ! Do not change the ionisation fraction and refinement variable
-#ifdef RT
-              do ii=0,nIons-1 ! get the ionisation fraction
-                 xion(ii+1)=unew(icell,iIons+ii)/unew(icell,1)
-              end do
-#endif
-              if(ivar_refine>5)then
-                 frac_ref = unew(icell,ivar_refine)/unew(icell,1)
-              endif
-
-              ! update now
-              unew(icell,1:5) = pvar(1:5)
-              if(metal) unew(icell,imetal) = pvar(imetal)
-              do ich=1,nchem
-                 unew(icell,ichem+ich-1) = pvar(ichem+ich-1)
-              end do
-#ifdef RT
-              do ii=0,nIons-1 ! put it back with the updated density
-                 unew(icell,iIons+ii)=unew(icell,1)*xion(ii+1)
-              end do
-#endif
-#if NENER>0
-              do irad=1,nener
-                 unew(icell,ndim+2+irad) = pvar(ndim+2+irad)
-              end do
-#endif
-              if(ivar_refine>5)then
-                 unew(icell,ivar_refine)=unew(icell,1)*frac_ref
-              endif
-
+              unew(icell,1:nvarMHD) = pvar(1:nvarMHD)
            else
-              ! Do not change the ionisation fraction and refinement variable
-#ifdef RT
-              do ii=0,nIons-1 ! get the ionisation fraction
-                 xion(ii+1)=uold(icell,iIons+ii)/uold(icell,1)
-              end do
-#endif
-              if(ivar_refine>5)then
-                 frac_ref = uold(icell,ivar_refine)/uold(icell,1)
-              endif
-
-              ! update now
-              uold(icell,1:5) = pvar(1:5)
-              if(metal) uold(icell,imetal) = pvar(imetal)
-              do ich=1,nchem
-                 uold(icell,ichem+ich-1) = pvar(ichem+ich-1)
-              end do
-#ifdef RT
-              do ii=0,nIons-1 ! put it back with the updated density
-                 uold(icell,iIons+ii)=uold(icell,1)*xion(ii+1)
-              end do
-#endif
-#if NENER>0
-              do irad=1,nener
-                 uold(icell,ndim+2+irad) = pvar(ndim+2+irad)
-              end do
-#endif
-              if(ivar_refine>5)then
-                 uold(icell,ivar_refine) = uold(icell,1)*frac_ref
-              endif
-
-           endif
+              uold(icell,1:nvarMHD) = pvar(1:nvarMHD)
+           endif 
 
         end if
      end do ! loop over 48 neighbors
 
 
-#ifndef WITHOUTMPI
+#ifndef WITHOUTMPI 
      if(nwco>0)then  ! for SNs across different cpu
         if(nwco>1)then
            nwco_here=nwco
@@ -942,9 +858,6 @@ subroutine mech_fine_mpi(ilevel)
   use mechanical_commons
   use pm_commons
   use hydro_commons
-#ifdef RT
-  use rt_parameters, ONLY:iIons,nIons
-#endif
   implicit none
 #ifndef WITHOUTMPI
   include 'mpif.h'
@@ -959,31 +872,32 @@ subroutine mech_fine_mpi(ilevel)
   real(dp)::dx,dx_loc,scale,vol_loc
   real(dp)::mloadSN_i,zloadSN_i,ploadSN_i(1:3),mSN_i,xSN_i(1:3),fload_i
   real(dp)::f_esn2,d_nei,Z_nei,Z_neisol,f_w_cell,f_w_crit,nH_nei,dratio
-  real(dp)::num_sn,vload,Tk,Zdepen=1d0,vol_nei,dm_ejecta
-  real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
-  real(dp)::scale_msun,msun2g=2d33, pvar(1:ndim+3+512),etot0
+  real(dp)::num_sn,vload,Tk,vol_nei,dm_ejecta
+  real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_kms
+  real(dp)::scale_msun,msun2g=1.989d33, pvar(1:nvarMHD),etot0
   real(dp)::skip_loc(1:3),d,u,v,w,ekk,eth,d0,u0,v0,w0,eth0,ekk0,Tk0,ekk_ej,T2min
   integer::igrid,icell,ilevel,ilevel2,irad,ii,ich
   real(dp),dimension(1:twotondim,1:ndim),save::xc
-  logical(dp),dimension(1:nvector,1:nSNnei),save ::snowplough
-#ifdef RT
-  real(dp),dimension(1:nIons),save::xion
-#endif
+  logical,allocatable,dimension(:,:)::snowplough
   real(dp),dimension(1:nchem),save::chloadSN_i
   real(dp)::rSt_i,dx_loc_pc,psn_tr,chi_tr,psn_thor98,psn_geen15,fthor
-  real(dp)::km2cm=1d5,M_SN_var,boost_geen_ad=0d0,p_hydro,vload_rad,f_wrt_snow
-  real(dp)::frac_ref ! refinement variable in fraction
+  real(dp)::km2cm=1d5,M_SNII_var,boost_geen_ad=0d0,p_hydro,vload_rad,f_wrt_snow
+  ! fractional abundances ; for ionisation fraction and ref, etc
+  real(dp),dimension(1:NVAR),save::fractions ! not compatible with delayed cooling
+  integer::i_fractions,idim
+  real(dp)::emag
 
   if(ndim.ne.3) return
 
-  snowplough = .false.
+  ! starting index for passive variables except for imetal and chem
+  i_fractions = imetal+nchem+1
 
   !============================================================
   ! For MPI communication
   !============================================================
   ncpu_send=0;ncpu_recv=0
 
-  ncomm_SN_cpu=0
+  ncomm_SN_cpu=0 
   ncomm_SN_mpi=0
   ncomm_SN_mpi(myid)=ncomm_SN
   ! compute the total number of communications needed
@@ -997,9 +911,9 @@ subroutine mech_fine_mpi(ilevel)
 
   ! index for mpi variable
   if(myid==1)then
-     isend_sta = 0
+     isend_sta = 0 
   else
-     isend_sta = sum(ncomm_SN_cpu(1:myid-1))
+     isend_sta = sum(ncomm_SN_cpu(1:myid-1)) 
   endif
 
   icpuSN_comm=0
@@ -1027,7 +941,7 @@ subroutine mech_fine_mpi(ilevel)
      list2send=icpuSN_comm_mpi(isend_sta+1:isend_sta+ncell_send,2)
      ncpu_send=1
      if(ncell_send>1) call redundant_non_1d (list2send,ncell_send,ncpu_send)
-     ! ncpu_send = No. of cpus to which myid should send info
+     ! ncpu_send = No. of cpus to which myid should send info 
      allocate( reqsend  (1:ncpu_send) )
      allocate( statsend (1:MPI_STATUS_SIZE,1:ncpu_send) )
      reqsend=0; statsend=0
@@ -1041,18 +955,18 @@ subroutine mech_fine_mpi(ilevel)
      j=0
      do i=1,nSN_tot
         if(icpuSN_comm_mpi(i,2).eq.myid)then
-           j=j+1
+           j=j+1 
            list2recv(j) = icpuSN_comm_mpi(i,1)
         endif
      end do
-
+ 
      ncc = j
      if(ncc.ne.ncell_recv)then ! sanity check
         write(*,*) 'Error in mech_fine_mpi: ncc != ncell_recv',ncc,ncell_recv,myid
         call clean_stop
      endif
 
-     ncpu_recv=1 ! No. of cpus from which myid should receive info
+     ncpu_recv=1 ! No. of cpus from which myid should receive info 
      if(j>1) call redundant_non_1d(list2recv,ncc,ncpu_recv)
 
      allocate( reqrecv  (1:ncpu_recv) )
@@ -1086,7 +1000,7 @@ subroutine mech_fine_mpi(ilevel)
 
         tag = myid + cpu2send + ncc
         call MPI_ISEND (SNsend(1:nvarSN,1:ncc),ncc*nvarSN,MPI_DOUBLE_PRECISION, &
-                      & cpu2send-1,tag,MPI_COMM_WORLD,reqsend(icpu),info)
+                      & cpu2send-1,tag,MPI_COMM_WORLD,reqsend(icpu),info) 
      end do ! icpu
 
   endif ! ncell_send>0
@@ -1106,12 +1020,12 @@ subroutine mech_fine_mpi(ilevel)
         end do
         irecv_end=irecv_sta+ncc-1
         tag = myid + cpu2recv + ncc
-
+        
         call MPI_IRECV (SNrecv(1:nvarSN,irecv_sta:irecv_end),ncc*nvarSN,MPI_DOUBLE_PRECISION,&
                      & cpu2recv-1,tag,MPI_COMM_WORLD,reqrecv(icpu),info)
 
         irecv_sta=irecv_end+1
-     end do ! icpu
+     end do ! icpu 
 
   endif ! ncell_recv >0
 
@@ -1126,7 +1040,8 @@ subroutine mech_fine_mpi(ilevel)
   ! Conversion factor from user units to cgs units
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
   scale_msun = scale_l**3*scale_d/msun2g
-
+  scale_kms  = scale_v/1d5
+ 
   ! Mesh variables
   call mesh_info (ilevel,skip_loc,scale,dx,dx_loc,vol_loc,xc)
   dx_loc_pc = dx_loc*scale_l/3.08d18
@@ -1135,7 +1050,8 @@ subroutine mech_fine_mpi(ilevel)
   if(ncell_recv>0) then
      allocate(p_solid(1:np,1:nSNnei))
      allocate(ek_solid(1:np,1:nSNnei))
-     p_solid=0d0;ek_solid=0d0
+     allocate(snowplough(1:np,1:nSNnei))
+     p_solid=0d0;ek_solid=0d0;snowplough=.false.
   endif
 
   ! Compute the momentum first before redistributing mass
@@ -1149,9 +1065,9 @@ subroutine mech_fine_mpi(ilevel)
      num_sn     = SNrecv(11,i)
      ek_solid(i,:) = SNrecv(10,i)/dble(nSNnei) ! kinetic energy of the gas mass entrained from the host cell + SN
      if(metal) ZloadSN_i = SNrecv(12,i)/SNrecv(5,i)
-     if(mechanical_geen.and.rt) rSt_i = SNrecv(13,i) ! Stromgren sphere in pc
+     if(mechanical_geen.and.rt) rSt_i = SNrecv(13,i) ! Stromgren sphere in pc 
 
-     M_SN_var = mSN_i*scale_msun/num_sn
+     M_SNII_var = mSN_i*scale_msun/num_sn
 
      do j=1,nSNnei
         call get_icell_from_pos (xSN_i+xSNnei(1:3,j)*dx, ilevel+1, igrid, icell,ilevel2)
@@ -1172,13 +1088,12 @@ subroutine mech_fine_mpi(ilevel)
            f_w_cell = (mloadSN_i/dble(nSNnei) + d_nei*vol_loc/8d0)/dm_ejecta - 1d0
            nH_nei   = d_nei*scale_nH*dratio
            Z_neisol = max(0.01,Z_nei/0.02)
-           Zdepen   = Z_neisol**(expZ_SN*2d0) !From Thornton+(98)
 
            ! transition mass loading factor (momentum conserving phase)
            ! psn_tr = sqrt(2*chi_tr*Nsn*Esn*Msn*fe)
            ! chi_tr = (1+f_w_crit)
            psn_thor98   = A_SN * num_sn**(expE_SN) * nH_nei**(expN_SN) * Z_neisol**(expZ_SN)  !km/s Msun
-           psn_tr       = psn_thor98
+           psn_tr       = psn_thor98 
            if(mechanical_geen)then
               ! For snowplough phase, psn_tr will do the job
               psn_geen15= A_SN_Geen * num_sn**(expE_SN) * Z_neisol**(expZ_SN)  !km/s Msun
@@ -1193,24 +1108,24 @@ subroutine mech_fine_mpi(ilevel)
               ! For adiabatic phase
               ! psn_tr =  A_SN * (E51 * boost_geen)**expE_SN_boost * nH_nei**(expN_SN_boost) * Z_neisol**(expZ_SN)
               !        =  p_hydro * boost_geen**expE_SN_boost
-              p_hydro = A_SN * num_sn**(expN_SN_boost) * nH_nei**(expN_SN_boost) * Z_neisol**(expZ_SN)
+              p_hydro = A_SN * num_sn**(expE_SN_boost) * nH_nei**(expN_SN_boost) * Z_neisol**(expZ_SN)
               boost_geen_ad = (psn_tr / p_hydro)**(1d0/expE_SN_boost)
               boost_geen_ad = max(boost_geen_ad-1d0,0.0)
            endif
-           chi_tr   = psn_tr**2d0 / (2d0 * num_sn * (E_SNII/msun2g/km2cm**2d0) * M_SN_var * f_ESN)
+           chi_tr   = psn_tr**2d0 / (2d0 * num_sn**2d0 * (E_SNII/msun2g/km2cm**2d0) * M_SNII_var * f_ESN)
            !          (Msun*km/s)^2                 (Msun *km2/s2)              (Msun)
            f_w_crit = max(chi_tr-1d0, 0d0)
-
+ 
            !f_w_crit = (A_SN/1d4)**2d0/(f_ESN*M_SNII)*num_sn**((expE_SN-1d0)*2d0)*nH_nei**(expN_SN*2d0)*Zdepen - 1d0
            !f_w_crit = max(0d0,f_w_crit)
 
-           vload_rad = dsqrt(2d0*f_ESN*E_SNII*(1d0+f_w_crit)/(M_SN_var*msun2g))/(1d0+f_w_cell)/scale_v/f_LOAD/f_PCAN
+           vload_rad = dsqrt(2d0*f_ESN*E_SNII*(1d0+f_w_crit)/(M_SNII_var*msun2g))/(1d0+f_w_cell)/scale_v/f_LOAD/f_PCAN
            if(f_w_cell.ge.f_w_crit)then ! radiative phase
               vload = vload_rad
               snowplough(i,j)=.true.
            else ! adiabatic phase
               f_esn2 = 1d0-(1d0-f_ESN)*f_w_cell/f_w_crit
-              vload = dsqrt(2d0*f_esn2*E_SNII/(1d0+f_w_cell)/(M_SN_var*msun2g))/scale_v/f_LOAD
+              vload = dsqrt(2d0*f_esn2*E_SNII/(1d0+f_w_cell)/(M_SNII_var*msun2g))/scale_v/f_LOAD
               if(mechanical_geen) then
                  f_wrt_snow = 2d0-2d0/(1d0+exp(-f_w_cell/f_w_crit/0.30))
                  boost_geen_ad = boost_geen_ad * f_wrt_snow
@@ -1224,7 +1139,7 @@ subroutine mech_fine_mpi(ilevel)
            p_solid(i,j)=(1d0+f_w_cell)*dm_ejecta*vload
            ek_solid(i,j)=ek_solid(i,j)+p_solid(i,j)*(vload*f_LOAD)/2d0 !ek
         endif
-
+       
      enddo ! loop over neighboring cells
 
   end do
@@ -1244,51 +1159,42 @@ subroutine mech_fine_mpi(ilevel)
      end do
 
      do j=1,nSNnei
-
+ 
         call get_icell_from_pos (xSN_i(1:3)+xSNnei(1:3,j)*dx, ilevel+1, igrid, icell, ilevel2)
         if(cpu_map(father(igrid))==myid)then
 
            vol_nei = vol_loc*(2d0**ndim)**(ilevel-ilevel2)
            if(ilevel>ilevel2)then ! touching level-1 cells
-              pvar(1:5) = unew(icell,1:5)
-              if(metal) pvar(imetal) = unew(icell,imetal)
-              do ich=1,nchem
-                 pvar(ichem+ich-1) = unew(icell,ichem+ich-1)
-              end do
-#if NENER>0
-              do irad=1,nener
-                 pvar(ndim+2+irad) = unew(icell,ndim+2+irad)
-              end do
-#endif
+              pvar(1:nvarMHD) = unew(icell,1:nvarMHD)
            else
-              pvar(1:5) = uold(icell,1:5)
-              if(metal) pvar(imetal) = uold(icell,imetal)
-              do ich=1,nchem
-                 pvar(ichem+ich-1) = uold(icell,ichem+ich-1)
-              end do
-#if NENER>0
-              do irad=1,nener
-                 pvar(ndim+2+irad) = uold(icell,ndim+2+irad)
-              end do
-#endif
+              pvar(1:nvarMHD) = uold(icell,1:nvarMHD)
            endif
-
+           do ii=i_fractions,nvar
+              fractions(ii)=pvar(ii)/pvar(1)
+           enddo
+     
+           emag=0.0d0
+#ifdef SOLVERmhd
+           do idim=1,ndim
+              emag=emag+0.125d0*(pvar(idim+ndim+2)+pvar(idim+nvar))**2
+           enddo
+#endif
            d0=pvar(1)
            u0=pvar(2)/d0
            v0=pvar(3)/d0
            w0=pvar(4)/d0
            ekk0=0.5d0*d0*(u0**2d0 + v0**2d0 + w0**2d0)
-           eth0=pvar(5)-ekk0
+           eth0=pvar(5)-ekk0-emag
 #if NENER>0
            do irad=1,nener
               eth0 = eth0 - pvar(ndim+2+irad)
            end do
 #endif
            Tk0 = eth0/d0*scale_T2*(gamma-1)
-           T2min = T2_star*(d0*scale_nH/n_star)**g_star
+           T2min = T2_star*(d0*scale_nH/n_star)**(g_star-1.0)
            if(Tk0<T2min)then
               eth0 = T2min*d0/scale_T2/(gamma-1)
-           endif
+           endif 
 
            d= mloadSN_i   /dble(nSNnei)/vol_nei
            u=(ploadSN_i(1)/dble(nSNnei)+p_solid(i,j)*vSNnei(1,j))/vol_nei/d
@@ -1300,7 +1206,7 @@ subroutine mech_fine_mpi(ilevel)
            pvar(3)=pvar(3)+d*v
            pvar(4)=pvar(4)+d*w
            ekk_ej = 0.5*d*(u**2 + v**2 + w**2)
-           etot0  = eth0+ekk0+ek_solid(i,j)/vol_nei  ! additional energy from SNe+entrained gas
+           etot0  = eth0+ekk0+emag+ek_solid(i,j)/vol_nei  ! additional energy from SNe+entrained gas
 
            ! the minimum thermal energy input floor
            d   = pvar(1)
@@ -1309,7 +1215,7 @@ subroutine mech_fine_mpi(ilevel)
            w   = pvar(4)/d
            ekk = 0.5*d*(u**2 + v**2 + w**2)
 
-           pvar(5) = max(etot0, ekk+eth0)
+           pvar(5) = max(etot0, ekk+eth0+emag)
 
 #if NENER>0
            do irad=1,nener
@@ -1318,74 +1224,22 @@ subroutine mech_fine_mpi(ilevel)
 #endif
 
            if(metal)then
-               pvar(imetal)=pvar(imetal)+mloadSN_i/dble(nSNnei)*ZloadSN_i/vol_nei
+              pvar(imetal)=pvar(imetal)+mloadSN_i/dble(nSNnei)*ZloadSN_i/vol_nei
            end if
            do ich=1,nchem
-               pvar(ichem+ich-1)=pvar(ichem+ich-1)+mloadSN_i/dble(nSNnei)*chloadSN_i(ich)/vol_nei
+              pvar(ichem+ich-1)=pvar(ichem+ich-1)+mloadSN_i/dble(nSNnei)*chloadSN_i(ich)/vol_nei
+           end do
+           do ii=i_fractions,nvar
+              pvar(ii)=fractions(ii)*pvar(1)
            end do
 
            ! update the hydro variable
            if(ilevel>ilevel2)then ! touching level-1 cells
-#ifdef RT
-              do ii=0,nIons-1 ! get the ionisation fraction
-                 xion(ii+1)=unew(icell,iIons+ii)/unew(icell,1)
-              end do
-#endif
-              if(ivar_refine>5)then
-                 frac_ref=unew(icell,ivar_refine)/unew(icell,1)
-              endif
-
-              ! update now
-              unew(icell,1:5) = pvar(1:5)
-              if(metal) unew(icell,imetal) = pvar(imetal)
-              do ich=1,nchem
-                 unew(icell,ichem+ich-1) = pvar(ichem+ich-1)
-              end do
-#ifdef RT
-              do ii=0,nIons-1 ! put it back with the updated density
-                 unew(icell,iIons+ii)=unew(icell,1)*xion(ii+1)
-              end do
-#endif
-#if NENER>0
-              do irad=1,nener
-                 unew(icell,ndim+2+irad) = pvar(ndim+2+irad)
-              end do
-#endif
-              if(ivar_refine>5)then
-                 unew(icell,ivar_refine)=unew(icell,1)*frac_ref
-              endif
-
+              unew(icell,1:nvarMHD) = pvar(1:nvarMHD)
            else
-#ifdef RT
-              do ii=0,nIons-1 ! get the ionisation fraction
-                 xion(ii+1)=uold(icell,iIons+ii)/uold(icell,1)
-              end do
-#endif
-              if(ivar_refine>5)then
-                 frac_ref=uold(icell,ivar_refine)/uold(icell,1)
-              endif
-
-              ! update now
-              uold(icell,1:5) = pvar(1:5)
-              if(metal) uold(icell,imetal) = pvar(imetal)
-              do ich=1,nchem
-                 uold(icell,ichem+ich-1) = pvar(ichem+ich-1)
-              end do
-#ifdef RT
-              do ii=0,nIons-1 ! put it back with the updated density
-                 uold(icell,iIons+ii)=uold(icell,1)*xion(ii+1)
-              end do
-#endif
-#if NENER>0
-              do irad=1,nener
-                 uold(icell,ndim+2+irad) = pvar(ndim+2+irad)
-              end do
-#endif
-              if(ivar_refine>5)then
-                 uold(icell,ivar_refine)=uold(icell,1)*frac_ref
-              endif
+              uold(icell,1:nvarMHD) = pvar(1:nvarMHD)
            endif
-
+ 
         endif ! if this belongs to me
 
 
@@ -1396,7 +1250,7 @@ subroutine mech_fine_mpi(ilevel)
   deallocate(icpuSN_comm_mpi, icpuSN_comm)
   if(ncell_send>0) deallocate(list2send,SNsend,reqsend,statsend)
   if(ncell_recv>0) deallocate(list2recv,SNrecv,reqrecv,statrecv)
-  if(ncell_recv>0) deallocate(p_solid,ek_solid)
+  if(ncell_recv>0) deallocate(p_solid,ek_solid,snowplough)
 
   ncomm_SN=nSN_tot
 #endif
@@ -1405,24 +1259,24 @@ end subroutine mech_fine_mpi
 !################################################################
 !################################################################
 !################################################################
-subroutine get_number_of_sn2(birth_time,dteff,zp_star,id_star,mass0,nsn,done_star)
-  use amr_commons, ONLY:dp,M_SNII,eta_sn,sn2_real_delay
+subroutine get_number_of_sn2(birth_time,dteff,zp_star,id_star,mass0,mass_t,M_SNII_var,nsn,done_star)
+  use amr_commons, ONLY:dp,snII_freq,eta_sn,sn2_real_delay
   use random
   implicit none
-  real(kind=dp)::birth_time,zp_star,mass0,dteff ! birth_time in code, mass in Msun
+  real(kind=dp)::birth_time,zp_star,mass0,mass_t,dteff ! birth_time in code, mass in Msun
   real(kind=dp)::nsn
-  integer::nsn_tot,nsn_sofar
+  integer::nsn_tot,nsn_sofar,nsn_age2
   integer::i,localseed,id_star   ! necessary for the random number
   real(kind=dp)::age1,age2,tMyr,xdum,ydum,logzpsun
-  real(kind=dp)::co0,co1,co2
+  real(kind=dp)::co0,co1,co2,M_SNII_var
   ! fit to the cumulative number fraction for Kroupa IMF
-  ! ~kimm/soft/starburst99/output_hires_new/snrate.pro
-  ! ~kimm/soft/starburst99/output_hires_new/fit.pro
-  ! ~kimm/soft/starburst99/output_hires_new/sc.pro
+  ! ~kimm/soft/starburst99/output_hires_new/snrate.pro 
+  ! ~kimm/soft/starburst99/output_hires_new/fit.pro 
+  ! ~kimm/soft/starburst99/output_hires_new/sc.pro 
   real(kind=dp),dimension(1:3)::coa=(/-2.677292E-01,1.392208E-01,-5.747332E-01/)
   real(kind=dp),dimension(1:3)::cob=(/4.208666E-02, 2.152643E-02, 7.893866E-02/)
   real(kind=dp),dimension(1:3)::coc=(/-8.612668E-02,-1.698731E-01,1.867337E-01/)
-  real(kind=dp),external::ran1
+  real(kind=dp),external::ran1 
   logical:: done_star
 
 
@@ -1450,31 +1304,37 @@ subroutine get_number_of_sn2(birth_time,dteff,zp_star,id_star,mass0,nsn,done_sta
   endif
 
   ! total number of SNe
-  nsn_tot   = NINT(mass0*(eta_sn/M_SNII),kind=4)
+  nsn_tot   = NINT(mass0*snII_freq,kind=4)
   if(nsn_tot.eq.0)then
       write(*,*) 'Fatal error: please increase the mass of your star particle'
       stop
   endif
 
-  nsn_sofar = 0
+  ! number of SNe up to this point
+  nsn_sofar = NINT((mass0-mass_t)/M_SNII_var,kind=4)
+  if(nsn_sofar.ge.nsn_tot)then
+     done_star=.true.
+     return
+  endif
+
   localseed = -abs(id_star) !make sure that the number is negative
 
+  nsn_age2 = 0
   do i=1,nsn_tot
      xdum =  ran1(localseed)
      ! inverse function for y=co0+sqrt(co1*x+co2)
      ydum = ((xdum-co0)**2.-co2)/co1
-     if(ydum.ge.age1.and.ydum.le.age2) then
-        nsn=nsn+1
-     endif
      if(ydum.le.age2)then
-        nsn_sofar=nsn_sofar+1
+        nsn_age2=nsn_age2+1
      endif
   end do
 
-  if(nsn_sofar.eq.nsn_tot) done_star=.true.
+  nsn_age2 = min(nsn_age2,nsn_tot)  ! just in case...
+  nsn = max(nsn_age2 - nsn_sofar, 0) 
+
+  if(nsn_age2.ge.nsn_tot) done_star=.true.
 
 end subroutine get_number_of_sn2
-!################################################################
 !################################################################
 !################################################################
 !################################################################
@@ -1486,7 +1346,7 @@ function ran1(idum)
             &NTAB=32,NDIV=1+(IM-1)/NTAB,EPS=1.2e-7,RNMX=1.-EPS)
    integer::j,k,iv(NTAB),iy
    save iv,iy
-   data iv /NTAB*0/, iy /0/
+   data iv /NTAB*0/, iy /0/ 
    if (idum.le.0.or.iy.eq.0) then! initialize
       idum=max(-idum,1)
       do j=NTAB+8,1,-1
@@ -1533,7 +1393,7 @@ subroutine redundant_non_1d(list,ndata,ndata2)
    integer::ndata,i,y1,ndata2
 
    ! sort first
-   call heapsort(list,ind,ndata)
+   call heapsort(list,ind,ndata) 
 
    list(:)=list(ind)
 
@@ -1667,14 +1527,14 @@ subroutine get_icell_from_pos (fpos,ilevel_max,ind_grid,ind_cell,ilevel_out)
   skip_loc(2)=dble(jcoarse_min)
   skip_loc(3)=dble(kcoarse_min)
   scale=boxlen/dble(nx_loc)
-
+ 
   fpos2=fpos
-  if (fpos2(1).gt.boxlen) fpos2(1)=fpos2(1)-boxlen
-  if (fpos2(2).gt.boxlen) fpos2(2)=fpos2(2)-boxlen
-  if (fpos2(3).gt.boxlen) fpos2(3)=fpos2(3)-boxlen
-  if (fpos2(1).lt.0d0) fpos2(1)=fpos2(1)+boxlen
-  if (fpos2(2).lt.0d0) fpos2(2)=fpos2(2)+boxlen
-  if (fpos2(3).lt.0d0) fpos2(3)=fpos2(3)+boxlen
+  if (fpos2(1).gt.1d0) fpos2(1)=fpos2(1)-1d0
+  if (fpos2(2).gt.1d0) fpos2(2)=fpos2(2)-1d0
+  if (fpos2(3).gt.1d0) fpos2(3)=fpos2(3)-1d0
+  if (fpos2(1).lt.0d0) fpos2(1)=fpos2(1)+1d0
+  if (fpos2(2).lt.0d0) fpos2(2)=fpos2(2)+1d0
+  if (fpos2(3).lt.0d0) fpos2(3)=fpos2(3)+1d0
 
   not_found=.true.
   ind_grid =1  ! this is level=1 grid
@@ -1683,7 +1543,7 @@ subroutine get_icell_from_pos (fpos,ilevel_max,ind_grid,ind_cell,ilevel_out)
      dx = 0.5D0**ilevel_out
      x0 = xg(ind_grid,1:ndim)-dx-skip_loc  !left corner of *this* grid [0-1], not cell (in ramses, grid is basically a struture containing 8 cells)
 
-     ind  = 1
+     ind  = 1 
      do idim = 1,ndim
         i = int( (fpos2(idim) - x0(idim))/dx)
         ind = ind + i*2**(idim-1)
@@ -1703,13 +1563,13 @@ end subroutine get_icell_from_pos
 !################################################################
 subroutine SNII_yield (zp_star, ej_m, ej_Z, ej_chem)
   use amr_commons, ONLY:dp,nchem,chem_list
-  use hydro_parameters, ONLY:ichem
+  use hydro_parameters, ONLY:ichem 
   implicit none
   real(dp)::zp_star,ej_m,ej_Z,ej_chem(1:nchem)
 !-----------------------------------------------------------------
-! Notice that even if the name is 'yield',
+! Notice that even if the name is 'yield', 
 ! the return value is actually a metallicity fraction for simplicity
-! These numbers are based on the outputs from Starburst99
+! These numbers are based on the outputs from Starburst99 
 !                   (i.e. essentially Woosley & Weaver 95)
 !-----------------------------------------------------------------
   real(dp),dimension(1:5)::log_SNII_m, log_Zgrid, log_SNII_Z
@@ -1749,7 +1609,7 @@ subroutine SNII_yield (zp_star, ej_m, ej_Z, ej_chem)
 
   ej_Z = log_SNII_Z(izg)*fz + log_SNII_Z(izg+1)*(1d0-fz)
   ej_Z = 10d0**ej_Z
-
+ 
   do ich=1,nchem
       element_name=chem_list(ich)
       select case (element_name)
@@ -1783,3 +1643,24 @@ end subroutine SNII_yield
 !################################################################
 !################################################################
 !################################################################
+!################################################################
+subroutine binary_search(database,xtarget,ndata,i)
+   use amr_commons,ONLY:dp
+   implicit none 
+   integer::i,j,k
+   integer,intent(in)::ndata
+   real(dp),intent(in)::database(1:ndata),xtarget
+
+   i=1  
+   j=ndata
+   do   
+     k=(i+j)/2
+     if (xtarget<database(k)) then 
+         j=k  
+     else 
+         i=k  
+     end if
+     if (i+1>=j) exit 
+   end do
+
+end subroutine binary_search
