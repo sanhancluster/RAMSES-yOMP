@@ -206,7 +206,7 @@ subroutine update_time(ilevel)
   implicit none
 #ifndef WITHOUTMPI
   real(kind=8)::ttend
-  real(kind=8),save::ttstart=0
+  real(kind=8)::ttstart=0
 #endif
   integer::ilevel
 
@@ -580,8 +580,8 @@ SUBROUTINE getAgeGyr(t_birth_proper, age)
   implicit none
   real(dp):: t_birth_proper, age
   real(dp), parameter:: yr = 3.15569d+07
-  real(dp),save:: scale_t_Gyr
-  logical,save::scale_init=.false.
+  real(dp):: scale_t_Gyr
+  logical::scale_init=.false.
   real(dp):: scale_nH, scale_T2, scale_l, scale_d, scale_t, scale_v
   if( .not. scale_init) then
      ! The timescale has not been initialized
@@ -600,7 +600,7 @@ SUBROUTINE getAgeSec(t_birth_proper, age)
   use pm_commons
   implicit none
   real(dp):: t_birth_proper, age
-  real(dp),save:: scale_t_sec
+  real(dp):: scale_t_sec
   logical::scale_init=.false.
   real(dp):: scale_nH, scale_T2, scale_l, scale_d, scale_t, scale_v
   if( .not. scale_init) then

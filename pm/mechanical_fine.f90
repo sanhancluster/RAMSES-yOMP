@@ -125,9 +125,10 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   ! MC Tracer =================================================
   ! Reset tmpp array that contains the probability to be detached from the particle
   if (MC_tracer) then
+!$omp parallel private(igrid,npart1,ipart)
      do icpu=1,ncpu
         ! Loop over grids
-!$omp do private(igrid,npart1,ipart) schedule(dynamic,nchunk)
+!$omp do
         do jgrid=1,numbl(icpu,ilevel)
            if(icpu==myid)then
               igrid=active(ilevel)%igrid(jgrid)
@@ -144,7 +145,9 @@ subroutine mechanical_feedback_fine(ilevel,icount)
               end do
            end if
         end do
+!$omp end do nowait
      end do
+!$omp end parallel
   end if
   ! End MC Tracer
 
@@ -161,12 +164,24 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   endif
 
   ! Loop over cpus
+!$omp parallel private(ip,ind_grid,ind_pos_cell,nSNe,mSNe,pSNe,nphSNe,mchSNe,mZSNe,igrid,npart1,npart2,ipart,next_part, &
+!$omp & x0,m8,mz8,p8,n8,nph8,mch8,ok,ind_son,ind,iskip,ind_cell,mejecta,nsnII_star,mass0,mass_t,mfrac_snII, &
+!$omp & Zejecta,Zejecta_chem_II,M_SNII_var) reduction(+:nSNc,nsnII_tot) default(none) &
+!$omp & shared(ncpu,numbl,ilevel,myid,active,reception,numbp,xg,dx,skip_loc,headp,nextp,typep,use_initial_mass,mp0, &
+!$omp & scale_msun,mp,sn2_real_delay,tp,tyoung,snII_Zdep_yield,zp,snII_freq,yield,dteff,idp,done_star,xp,scale, &
+!$omp & ncoarse,ngridmax,son,vp,metal,MC_tracer,tmpp)
   do icpu=1,ncpu
-     igrid=headl(icpu,ilevel)
      ip=0
 
      ! Loop over grids
+!$omp do schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
+        if(icpu==myid)then
+           igrid=active(ilevel)%igrid(jgrid)
+        else
+           igrid=reception(icpu,ilevel)%igrid(jgrid)
+        end if
+
         npart1=numbp(igrid)  ! Number of particles in the grid
         npart2=0
 
@@ -203,7 +218,6 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                        mass0 = mp (ipart)*scale_msun
                     endif
                     mass_t = mp (ipart)*scale_msun
- 
 
                     ok=.false.
                     if(sn2_real_delay)then
@@ -339,79 +353,31 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                  nsnII_tot = nsnII_tot + nsnII_star
  
                  if(ip==nvector)then
+!$omp critical
                     call mech_fine(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
+!$omp end critical
                     ip=0
                  endif 
               endif
            enddo
-    
-    
         end if
      end do ! End loop over grids
-    
+!$omp end do nowait
      if (ip>0) then
+!$omp critical
         call mech_fine(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
+!$omp end critical
         ip=0
      endif
   end do ! End loop over cpus
+!$omp end parallel
 
-  do icpu=1,ncpu
-     if (MC_tracer) then
-        ! MC Tracer =================================================
+   if (MC_tracer) then
+      ! MC Tracer =================================================
+!$omp parallel private(igrid,npart1,ipart,next_part,rand,irand,new_xp)
+      do icpu=1,ncpu
         ! Loop over grids
-!$omp do private(igrid,npart1,ipart,next_part,rand,irand,new_xp)
-        do jgrid = 1, numbl(icpu, ilevel)
-           if(icpu==myid)then
-              igrid=active(ilevel)%igrid(jgrid)
-           else
-              igrid=reception(icpu,ilevel)%igrid(jgrid)
-           end if
-           npart1 = numbp(igrid)  ! Number of particles in the grid
-           ipart = headp(igrid)
-
-           ! Loop over tracer particles
-           do jpart = 1, npart1
-              next_part=nextp(ipart)
-
-              if (is_star_tracer(typep(ipart))) then
-                 ! Detach particle if required
-                 call ranf(ompseed, rand)
-
-                 ! Detach particles
-                 if (rand < tmpp(partp(ipart))) then
-                    typep(ipart)%family = FAM_TRACER_GAS
-
-                    ! Change here to tag the particle with the star id
-                    typep(ipart)%tag = typep(ipart)%tag + 1
-                    move_flag(ipart) = 1
-
-                    ! Detached, now decide where to move it
-                    call ranf(ompseed, rand)
-
-                    do idim = 1, ndim
-                       ! Draw number between 1 and nSNnei
-                       irand = floor(rand * nSNnei) + 1
-                       new_xp(idim) = xSNnei(idim, irand)*dx
-                    end do
-
-                    do idim = 1, ndim
-                       xp(ipart, idim) = xp(ipart, idim) + new_xp(idim)
-                    end do
-                 end if
-              end if
-              ipart = next_part ! Go to next particle
-           end do ! End loop over particles
-        end do ! End loop over grids
-!$omp end do nowait
-        ! End MC Tracer =============================================
-     end if
-  end do ! End loop over cpus
-
-  do icpu=1,ncpu
-     if (MC_tracer) then
-        ! MC Tracer =================================================
-        ! Loop over grids
-!$omp do private(igrid,npart1,ipart,next_part,rand,irand,new_xp)
+!$omp do
         do jgrid = 1, numbl(icpu, ilevel)
            if(icpu==myid)then
               igrid=active(ilevel)%igrid(jgrid)
@@ -456,8 +422,9 @@ subroutine mechanical_feedback_fine(ilevel,icount)
         end do ! End loop over grids
 !$omp end do nowait
         ! End MC Tracer =============================================
-     end if
-  end do ! End loop over cpus
+      end do ! End loop over cpus
+!$omp end parallel
+   end if
 
 
 #ifndef WITHOUTMPI
@@ -506,10 +473,10 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_kms
   real(dp)::scale_msun,msun2g=1.989d33
   real(dp)::skip_loc(1:3),Tk0,ekk0,eth0,etot0,T2min
-  real(dp),dimension(1:twotondim,1:ndim),save::xc
+  real(dp),dimension(1:twotondim,1:ndim)::xc
   ! Grid based arrays
-  real(dp),dimension(1:ndim,1:nvector),save::xc2
-  real(dp),dimension(1:nvector,1:nSNnei), save::p_solid,ek_solid
+  real(dp),dimension(1:ndim,1:nvector)::xc2
+  real(dp),dimension(1:nvector,1:nSNnei)::p_solid,ek_solid
   real(dp)::d_nei,Z_nei,Z_neisol,dm_ejecta,vol_nei
   real(dp)::mload,vload,Zload=0d0,f_esn2
   real(dp)::num_sn,nH_nei,f_w_cell,f_w_crit
@@ -518,16 +485,16 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
   real(dp)::d1,d2,d3,d4,d5,d6,dtot,pvar(1:nvarMHD)
   real(dp)::vturb,vth,Mach,sig_s2,dratio,mload_cen
   ! For stars affecting across the boundary of a cpu
-  integer, dimension(1:nSNnei),save::icpuSNnei
+  integer, dimension(1:nSNnei)::icpuSNnei
   integer ,dimension(1:nvector,0:twondim):: ind_nbor
-  logical,dimension(1:nvector,1:nSNnei),save ::snowplough
+  logical,dimension(1:nvector,1:nSNnei) ::snowplough
   real(dp),dimension(1:nvector)::rStrom ! in pc
   real(dp)::dx_loc_pc,psn_tr,chi_tr,psn_thor98,psn_geen15,fthor
   real(dp)::km2cm=1d5,M_SNII_var,boost_geen_ad=0d0,p_hydro,vload_rad,f_wrt_snow
   ! chemical abundance
   real(dp),dimension(1:nchem)::chload,z_ch
   ! fractional abundances ; for ionisation fraction and ref, etc
-  real(dp),dimension(1:NVAR),save::fractions ! not compatible with delayed cooling
+  real(dp),dimension(1:NVAR)::fractions ! not compatible with delayed cooling
   integer::i_fractions
   real(dp)::emag
 
