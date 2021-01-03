@@ -66,7 +66,8 @@ subroutine read_params
        & ,ic_mask_ivar,ic_mask_min,ic_mask_max,ic_mask_ptype,analytic_gas_profile
 #endif
   namelist/tracer_params/ MC_tracer,tracer,tracer_feed,tracer_feed_fmt,tracer_mass, &
-       tracer_first_balance_part_per_cell,tracer_first_balance_levelmin,tracer_per_cell,tracer_level
+       tracer_first_balance_part_per_cell,tracer_first_balance_levelmin,tracer_per_cell, &
+       tracer_level,no_init_gas_tracer
   ! MPI initialization
 #ifndef WITHOUTMPI
 #ifdef _OPENMP

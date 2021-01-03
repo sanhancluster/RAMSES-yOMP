@@ -50,6 +50,15 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
   real(dp)::ttsta,ttend
   logical::ok_star
 
+  ! MC Tracer =================================================
+  real(dp)::rand
+  real(dp)::new_xp(1:ndim)
+  integer :: irand
+  ! End MC Tracer =============================================
+
+  integer,dimension(1:IRandNumSize),save :: ompseed
+!$omp threadprivate(ompseed)
+
   if(icount==2) return
   if(.not.hydro) return
   if(ndim.ne.3)  return
@@ -75,6 +84,32 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
   else
      dteff = dtnew(ilevel-1)
   endif
+
+  ! MC Tracer =================================================
+  ! Reset tmpp array that contains the probability to be detached from the particle
+  if (MC_tracer) then
+     do icpu=1,ncpu
+        ! Loop over grids
+!$omp do private(igrid,npart1,ipart) schedule(dynamic,nchunk)
+        do jgrid=1,numbl(icpu,ilevel)
+           if(icpu==myid)then
+              igrid=active(ilevel)%igrid(jgrid)
+           else
+              igrid=reception(icpu,ilevel)%igrid(jgrid)
+           end if
+           npart1=numbp(igrid)  ! Number of particles in the grid
+           ! Count star particles
+           if(npart1>0)then
+              ipart=headp(igrid)
+              do jpart=1,npart1
+                 if(is_star(typep(ipart))) tmpp(ipart) = 0d0
+                 ipart=nextp(ipart)
+              end do
+           end if
+        end do
+     end do
+  end if
+  ! End MC Tracer
 
   ncomm_SN=0  ! important to initialize; number of communications (not SNe)
 #ifndef WITHOUTMPI
@@ -160,6 +195,7 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
 
                     ! subtract the mass return
                     mp(ipart)=mp(ipart)-mejecta
+                    if (MC_tracer) tmpp(ipart) = mejecta / mp(ipart)
 
                  endif
               endif
@@ -205,6 +241,58 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
         ip=0
      endif
 
+  end do ! End loop over cpus
+
+  do icpu=1,ncpu
+     if (MC_tracer) then
+        ! MC Tracer =================================================
+        ! Loop over grids
+!$omp do private(igrid,npart1,ipart,next_part,rand,irand,new_xp)
+        do jgrid = 1, numbl(icpu, ilevel)
+           if(icpu==myid)then
+              igrid=active(ilevel)%igrid(jgrid)
+           else
+              igrid=reception(icpu,ilevel)%igrid(jgrid)
+           end if
+           npart1 = numbp(igrid)  ! Number of particles in the grid
+           ipart = headp(igrid)
+
+           ! Loop over tracer particles
+           do jpart = 1, npart1
+              next_part=nextp(ipart)
+
+              if (is_star_tracer(typep(ipart))) then
+                 ! Detach particle if required
+                 call ranf(ompseed, rand)
+
+                 ! Detach particles
+                 if (rand < tmpp(partp(ipart))) then
+                    typep(ipart)%family = FAM_TRACER_GAS
+
+                    ! Change here to tag the particle with the star id
+                    typep(ipart)%tag = typep(ipart)%tag + 1
+                    move_flag(ipart) = 1
+
+                    ! Detached, now decide where to move it
+                    call ranf(ompseed, rand)
+
+                    do idim = 1, ndim
+                       ! Draw number between 1 and nSNnei
+                       irand = floor(rand * nSNnei) + 1
+                       new_xp(idim) = xSNnei(idim, irand)*dx
+                    end do
+
+                    do idim = 1, ndim
+                       xp(ipart, idim) = xp(ipart, idim) + new_xp(idim)
+                    end do
+                 end if
+              end if
+              ipart = next_part ! Go to next particle
+           end do ! End loop over particles
+        end do ! End loop over grids
+!$omp end do nowait
+        ! End MC Tracer =============================================
+     end if
   end do ! End loop over cpus
 
 
@@ -277,7 +365,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
   real(dp)::emag
 
   ! starting index for passive variables except for imetal and chem
-  i_fractions = imetal+nchem+1
+  i_fractions = ichem+nchem
 
   ! Conversion factor from user units to cgs units
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)

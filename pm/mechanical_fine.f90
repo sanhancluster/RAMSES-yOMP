@@ -347,7 +347,6 @@ subroutine mechanical_feedback_fine(ilevel,icount)
     
     
         end if
-        igrid=next(igrid)   ! Go to next grid
      end do ! End loop over grids
     
      if (ip>0) then
@@ -385,6 +384,58 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                     ! Change here to tag the particle with the star id
                     typep(ipart)%tag = typep(ipart)%tag + 1
                     move_flag(ipart) = 1
+
+                    ! Detached, now decide where to move it
+                    call ranf(ompseed, rand)
+
+                    do idim = 1, ndim
+                       ! Draw number between 1 and nSNnei
+                       irand = floor(rand * nSNnei) + 1
+                       new_xp(idim) = xSNnei(idim, irand)*dx
+                    end do
+
+                    do idim = 1, ndim
+                       xp(ipart, idim) = xp(ipart, idim) + new_xp(idim)
+                    end do
+                 end if
+              end if
+              ipart = next_part ! Go to next particle
+           end do ! End loop over particles
+        end do ! End loop over grids
+!$omp end do nowait
+        ! End MC Tracer =============================================
+     end if
+  end do ! End loop over cpus
+
+  do icpu=1,ncpu
+     if (MC_tracer) then
+        ! MC Tracer =================================================
+        ! Loop over grids
+!$omp do private(igrid,npart1,ipart,next_part,rand,irand,new_xp)
+        do jgrid = 1, numbl(icpu, ilevel)
+           if(icpu==myid)then
+              igrid=active(ilevel)%igrid(jgrid)
+           else
+              igrid=reception(icpu,ilevel)%igrid(jgrid)
+           end if
+           npart1 = numbp(igrid)  ! Number of particles in the grid
+           ipart = headp(igrid)
+
+           ! Loop over tracer particles
+           do jpart = 1, npart1
+              next_part=nextp(ipart)
+
+              if (is_star_tracer(typep(ipart))) then
+                 ! Detach particle if required
+                 call ranf(ompseed, rand)
+
+                 ! Detach particles
+                 if (rand < tmpp(partp(ipart))) then
+                    typep(ipart)%family = FAM_TRACER_GAS
+
+                    ! Change here to tag the particle with the star id
+                    typep(ipart)%tag = typep(ipart)%tag + 1
+                    move_flag(ipart) = 0
 
                     ! Detached, now decide where to move it
                     call ranf(ompseed, rand)
@@ -481,7 +532,7 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
   real(dp)::emag
 
   ! starting index for passive variables except for imetal and chem
-  i_fractions = imetal+nchem+1
+  i_fractions = ichem+nchem
 
   ! Conversion factor from user units to cgs units
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
