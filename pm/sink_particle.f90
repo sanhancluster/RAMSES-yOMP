@@ -2945,7 +2945,9 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
   use hydro_commons
   use cooling_module, ONLY: rhoc, mH, twopi
   use random, ONLY:IRandNumSize
+#ifdef _OPENMP
   use omp_lib
+#endif
   ! AGNRT
 #ifdef RT
   use rt_parameters,only: nGroups, iGroups, group_egy, rt_AGN

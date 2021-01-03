@@ -172,6 +172,9 @@ subroutine stellar_winds_fine(ilevel)
   use amr_commons
   use pm_commons
   use hydro_commons
+#ifdef _OPENMP
+   use omp_lib
+#endif
   implicit none
   integer::ilevel
   !------------------------------------------------------------------------
@@ -187,9 +190,49 @@ subroutine stellar_winds_fine(ilevel)
   integer,dimension(1:nvector)::ind_grid,ind_part,ind_grid_part,ind_cell
   logical::ok_star
 
+  real(dp)::rand
+  integer,dimension(1:IRandNumSize),save :: ompseed
+!$omp threadprivate(ompseed)
+
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
   if(ndim.ne.3) return
+
+#ifdef _OPENMP
+!$omp parallel
+    ! Give slight offsets for each OMP threads
+    ompseed=MOD(tracer_seed+omp_get_thread_num()+1,4096)
+!$omp end parallel
+#else
+    ompseed=MOD(tracer_seed+1,4096)
+#endif
+    call ranf(tracer_seed,rand)
+
+  ! MC Tracer =================================================
+  ! Reset tmpp array that contains the probability to be detached from the particle
+  if (MC_tracer) then
+     do icpu=1,ncpu
+        ! Loop over grids
+!$omp do private(igrid,npart1,ipart) schedule(dynamic,nchunk)
+        do jgrid=1,numbl(icpu,ilevel)
+           if(icpu==myid)then
+              igrid=active(ilevel)%igrid(jgrid)
+           else
+              igrid=reception(icpu,ilevel)%igrid(jgrid)
+           end if
+           npart1=numbp(igrid)  ! Number of particles in the grid
+           ! Count star particles
+           if(npart1>0)then
+              ipart=headp(igrid)
+              do jpart=1,npart1
+                 if(is_star(typep(ipart))) tmpp(ipart) = 0d0
+                 ipart=nextp(ipart)
+              end do
+           end if
+        end do
+     end do
+  end if
+  ! End MC Tracer
 
   ! Update the rest of the passive scales so that the fractional quantities are not changed
   ipvar=ichem+nchem
@@ -283,6 +326,43 @@ subroutine stellar_winds_fine(ilevel)
   end do 
 !$omp end parallel
   ! End loop over cpus
+
+
+  if (MC_tracer) then
+     ! MC Tracer =================================================
+     ! Detach tracer particles from stars
+!$omp parallel private(igrid,npart1,ipart,next_part,rand)
+     do icpu=1,ncpu
+        ! Loop over grids
+!$omp do
+        do jgrid=1,numbl(icpu,ilevel)
+           if(icpu==myid)then
+              igrid=active(ilevel)%igrid(jgrid)
+           else
+              igrid=reception(icpu,ilevel)%igrid(jgrid)
+           end if
+
+           npart1=numbp(igrid)  ! Number of particles in the grid
+           if(npart1>0)then
+              ipart=headp(igrid)
+              do jpart=1,npart1
+                 next_part=nextp(ipart)
+                 if(is_star_tracer(typep(ipart))) then
+                    call ranf(ompseed, rand)
+                    if (rand < tmpp(partp(ipart))) then
+                       typep(ipart)%family = FAM_TRACER_GAS
+                       typep(ipart)%tag = typep(ipart)%tag + 1
+                       move_flag(ipart) = 1
+                    end if
+                 end if
+                 ipart = next_part
+              end do
+           end if
+        end do
+!$omp end do nowait
+     end do
+!$omp end parallel
+  end if
 
   ! Update the rest of the passive scales so that the fractional quantities are not changed
 !$omp parallel do private(ngrid,ind_grid,iskip,ind_cell)
@@ -501,6 +581,7 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
      endif
      ! Reduce star particle mass
      mp(ind_part(j))=mp(ind_part(j))-mejecta
+     if(MC_tracer) tmpp(ind_part(j)) = mejecta / mp(ind_part(j))
   end do
 
   ! Update hydro variables due to feedback
