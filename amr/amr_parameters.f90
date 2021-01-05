@@ -276,14 +276,16 @@ module amr_parameters
   ! Stellar winds for yOMP
   logical::stellar_winds=.false.
   character(len=128)::stellar_winds_file='none'
-  character(LEN=2),dimension(1:8)::chem_list=(/'H ','O ','Fe','Mg','C ','N ','Si','S '/)
+  character(LEN=2),dimension(1:8)::chem_list=(/'H','O','Fe','Mg','C','N','Si','S'/)
   logical::SNII_zdep_yield=.false.  ! TypeII yields are computed according to metallicities base
   logical::no_wind_energy=.false.   ! Disable energy output from stellar winds
 
   ! SN Type Ia
   logical ::snIa=.false.
-  real(dp)::A_snIa=0.0013
-  real(dp)::E_SNIa=1d51
+  real(dp)::psi_DTD=2.35E-13        ! DTD amplitude (per yr Msol)
+  real(dp)::E_SNIa=1d51             ! SNIa energy release per explosion
+  real(dp)::t_ini_snIa=5d7          ! DTD lower cut
+  real(dp)::t_fin_snIa=1.37d10      ! DTD upper cut
 
   ! Output times
   real(dp),dimension(1:MAXOUT)::aout=1.1       ! Output expansion factors
