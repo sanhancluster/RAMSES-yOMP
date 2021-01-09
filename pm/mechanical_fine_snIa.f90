@@ -1238,7 +1238,7 @@ subroutine get_number_of_snIa (birth_time, dteff, id_star, mass0, nsnIa )
 
   t_ini = t_ini_snIa
   t_fin = t_fin_snIa
-  A_SNIa = psi_DTD * (log(t_fin) - log(t_ini)) * 1E9
+  A_SNIa = phi_snIa * (log(t_fin) - log(t_ini)) / 1d1
   A_DTD = 1d0 / (log(t_fin) - log(t_ini))
 
   nsnIa = 0d0

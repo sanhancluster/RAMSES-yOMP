@@ -580,14 +580,16 @@ SUBROUTINE getAgeGyr(t_birth_proper, age)
   implicit none
   real(dp):: t_birth_proper, age
   real(dp), parameter:: yr = 3.15569d+07
-  real(dp):: scale_t_Gyr
-  logical::scale_init=.false.
+  real(dp), save :: scale_t_Gyr
+  logical, save :: scale_init=.false.
   real(dp):: scale_nH, scale_T2, scale_l, scale_d, scale_t, scale_v
   if( .not. scale_init) then
      ! The timescale has not been initialized
      call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
+!$omp critical
      scale_t_Gyr = (scale_t/aexp**2)/yr/1.e9
      scale_init=.true.
+!$omp end critical
   endif
   age = (texp - t_birth_proper) * scale_t_Gyr
 END SUBROUTINE getAgeGyr
@@ -600,14 +602,16 @@ SUBROUTINE getAgeSec(t_birth_proper, age)
   use pm_commons
   implicit none
   real(dp):: t_birth_proper, age
-  real(dp):: scale_t_sec
-  logical::scale_init=.false.
+  real(dp), save :: scale_t_sec
+  logical, save :: scale_init=.false.
   real(dp):: scale_nH, scale_T2, scale_l, scale_d, scale_t, scale_v
   if( .not. scale_init) then
      ! The timescale has not been initialized
      call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
+!$omp critical
      scale_t_sec = (scale_t/aexp**2)
      scale_init=.true.
+!$omp end critical
   endif
   age = (texp - t_birth_proper) * scale_t_sec
 END SUBROUTINE getAgeSec
