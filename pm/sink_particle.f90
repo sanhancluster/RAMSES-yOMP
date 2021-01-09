@@ -3319,13 +3319,13 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
               ! TODO: deal with very low mach number
               if(mach.le.0.950d0)factor=factor/mach**2*(0.5d0*log((1d0+mach)/(1d0-mach))-mach)
               if(mach.ge.1.007d0)factor=factor/mach**2*(0.5d0*log(mach**2-1d0)+3.2d0)
-              DF_factor_add = DF_factor_add + factor * mp(ind_part(j)) / msink(isink)
               ! HP: updates on the gas DF
               dvdrag_norm = factor * ddt * vnorm_rel
               if ((dvdrag_norm/vnorm_rel .ge. 0.1) .and. (counter .le. 9)) then
                  ddt=0.1/(dvdrag_norm/vnorm_rel)*ddt
               end if
               factor = min(1/ddt, factor)
+              DF_factor_add = DF_factor_add + factor * mp(ind_part(j)) / msink(isink)
               !/HP
 
               do idim=1,ndim
@@ -6907,13 +6907,13 @@ subroutine get_drag_part(ilevel)
         else
            factor = 0
         end if
-        DF_factor(isink, itype+1) = factor
         ! At the first timestep, the dt hasn't been computed yet
         if (dtnew(ilevel) > 0) then
            factor = min(1/dtnew(ilevel), factor)
         else
            factor = 0
         end if
+        DF_factor(isink, itype+1) = factor
 
         do idim = 1, ndim
            vsink(isink, idim) = vsink(isink, idim) - factor*dtnew(ilevel)*vrel_sink(isink, idim, itype)
