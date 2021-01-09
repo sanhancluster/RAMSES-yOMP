@@ -2963,7 +2963,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
 #ifdef SOLVERmhd
   real(dp)::bx1,bx2,by1,by2,bz1,bz2
 #endif
-  real(dp)::dx,dx_loc,scale,vol_loc,weight,acc_mass,vol_cloud
+  real(dp)::dx,dx_loc,scale,vol_loc,weight,acc_mass,vol_cloud,DF_factor_add
   logical::error
   ! Grid based arrays
   real(dp),dimension(1:nvector,1:ndim)::x0
@@ -3319,7 +3319,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
               ! TODO: deal with very low mach number
               if(mach.le.0.950d0)factor=factor/mach**2*(0.5d0*log((1d0+mach)/(1d0-mach))-mach)
               if(mach.ge.1.007d0)factor=factor/mach**2*(0.5d0*log(mach**2-1d0)+3.2d0)
-              DF_factor_add = DF_factor_add + factor * mp(ind_part) / msink(isink)
+              DF_factor_add = DF_factor_add + factor * mp(ind_part(j)) / msink(isink)
               ! HP: updates on the gas DF
               dvdrag_norm = factor * ddt * vnorm_rel
               if ((dvdrag_norm/vnorm_rel .ge. 0.1) .and. (counter .le. 9)) then

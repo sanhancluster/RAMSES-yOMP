@@ -68,6 +68,9 @@ module pm_commons
   real(dp), allocatable, dimension(:)   :: tp       ! Birth epoch
   real(dp), allocatable, dimension(:,:) :: weightp  ! weight of cloud parts for sink accretion only
   real(dp), allocatable, dimension(:)   :: zp       ! Birth metallicity
+#ifdef NCHEM
+  real(dp), allocatable, dimension(:,:)   :: chp      ! Birth metallicity
+#endif
   real(dp), allocatable, dimension(:)   :: tmpp     ! Working array
   integer,  allocatable, dimension(:)   :: itmpp    ! Working array
   integer,  allocatable, dimension(:)   :: itmpp2   ! Working array

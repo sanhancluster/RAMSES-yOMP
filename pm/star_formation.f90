@@ -73,7 +73,7 @@ subroutine star_formation(ilevel)
 #if NENER>0
   integer::irad
 #endif
-#ifdef NCHEM
+#if NCHEM>0
   real(dp),dimension(1:nchem) :: chem1=0.0
   integer::iche
 #endif
@@ -397,7 +397,7 @@ subroutine star_formation(ilevel)
            tg=uold(ind_cell_new(i),5)*(gamma-1)*scale_T2
            if(metal) then
               zg=uold(ind_cell_new(i),imetal)
-#ifdef NCHEM
+#if NCHEM>0
               do iche=1,nchem
                  chem1(iche) = uold(ind_cell_new(i),ichem+iche-1)
               enddo
@@ -428,7 +428,7 @@ subroutine star_formation(ilevel)
 
            if (metal) then
               zp(ind_part(i)) = zg  ! Initial star metallicity
-#ifdef NCHEM
+#if NCHEM>0
               do iche=1,nchem
                  chp(ind_part(i),iche) = chem1(iche)  ! Initial chemical abudance
               enddo
