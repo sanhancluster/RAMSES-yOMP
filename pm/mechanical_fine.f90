@@ -1700,6 +1700,11 @@ subroutine SNII_yield (zp_star, ej_m, ej_Z, ej_chem)
   ! (generating code: https://github.com/JinsuRhee/RAMSES-yomp_FB)
   ! (or library/make_stellar_winds.pro)
   ! jinsu.rhee@yonsei.ac.kr // tskimm@yonsei.ac.kr
+  ! * all are represented in log-scale
+  ! log_SNII_m : ejecta mass from SNII
+  ! log_Zgrid : metallicity grid (assuming Zsun = 0.02 in Starburst99)
+  ! log_SNII_Z : metallicity fraction of the ejecta mass
+  ! log_SNII_H - log_SNII_Fe : chemical species fraction of the ejecta mass
   log_SNII_m =(/-0.80098803,-0.88534048,-0.91581461,-0.95459520,-1.00239394/)
   log_Zgrid  =(/-3.39793992,-2.39793992,-2.09691000,-1.69896996,-1.30103004/)
   log_SNII_Z =(/-0.97418137,-1.00545838,-1.01179919,-0.98548821,-1.00054797/)
