@@ -53,6 +53,14 @@ module amr_parameters
 #endif
   integer::nchunk=2  ! Size of OpenMP chunk size
 
+#ifndef NCHEM
+  integer,parameter :: nchem=0
+#else
+  integer,parameter :: nchem=NCHEM
+#endif
+  integer(kind=4),parameter::nvarSN=15+nchem
+
+
   ! Precompute powers of 2 in the right prec for hilbert curve (MT)
   ! Careful, starts at zero, so that powof2(0) == 1
   real(qdp),parameter,dimension(0:ndim*32-1) :: powof2 = (/ (2.0_qdp**ipower, ipower=0,ndim*32-1) /)
@@ -113,7 +121,8 @@ module amr_parameters
   integer::ncontrol=1         ! Write control variables
   integer::nremap=0           ! Load balancing frequency (0: never)
   integer,allocatable,dimension(:)::remap_pscalar
-  real(dp)::dtstop=0          ! Halt the simulation when dt is smaller than this value
+  real(dp)::dtstop=0d0        ! Halt the simulation when dt is smaller than this value
+  real(dp)::dtmax=-1d0        ! Maximum allowed dt for the simulation
 
   ! Output parameters
   logical::output=.true.      ! Write output files
@@ -263,6 +272,21 @@ module amr_parameters
   logical :: drag_part = .false. !activate the friction from stars/DM (HP)
   logical :: holdback = .true. ! Activate strict hold-back method to preserve max physical resolution
 
+
+  ! Stellar winds for yOMP
+  logical::stellar_winds=.false.
+  character(len=128)::stellar_winds_file='none'
+  character(LEN=2),dimension(1:8)::chem_list=(/'H ','O ','Fe','Mg','C ','N ','Si','S '/)
+  logical::SNII_zdep_yield=.false.  ! TypeII yields are computed according to metallicities base
+  logical::no_wind_energy=.false.   ! Disable energy output from stellar winds
+
+  ! SN Type Ia
+  logical ::snIa=.false.
+  real(dp)::phi_snIa=2.35E-3        ! DTD amplitude (per yr * 10^10 Msol), Maoz+ 2012
+  real(dp)::E_SNIa=1d51             ! SNIa energy release per explosion
+  real(dp)::t_ini_snIa=5d7          ! DTD lower cut
+  real(dp)::t_fin_snIa=1.37d10      ! DTD upper cut
+
   ! Output times
   real(dp),dimension(1:MAXOUT)::aout=1.1       ! Output expansion factors
   real(dp),dimension(1:MAXOUT)::tout=0.0       ! Output times
@@ -385,17 +409,14 @@ module amr_parameters
   ! Realistic time delay for individual star particle. t_sne is oldest age to consider if set:
   logical ::sn2_real_delay=.false.
   logical ::use_initial_mass=.false. ! read/write initial mass of particles
-  ! Activate mechanical feedback (cannot use with star_particle_winds):
-  integer :: mechanical_feedback=0
+  ! Activate mechanical feedback
+  logical :: mechanical_feedback=.false.
   logical :: mechanical_geen = .false.
   logical :: log_mfb=.false.
   logical :: log_mfb_mega=.false.
-  real(dp) :: A_SN=3d5
+  real(dp) :: A_SN=2.5d5
   real(dp) :: expN_SN=-2d0/17d0
   real(dp) :: A_SN_geen = 5d5
-  real(dp) :: expN_SN_boost = -0.15    ! parameter needed to make sure
-  real(dp) :: expE_SN_boost = 16./17.  ! that pSN_geen = A_SN_Geen during an adiabatic phase
-  real(dp) :: porosity = 1.0d0
 
   ! Trick to fill a spherical region with passive scalar
   integer  :: level_zoom=0       ! Zoom level
@@ -418,6 +439,13 @@ module amr_parameters
 !!$  real(dp)::n_gmc=1D-1
   ! Star particle mass in units of the number of SN:
   integer ::nsn2mass=-1
+  real(dp)::snII_freq=-1  ! SN II frequency per Msun: 0.01 for Kroupa
 
+
+#ifdef SOLVERmhd
+   integer,parameter::nvarMHD=NVAR+3
+#else
+   integer,parameter::nvarMHD=NVAR
+#endif
 
 end module amr_parameters

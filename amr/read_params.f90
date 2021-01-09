@@ -36,7 +36,7 @@ subroutine read_params
        & ,nrestart,nrestart_seek,ncontrol,nstepmax,nsubcycle,load_weights,part_univ_cost,exact_timer,nremap,ordering &
        & ,bisec_tol,static,overload,cost_weighting,aton,nrestart_quad,restart_remap &
        & ,static_dm,static_gas,static_stars,convert_birth_times,use_proper_time,remap_pscalar &
-       & ,dtstop,magic_number,nchunk
+       & ,dtstop,magic_number,nchunk,dtmax
   namelist/output_params/output,noutput,foutput,aout,tout &
        & ,tend,delta_tout,aend,delta_aout,gadget_output,walltime_hrs,minutes_dump &
        & ,early_stop_hrs,dump_stop,foutput_timer,wallstep
@@ -66,7 +66,8 @@ subroutine read_params
        & ,ic_mask_ivar,ic_mask_min,ic_mask_max,ic_mask_ptype,analytic_gas_profile
 #endif
   namelist/tracer_params/ MC_tracer,tracer,tracer_feed,tracer_feed_fmt,tracer_mass, &
-       tracer_first_balance_part_per_cell,tracer_first_balance_levelmin,tracer_per_cell,tracer_level
+       tracer_first_balance_part_per_cell,tracer_first_balance_levelmin,tracer_per_cell, &
+       tracer_level,no_init_gas_tracer
   ! MPI initialization
 #ifndef WITHOUTMPI
 #ifdef _OPENMP

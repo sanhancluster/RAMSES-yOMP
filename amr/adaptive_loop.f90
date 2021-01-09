@@ -41,7 +41,7 @@ subroutine adaptive_loop
 #ifdef ATON
   if(aton)call init_radiation        ! Initialize radiation variables
 #endif
-  if(mechanical_feedback.eq.2) call init_mechanical
+  if(mechanical_feedback) call init_mechanical
   if(nrestart==0)call init_refine    ! Build initial AMR grid
 
 #ifdef grackle

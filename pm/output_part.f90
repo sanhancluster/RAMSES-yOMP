@@ -11,7 +11,7 @@ subroutine backup_part(filename, filename_desc)
 #endif
   character(len=80) :: filename, filename_desc
 
-  integer :: i, idim, unit_out, ipart
+  integer :: i, idim, unit_out, ipart, ich
   character(len=80) :: fileloc
   character(len=5) :: nchar
   real(dp), allocatable, dimension(:) :: xdp
@@ -227,7 +227,21 @@ subroutine backup_part(filename, filename_desc)
         end do
         call generic_dump("initial_mass", ivar, xdp, unit_out, dump_info, unit_info)
      endif
-
+     ! Write chemistry
+#ifdef NCHEM
+     if (nchem>0) then
+        do ich = 1, nchem
+           ipart = 0
+           do i = 1, npartmax
+              if (levelp(i) > 0) then
+                 ipart = ipart+1
+                 xdp(ipart) = chp(i,ich)
+              end if
+           end do
+           call generic_dump("chem_"//chem_list(ich), ivar, xdp, unit_out, dump_info, unit_info)
+        end do
+     end if
+#endif
      deallocate(xdp)
   end if
 

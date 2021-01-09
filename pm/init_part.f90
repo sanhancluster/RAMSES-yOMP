@@ -21,13 +21,14 @@
   ! Read particles positions and velocities from grafic files
   !------------------------------------------------------------
   integer::npart2,ndim2,ncpu2
-  integer::ipart,jpart,ipart_old,ilevel,idim
+  integer::ipart,jpart,ipart_old,ilevel,idim,ivar
   integer::i,j,igrid,ncache,ngrid,iskip
   integer::ind,ix,iy,iz,ilun,icpu
   integer::i1,i2,i3
   integer::i1_min=0,i1_max=0,i2_min=0,i2_max=0,i3_min=0,i3_max=0
   integer::buf_count,indglob
-  real(dp)::dx,xx1,xx2,xx3,vv1,vv2,vv3,mm1
+  real(dp)::dx,xx1,xx2,xx3,vv1,vv2,vv3,mm1,zz1,ttp1
+  integer(1)::ff1,tt1
   real(dp)::min_mdm_cpu,min_mdm_all
   real(dp),dimension(1:twotondim,1:3)::xc
   integer ,dimension(1:nvector)::ind_grid,ind_cell,ii
@@ -42,7 +43,7 @@
   real(dp),allocatable,dimension(:,:,:)::init_array,init_array_x
   integer(i8b),allocatable,dimension(:,:,:)::init_array_id
   real(kind=8),dimension(1:nvector,1:3)::xx,vv
-  real(kind=8),dimension(1:nvector)::mm
+  real(kind=8),dimension(1:nvector)::mm,zz,ttp
   type(part_t)::tmppart
   real(kind=8)::dispmax=0.0
 #ifndef WITHOUTMPI
@@ -143,6 +144,11 @@
         allocate(zp(npartmax))
         zp=0.0
      end if
+#ifdef NCHEM
+     if(nchem>0)then
+        allocate(chp(npartmax,1:nchem))
+     end if
+#endif
      if(use_initial_mass)then
         allocate(mp0(npartmax))
         mp0=0.0
@@ -271,6 +277,14 @@
            read(ilun)xdp
            mp0(1:npart2)=xdp
         endif
+#ifdef NCHEM
+        if(nchem>0)then
+           do ivar=1,nchem
+              read(ilun)xdp
+              chp(1:npart2,ivar)=xdp
+           end do
+        endif
+#endif
         deallocate(xdp)
      end if
 
@@ -471,6 +485,7 @@
   end if
 
   if(sink)call init_sink
+  if(star .and. stellar_winds)call init_stellar_winds
 
 
 contains
@@ -1124,7 +1139,7 @@ contains
           if(myid==1)then
              jpart=0
              do i=1,nvector
-                read(10,*,end=100)xx1,xx2,xx3,vv1,vv2,vv3,mm1
+                read(10,*,end=100)xx1,xx2,xx3,vv1,vv2,vv3,mm1,zz1,ttp1,ff1,tt1
                 jpart=jpart+1
                 indglob=indglob+1
                 xx(i,1)=xx1+boxlen/2.0
@@ -1134,9 +1149,11 @@ contains
                 vv(i,2)=vv2
                 vv(i,3)=vv3
                 mm(i  )=mm1
+                zz(i  )=zz1
+                ttp(i )=ttp1
                 ii(i  )=indglob
-                tmppart%family = FAM_DM
-                tmppart%tag    = 0
+                tmppart%family = ff1
+                tmppart%tag    = tt1
                 pp(i  )=part2int(tmppart)
              end do
 100          continue
@@ -1149,6 +1166,8 @@ contains
           call MPI_BCAST(mm,nvector  ,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,info)
           call MPI_BCAST(ii,nvector  ,MPI_INTEGER         ,0,MPI_COMM_WORLD,info)
           call MPI_BCAST(pp,nvector  ,MPI_INTEGER         ,0,MPI_COMM_WORLD,info)
+          call MPI_BCAST(zz,nvector  ,MPI_INTEGER         ,0,MPI_COMM_WORLD,info)
+          call MPI_BCAST(ttp,nvector ,MPI_INTEGER         ,0,MPI_COMM_WORLD,info)
           call MPI_BCAST(eof,1       ,MPI_LOGICAL         ,0,MPI_COMM_WORLD,info)
           call MPI_BCAST(jpart,1     ,MPI_INTEGER         ,0,MPI_COMM_WORLD,info)
           call cmp_cpumap(xx,cc,jpart)
@@ -1172,6 +1191,11 @@ contains
                 ! Get back the particle type from the communicated
                 ! shortened integer
                 typep(ipart) = int2part(pp(i))
+                if(is_star(typep(ipart)))then
+                   tp(ipart)=ttp(i)
+                   zp(ipart)=zz(i)
+                   nstar_tot=nstar_tot+1
+                end if
                 if(use_initial_mass) mp0(ipart) = mm(i)
 #ifndef WITHOUTMPI
              endif
@@ -1838,7 +1862,7 @@ contains
   !------------------------------------------------------------
   ! Create the tracer inplace by looping on the amr grid
   subroutine load_tracers_inplace
-    integer :: nx_loc, icpu, jgrid, igrid, j, icell, iskip
+    integer :: nx_loc, icpu, jgrid, igrid, j, icell, iskip, kpart, npart1
     integer :: ix, iy, iz, npart_tot
     real(dp) :: scale, dx, dx_loc, vol_loc, d
 
@@ -1898,70 +1922,108 @@ contains
        end if
     end if
 
-    ! Loop over levels
-    do ilevel = levelmin, nlevelmax
-       dx = 0.5_dp**(ilevel)
-       dx_loc = dx * scale
-       vol_loc = dx_loc**3
+    if(.not. no_init_gas_tracer) then
+       ! Loop over levels
+       do ilevel = levelmin, nlevelmax
+          dx = 0.5_dp**(ilevel)
+          dx_loc = dx * scale
+          vol_loc = dx_loc**3
 
-       do jgrid = 1, active(ilevel)%ngrid
-          igrid = active(ilevel)%igrid(jgrid)
-          ! Loop on cells
-          do ind = 1, twotondim
-             iskip = ncoarse + (ind-1) * ngridmax
-             icell = iskip + igrid
+          do jgrid = 1, active(ilevel)%ngrid
+             igrid = active(ilevel)%igrid(jgrid)
+             ! Loop on cells
+             do ind = 1, twotondim
+                iskip = ncoarse + (ind-1) * ngridmax
+                icell = iskip + igrid
 
-             ! Select leaf cells
-             if (son(icell) == 0) then
-                ! In zoomed region (if any)
-                if (ivar_refine > 0) then
-                   if (uold(icell, ivar_refine) / uold(icell, 1) < var_cut_refine) then
-                      cycle
+                ! Select leaf cells
+                if (son(icell) == 0) then
+                   ! In zoomed region (if any)
+                   if (ivar_refine > 0) then
+                      if (uold(icell, ivar_refine) / uold(icell, 1) < var_cut_refine) then
+                         cycle
+                      end if
                    end if
-                end if
 
-                ! Compute number of tracers to create
-                d = uold(icell, 1) * vol_loc
-                npart_loc_real = d / tracer_mass
-                npart_loc = int(npart_loc_real)
+                   ! Compute number of tracers to create
+                   d = uold(icell, 1) * vol_loc
+                   npart_loc_real = d / tracer_mass
+                   npart_loc = int(npart_loc_real)
 
-                ! The number of tracer is real, so we have to decide
-                ! whether the number is the floor or ceiling of the
-                ! real number.
-                call ranf(tracer_seed, rand)
+                   ! The number of tracer is real, so we have to decide
+                   ! whether the number is the floor or ceiling of the
+                   ! real number.
+                   call ranf(tracer_seed, rand)
 
-                if (rand < npart_loc_real-npart_loc) then
-                   npart_loc = npart_loc + 1
-                end if
-
-                ! Get cell position
-                xcell(:) = (xg(igrid, :) - skip_loc(:) + dx_cell(ind, :) * dx) * scale
-
-                ! Now create the right number of tracers
-                !
-                ! Note: we don't create the idp of the tracers here. See below.
-                do j = 1, npart_loc
-                   ipart = ipart+1
-                   if (ipart > npartmax) then
-                      write(*,*) 'Maximum number of particles incorrect'
-                      write(*,*) 'npartmax should be greater than', ipart, 'got', npartmax
-                      stop
+                   if (rand < npart_loc_real-npart_loc) then
+                      npart_loc = npart_loc + 1
                    end if
-                   xp(ipart, 1) = xcell(1)
-                   xp(ipart, 2) = xcell(2)
-                   xp(ipart, 3) = xcell(3)
 
-                   vp(ipart, :) = 0._dp
-                   mp(ipart) = tracer_mass
-                   levelp(ipart) = ilevel
-                   typep(ipart)%family = FAM_TRACER_GAS
-                end do
-             end if
+                   ! Get cell position
+                   xcell(:) = (xg(igrid, :) - skip_loc(:) + dx_cell(ind, :) * dx) * scale
+
+                   ! Now create the right number of tracers
+                   !
+                   ! Note: we don't create the idp of the tracers here. See below.
+                   do j = 1, npart_loc
+                      ipart = ipart+1
+                      if (ipart > npartmax) then
+                         write(*,*) 'Maximum number of particles incorrect'
+                         write(*,*) 'npartmax should be greater than', ipart, 'got', npartmax
+                         stop
+                      end if
+                      xp(ipart, 1) = xcell(1)
+                      xp(ipart, 2) = xcell(2)
+                      xp(ipart, 3) = xcell(3)
+
+                      vp(ipart, :) = 0._dp
+                      mp(ipart) = tracer_mass
+                      levelp(ipart) = ilevel
+                      typep(ipart)%family = FAM_TRACER_GAS
+                      typep(ipart)%tag = 0
+                   end do
+                end if
+             end do
+             ! Get next grid
           end do
-          ! Get next grid
+          ! End loop over active grids
+       end do ! End loop over levels
+    end if
+
+    ! attach tracers if there's any star particles
+    if(nstar_tot>0) then
+       do kpart = 1, npart
+          if(is_star(typep(kpart))) then
+             npart_loc_real = mp(kpart) / tracer_mass
+             npart_loc = int(npart_loc_real)
+
+             ! The number of tracer is real, so we have to decide
+             ! whether the number is the floor or ceiling of the
+             ! real number.
+             call ranf(tracer_seed, rand)
+
+             if (rand < npart_loc_real-npart_loc) then
+                npart_loc = npart_loc + 1
+             end if
+             do j = 1, npart_loc
+                ipart = ipart+1
+                if (ipart > npartmax) then
+                   write(*,*) 'Maximum number of particles incorrect'
+                   write(*,*) 'npartmax should be greater than', ipart, 'got', npartmax
+                   stop
+                end if
+                partp(ipart) = kpart
+                xp(ipart, :) = xp(kpart, :)
+                vp(ipart, :) = vp(kpart, :)
+                mp(ipart) = tracer_mass
+                levelp(ipart) = levelp(kpart)
+                typep(ipart)%family = FAM_TRACER_STAR
+                typep(ipart)%tag = 0
+                move_flag(ipart) = 1
+             end do
+          end if
        end do
-       ! End loop over active grids
-    end do ! End loop over levels
+    end if
 
     ! Store total number of particules
     npart = ipart

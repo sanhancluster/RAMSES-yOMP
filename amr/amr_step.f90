@@ -26,7 +26,10 @@ recursive subroutine amr_step(ilevel,icount)
   logical::ok_defrag,output_now_all,stop_next_all
   logical,save::first_step=.true.
   character(LEN=80)::str
+  real(dp)::scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2
 
+  ! Conversion factor from user units to cgs units
+  call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
   if(numbtot(1,ilevel)==0)return
 
   if(verbose)write(*,999)icount,ilevel
@@ -189,7 +192,7 @@ recursive subroutine amr_step(ilevel,icount)
   !-----------------------------------------------------------
   if(ilevel==levelmin)then
                                call timer('star - feedback','start')
-     if (hydro .and. star .and. eta_sn>0 .and. f_w>0 .and. mechanical_feedback==0) then
+     if (hydro .and. star .and. eta_sn>0 .and. f_w>0 .and. (.not.mechanical_feedback)) then
      !----------------------------------------------------
      ! Kinetic feedback
      !----------------------------------------------------
@@ -207,6 +210,28 @@ recursive subroutine amr_step(ilevel,icount)
         call create_sink
      end if
   endif
+
+  ! Mechanical feedback from stars
+                            call timer('star - feedback','start')
+
+  if(hydro.and.star.and. mechanical_feedback) then
+     call mechanical_feedback_fine(ilevel,icount)
+     if (snIa) call mechanical_feedback_snIa_fine(ilevel,icount)
+
+#ifdef SOLVERmhd
+     do ivar=1,nvar+3
+#else
+     do ivar=1,nvar
+#endif
+        call make_virtual_fine_dp(uold(1,ivar),ilevel)
+#ifdef SOLVERmhd
+     end do
+#else
+     end do
+#endif
+
+  endif
+
   !--------------------
   ! Poisson source term
   !--------------------
@@ -261,11 +286,6 @@ recursive subroutine amr_step(ilevel,icount)
      ! Compute gravitational acceleration
      call force_fine(ilevel,icount)
 
-     ! Mechanical feedback from stars
-                               call timer('star - feedback','start')
-     if(hydro.and.star.and.eta_sn>0 .and. mechanical_feedback==2) then
-        call mechanical_feedback_fine(ilevel,icount)
-     endif
 
      ! Synchronize remaining particles for gravity
      if(pic)then
@@ -325,6 +345,8 @@ recursive subroutine amr_step(ilevel,icount)
   if(rt .and. (rt_star .or. rt_AGN)) call update_star_RT_feedback(ilevel)
 #endif
 
+
+
   !----------------------
   ! Compute new time step
   !----------------------
@@ -371,11 +393,17 @@ recursive subroutine amr_step(ilevel,icount)
 
 #if NDIM==3
   ! Thermal feedback from stars (also call if no feedback, for bookkeeping)
-  if(hydro .and. star .and. f_w==0.0 .and. mechanical_feedback==0) then
+  if(hydro .and. star .and. f_w==0.0 .and. (.not.mechanical_feedback)) then
                                call timer('star - feedback','start')
-     call thermal_feedback(ilevel)
+     !call thermal_feedback(ilevel)
   endif
 #endif
+
+  ! Stellar winds from stars
+  if(hydro.and.star.and.stellar_winds) call stellar_winds_fine(ilevel)
+
+
+
 
   !-----------
   ! Hydro step
@@ -388,6 +416,8 @@ recursive subroutine amr_step(ilevel,icount)
 
      ! Reverse update boundaries
                                call timer('hydro - rev ghostzones','start')
+
+
 #ifdef SOLVERmhd
      do ivar=1,nvar+3
 #else

@@ -74,7 +74,7 @@ subroutine init_flow_fine(ilevel)
   integer ,dimension(1:nvector),save::ind_grid,ind_cell
 
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
-  real(dp)::dx,rr,vx,vy,vz,ek,ei,pp,xx1,xx2,xx3,dx_loc,scale,xval
+  real(dp)::dx,rr,vx,vy,vz,ek,ei,pp,xx1,xx2,xx3,dx_loc,scale,xval,z_chem
   real(dp),dimension(1:3)::skip_loc
   real(dp),dimension(1:twotondim,1:3)::xc
   real(dp),dimension(1:nvector)       ,save::vv
@@ -288,7 +288,15 @@ subroutine init_flow_fine(ilevel)
            if(ncache>0)then
               init_array=0d0
               ! Default value for metals
-              if(cosmo.and.ivar==imetal.and.metal)init_array=z_ave*0.02 ! from solar units
+              if(cosmo .and. metal) then
+                 if(ivar==imetal)init_array=z_ave*0.02 ! from solar units
+                 if(nchem>0)then
+                    if(ivar>=ichem .and. ivar<ichem+nchem) then
+                       call init_chem(ivar-ichem+1,z_chem)
+                       init_array=z_chem ! from solar units
+                    end if
+                 end if
+              end if
               ! Default value for ionization fraction
               if(cosmo)xval=sqrt(omega_m)/(h0/100.*omega_b) ! From the book of Peebles p. 173
               if(cosmo.and.ivar==ixion.and.aton)init_array=1.2d-5*xval
@@ -693,6 +701,47 @@ subroutine region_condinit(x,q,dx,nn)
 
   return
 end subroutine region_condinit
+
+subroutine init_chem(ich,z_chem)
+   ! This routine initializes chemical abundances to solar scaled value
+   use amr_commons
+   use hydro_commons
+   implicit none
+   integer::ilevel
+   integer::ich
+   real(dp)::z_ini,Yp
+   real(dp),intent(out)::z_chem
+   real(dp),dimension(1:7)::f_solar,m_solar
+   character(len=2)::element_name
+
+   Yp = 0.2477        ! Manuel & Luridiana 2007
+   z_ini = z_ave*0.02 ! Inital metal abundance
+   f_solar = (/0.16245322d0,0.04757141d0,0.39389979d0,0.0486535d0,0.04570737d0,&
+       &0.0212605d0,0.08884559d0/) ! Relative fraction to metalicity, from Asplund+ 2009
+
+   element_name=chem_list(ich)
+   select case (element_name)
+      case ('H ')
+         z_chem=1d0-Yp-z_ini
+      case ('C ')
+         z_chem=f_solar(1)*z_ini
+      case ('N ')
+         z_chem=f_solar(2)*z_ini
+      case ('O ')
+         z_chem=f_solar(3)*z_ini
+      case ('Mg')
+         z_chem=f_solar(4)*z_ini
+      case ('Si')
+         z_chem=f_solar(5)*z_ini
+      case ('S ')
+         z_chem=f_solar(6)*z_ini
+      case ('Fe')
+         z_chem=f_solar(7)*z_ini
+      case default
+         z_chem=0d0
+   end select
+
+end subroutine init_chem
 
 #ifdef DICE
 subroutine reset_uold(ilevel)

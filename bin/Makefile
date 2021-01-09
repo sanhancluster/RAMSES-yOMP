@@ -9,6 +9,7 @@ NENER = 0
 NGROUPS = 0
 NIONS = 0
 METALS = 1
+NCHEM = 0
 #Extra variables beyond those required by dimensions, or listed above
 NVAR_EXTRA = 1
 SOLVER = hydro
@@ -32,7 +33,7 @@ OPENMP = 1
 #PATCH = ../patch/debug
 #############################################################################
 # Compute the right value for NVAR
-NVAR := $(shell echo $$(($(NDIM) + 2 + $(NVAR_EXTRA) + $(NIONS) + $(NENER) + $(REFMASK)+ $(METALS) )) )
+NVAR := $(shell echo $$(($(NDIM) + 2 + $(NVAR_EXTRA) + $(NIONS) + $(NENER) + $(REFMASK)+ $(METALS) + $(NCHEM) )) )
 #############################################################################
 GITBRANCH = $(shell git rev-parse --abbrev-ref HEAD)
 GITHASH = $(shell git log --pretty=format:'%H' -n 1)
@@ -40,7 +41,7 @@ GITREMOTE = $(shell git config --get branch.$(GITBRANCH).remote)
 GITREPO = $(shell git config --get remote.$(GITREMOTE).url)
 BUILDDATE = $(shell date +"%D-%T")
 DEFINES = -DNVECTOR=$(NVECTOR) -DNDIM=$(NDIM) -DNPRE=$(NPRE) -DNENER=$(NENER) -DNVAR=$(NVAR) \
-          -DSOLVER$(SOLVER)
+          -DSOLVER$(SOLVER) -DNCHEM=$(NCHEM)
 ifeq ($(USE_OLD_MPI_INCLUDE),1)
 DEFINES += -DMPI_OLD
 endif
@@ -201,7 +202,7 @@ PMOBJ = init_part.o output_part.o rho_fine.o synchro_fine.o           \
         remove_list.o star_formation.o          \
         sink_particle.o feedback.o clump_finder.o clump_merger.o      \
         flag_formation_sites.o init_sink.o output_sink.o              \
-        mechanical_commons.o mechanical_fine.o
+        mechanical_commons.o mechanical_fine.o stellar_winds_fine.o
 # Poisson solver objects
 POISSONOBJ = init_poisson.o phi_fine_cg.o interpol_phi.o force_fine.o multigrid_coarse.o multigrid_fine_commons.o \
              multigrid_fine_fine.o multigrid_fine_coarse.o gravana.o boundary_potential.o rho_ana.o output_poisson.o

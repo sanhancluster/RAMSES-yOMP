@@ -453,7 +453,7 @@ subroutine make_sink(ilevel)
               x_tmp(izero_myid+ninc_omp,1)=(xg(ind_grid(i),1)+xc(ind,1)-skip_loc(1))*scale
               x_tmp(izero_myid+ninc_omp,2)=(xg(ind_grid(i),2)+xc(ind,2)-skip_loc(2))*scale
               x_tmp(izero_myid+ninc_omp,3)=(xg(ind_grid(i),3)+xc(ind,3)-skip_loc(3))*scale
-              dens_tmp(izero_myid+ninc_omp)=uold(ind_cell(i),1)
+              dens_tmp(izero_myid+ninc_omp)=uold(ind_cell(i),1) + rho_star(ind_cell(i))
               flag_tmp(izero_myid+ninc_omp)=1
               point2flag2(ninc_omp)=ind_cell(i) ! This is a local pointer that is not shared with other cpus
            end if
@@ -2573,7 +2573,10 @@ subroutine average_density(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   c2gas(1:np)=0.0D0
   do ind=1,twotondim
      do j=1,np
-        dgas(j)=dgas(j)+uold(indp(j,ind),1)*vol(j,ind)
+        ! prevent accretion when the cloud is outside zoom-in region
+        if(ivar_refine <= 0 .or. uold(indp(j,ind),ivar_refine)/uold(indp(j,ind),1) > var_cut_refine)then
+           dgas(j)=dgas(j)+uold(indp(j,ind),1)*vol(j,ind)
+        end if
         d=max(uold(indp(j,ind),1), smallr)
         u=uold(indp(j,ind),2)/d
         v=uold(indp(j,ind),3)/d
@@ -2944,7 +2947,9 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
   use hydro_commons
   use cooling_module, ONLY: rhoc, mH, twopi
   use random, ONLY:IRandNumSize
+#ifdef _OPENMP
   use omp_lib
+#endif
   ! AGNRT
 #ifdef RT
   use rt_parameters,only: nGroups, iGroups, group_egy, rt_AGN
@@ -3316,6 +3321,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
                  alpha=max((d/(d_boost/scale_nH))**boost_drag,1d0)
               end if
               factor=alpha * fudge * d*msink(isink)/cgas**2 / vnorm_rel
+              ! Drag force as a function of the Mach number, see Chapon+ 2013, Ostriker 1999
               ! TODO: deal with very low mach number
               if(mach.le.0.950d0)factor=factor/mach**2*(0.5d0*log((1d0+mach)/(1d0-mach))-mach)
               if(mach.ge.1.007d0)factor=factor/mach**2*(0.5d0*log(mach**2-1d0)+3.2d0)

@@ -86,8 +86,11 @@ subroutine read_hydro_params(nml_ok)
        & ,f_w,mass_gmc,kappa_IR,delayed_cooling,momentum_feedback &
        & ,A_SN,A_SN_geen,expN_SN,E_SNII,M_SNII,SF_kick_kms,SN_dT2_min &
        & ,log_mfb,log_mfb_mega,mechanical_feedback,mechanical_geen &
-       & ,nsn2mass,porosity,sn2_real_delay,sn_IC,sn_trelax &
-       & ,ir_feedback,ir_eff,t_diss,t_sne,mass_star_max,mass_sne_min
+       & ,nsn2mass,sn2_real_delay,sn_IC,sn_trelax &
+       & ,ir_feedback,ir_eff,t_diss,t_sne,mass_star_max,mass_sne_min &
+       & ,stellar_winds,stellar_winds_file,chem_list,snII_freq &
+       & ,snIa,E_SNIa,phi_snIa,t_ini_SNIa,t_fin_snIa,SNII_zdep_yield &
+       & ,use_initial_mass,no_wind_energy
 
   ! Cooling / basic chemistry parameters
   namelist/cooling_params/cooling,metal,isothermal,haardt_madau,J21 &
@@ -307,8 +310,8 @@ subroutine read_hydro_params(nml_ok)
   !--------------------------------------------------
   ! Check initial mass [TK]
   !--------------------------------------------------
-  if(sn2_real_delay)        use_initial_mass=.true. ! for continuous SN2
-  if(sn2_real_delay)        t_sne=50.             ! SNe explode up to 50 Myr.
+  if(sn2_real_delay.or.snIa) use_initial_mass=.true. ! for continuous SN2 or SNIa
+  if(sn2_real_delay)         t_sne=50.             ! SNe explode up to 50 Myr.
   !Note: t_sne<<50 would reduce the SN rate per particle if sn2_real_delay=.true.
 
   !-------------------------------------------------
@@ -344,7 +347,13 @@ subroutine read_hydro_params(nml_ok)
      stop
   endif
   if (eta_sn_ini .lt. 0) eta_sn = 0.0d0
-  if(myid==1) write(*,*) '>>> SN parameters: M_SNII, eta_sn, t_sne =',sngl(M_SNII), sngl(eta_sn), sngl(t_sne)
+  if(myid==1) then
+     if(SNII_zdep_yield)then
+        write(*,*) '>>> SN parameters: SNII_zdep_yield=.true.'
+     else
+        write(*,*) '>>> SN parameters: M_SNII, eta_sn, t_sne =',sngl(M_SNII), sngl(eta_sn), sngl(t_sne)
+     endif
+  endif
 
   !-------------------------------------------------
   ! This section deals with hydro boundary conditions
@@ -529,6 +538,10 @@ subroutine read_hydro_params(nml_ok)
      imetal=ipar
      ipar=ipar+1
   endif
+  if(nchem>0)then
+     ichem=ipar
+     ipar=ipar+nchem
+  end if
   if(dust)then
      idust=ipar
      ipar=ipar+1
@@ -557,6 +570,7 @@ subroutine read_hydro_params(nml_ok)
      write(*,*) '   inener   = ',inener
 #endif
      if(metal)           write(*,*) '   imetal   = ',imetal
+     if(nchem>0)         write(*,*) '   ichems   = ',ichem,'-',ichem+nchem-1
      if(dust)            write(*,*) '   idust    = ',idust
      if(delayed_cooling) write(*,*) '   idelay   = ',idelay
      if(sf_virial .and. sf_model /= 6)then
@@ -569,7 +583,7 @@ subroutine read_hydro_params(nml_ok)
 #ifdef RT
      if(rt) write(*,*) '   iIons    = ',ichem
 #endif
-     if(ivar_refine>0)write(*,*) '   refmask  = ',ivar_refine
+     if(ivar_refine>0)   write(*,*) '   refmask  = ',ivar_refine
      write(*,'(A50)')"__________________________________________________"
   endif
 

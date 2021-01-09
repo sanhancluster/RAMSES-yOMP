@@ -73,9 +73,9 @@ subroutine star_formation(ilevel)
 #if NENER>0
   integer::irad
 #endif
-#if NCHEM>0
-  real(dp),dimension(1:nchem) :: chem1=0.0
-  integer::iche
+#ifdef NCHEM
+  real(dp),dimension(1:nchem) :: chem1
+  integer::ich
 #endif
   ! Initial kick
   real(dp)::v_kick(1:3),v_kick_mag,kms
@@ -91,6 +91,7 @@ subroutine star_formation(ilevel)
   if(.not. hydro)return
   if(ndim.ne.3)return
   if(static)return
+  if(eps_star==0d0)return
 
   if(verbose)write(*,*)' Entering star_formation'
 
@@ -397,12 +398,13 @@ subroutine star_formation(ilevel)
            tg=uold(ind_cell_new(i),5)*(gamma-1)*scale_T2
            if(metal) then
               zg=uold(ind_cell_new(i),imetal)
-#if NCHEM>0
-              do iche=1,nchem
-                 chem1(iche) = uold(ind_cell_new(i),ichem+iche-1)
-              enddo
-#endif
            end if
+#ifdef NCHEM
+           chem1 = 0d0
+           do ich=1,nchem
+              chem1(ich) = uold(ind_cell_new(i),ichem+ich-1)
+           enddo
+#endif
 
            ! Set star particle variables
            tp(ind_part(i)) = birth_epoch  ! Birth epoch
@@ -428,12 +430,14 @@ subroutine star_formation(ilevel)
 
            if (metal) then
               zp(ind_part(i)) = zg  ! Initial star metallicity
-#if NCHEM>0
-              do iche=1,nchem
-                 chp(ind_part(i),iche) = chem1(iche)  ! Initial chemical abudance
-              enddo
-#endif
            end if
+#ifdef NCHEM
+           if(nchem>0) then
+              do ich=1,nchem
+                 chp(ind_part(i),ich) = chem1(ich)  ! Initial chemical abudance
+              enddo
+           end if
+#endif
 
            ! Random kick, added by Joki, Jan 19th 2016 -------------------
            if(SF_kick_kms .gt. 0d0) then
