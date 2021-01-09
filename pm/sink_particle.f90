@@ -2702,6 +2702,7 @@ subroutine grow_bondi(ilevel)
 
   ! Reset new sink variables
   msink_new=0d0; vsink_new=0d0; dMBH_coarse_new=0d0; dMEd_coarse_new=0d0; dMsmbh_new=0d0
+  DF_factor_new=0d0; DF_factor=0d0;
   ! AGNRT
 #ifdef RT
   if (rt_AGN) dMeff_coarse_new = 0.d0
@@ -2890,6 +2891,7 @@ subroutine grow_bondi(ilevel)
      call MPI_ALLREDUCE(dMBH_coarse_new,dMBH_coarse_all,nsinkmax,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,info)
      call MPI_ALLREDUCE(dMEd_coarse_new,dMEd_coarse_all,nsinkmax,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,info)
      call MPI_ALLREDUCE(dMsmbh_new     ,dMsmbh_all     ,nsinkmax,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,info)
+     call MPI_ALLREDUCE(DF_factor_new  ,DF_factor      ,nsinkmax*3,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,info)
 ! AGNRT
 #ifdef RT
      if(rt_AGN) call MPI_ALLREDUCE(dMeff_coarse_new,dMeff_coarse_all,nsinkmax,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,info)
@@ -3152,6 +3154,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
 
   ! Init temporal arrays
   dMBH_coarse_add=0d0; dMEd_coarse_add=0d0; dMsmbh_add=0d0; msink_add=0d0; vsink_add=0d0
+  DF_factor_add=0d0;
 
   ! Remove mass from hydro cells
   do j=1,np
@@ -3316,6 +3319,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
               ! TODO: deal with very low mach number
               if(mach.le.0.950d0)factor=factor/mach**2*(0.5d0*log((1d0+mach)/(1d0-mach))-mach)
               if(mach.ge.1.007d0)factor=factor/mach**2*(0.5d0*log(mach**2-1d0)+3.2d0)
+              DF_factor_add = DF_factor_add + factor * mp(ind_part) / msink(isink)
               ! HP: updates on the gas DF
               dvdrag_norm = factor * ddt * vnorm_rel
               if ((dvdrag_norm/vnorm_rel .ge. 0.1) .and. (counter .le. 9)) then
@@ -3433,6 +3437,9 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
 !$omp atomic update
      vsink_new(isink,idim)=vsink_new(isink,idim)+vsink_add(idim)
   end do
+!$omp atomic update
+  DF_factor_new(isink,1)=DF_factor_new(isink,1)+DF_factor_add
+
 end subroutine accrete_bondi
 !################################################################
 !################################################################
@@ -5110,6 +5117,9 @@ subroutine AGN_feedback
            !factor for fast moving stars/DM (see Chandrasekar+43)
            write(ilun) fact_fast_background(1:nsink, itype) / volume
 
+        end do
+        do itype = 1, 3
+           write(ilun) DF_factor(1:nsink, itype)
         end do
      end if
      !/HP: dynamical friction from particles
@@ -6897,6 +6907,7 @@ subroutine get_drag_part(ilevel)
         else
            factor = 0
         end if
+        DF_factor(isink, itype+1) = factor
         ! At the first timestep, the dt hasn't been computed yet
         if (dtnew(ilevel) > 0) then
            factor = min(1/dtnew(ilevel), factor)

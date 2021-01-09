@@ -152,13 +152,15 @@ subroutine init_sink
      allocate(n_partall(1:nsinkmax, 1:2))
      allocate(n_part(1:nsinkmax, levelmin:nlevelmax, 1:2))
      allocate(n_partnew_all(1:nsinkmax, levelmin:nlevelmax, 1:2))
+     allocate(DF_factor(1:nsinkmax, 1:3))
+     allocate(DF_factor_new(1:nsinkmax, 1:3))
 
      ! Set initial value to 0
      v_background=0; n_background=0; m_background=0; mass_lowspeed_background=0; fact_fast_background=0
      vrel_sink=0; vrel_sink_norm=0; v_DFnew=0; v_DFall=0; v_DF=0; v_DFnew_all=0; mass_DFnew=0
      mass_DFall=0; mass_DF=0; mass_DFnew_all=0; fact_fastnew=0; fact_fastall=0; fact_fast=0;
      fact_fastnew_all=0; mass_lowspeednew=0; mass_lowspeedall=0; mass_lowspeed=0; mass_lowspeednew_all=0
-     n_partnew=0; n_partall=0; n_part=0; n_partnew_all=0
+     n_partnew=0; n_partall=0; n_part=0; n_partnew_all=0; DF_factor=0; DF_factor_new=0
 
      ! This table is needed to properly fill the above one
      ! after a merger
