@@ -2705,7 +2705,7 @@ subroutine grow_bondi(ilevel)
 
   ! Reset new sink variables
   msink_new=0d0; vsink_new=0d0; dMBH_coarse_new=0d0; dMEd_coarse_new=0d0; dMsmbh_new=0d0
-  DF_factor_new=0d0; DF_factor=0d0;
+  DF_factor_new=0d0;
   ! AGNRT
 #ifdef RT
   if (rt_AGN) dMeff_coarse_new = 0.d0
@@ -3331,7 +3331,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
                  ddt=0.1/(dvdrag_norm/vnorm_rel)*ddt
               end if
               factor = min(1/ddt, factor)
-              DF_factor_add = DF_factor_add + factor * mp(ind_part(j)) / msink(isink)
+              DF_factor_add = DF_factor_add + factor * ddt * mp(ind_part(j)) / msink(isink)
               !/HP
 
               do idim=1,ndim
@@ -5127,6 +5127,7 @@ subroutine AGN_feedback
         do itype = 1, 3
            write(ilun) DF_factor(1:nsink, itype)
         end do
+        DF_factor=0d0
      end if
      !/HP: dynamical friction from particles
      write(ilun)t         ! Simulation time
@@ -6919,7 +6920,7 @@ subroutine get_drag_part(ilevel)
         else
            factor = 0
         end if
-        DF_factor(isink, itype+1) = factor
+        DF_factor(isink, itype+1) = DF_factor(isink, itype+1) + factor * dtnew(ilevel)
 
         do idim = 1, ndim
            vsink(isink, idim) = vsink(isink, idim) - factor*dtnew(ilevel)*vrel_sink(isink, idim, itype)
