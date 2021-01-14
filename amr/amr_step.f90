@@ -211,27 +211,6 @@ recursive subroutine amr_step(ilevel,icount)
      end if
   endif
 
-  ! Mechanical feedback from stars
-                            call timer('star - feedback','start')
-
-  if(hydro.and.star.and. mechanical_feedback) then
-     call mechanical_feedback_fine(ilevel,icount)
-     if (snIa) call mechanical_feedback_snIa_fine(ilevel,icount)
-
-#ifdef SOLVERmhd
-     do ivar=1,nvar+3
-#else
-     do ivar=1,nvar
-#endif
-        call make_virtual_fine_dp(uold(1,ivar),ilevel)
-#ifdef SOLVERmhd
-     end do
-#else
-     end do
-#endif
-
-  endif
-
   !--------------------
   ! Poisson source term
   !--------------------
@@ -286,6 +265,26 @@ recursive subroutine amr_step(ilevel,icount)
      ! Compute gravitational acceleration
      call force_fine(ilevel,icount)
 
+     ! Mechanical feedback from stars
+                               call timer('star - feedback','start')
+
+     if(hydro.and.star.and. mechanical_feedback) then
+        call mechanical_feedback_fine(ilevel,icount)
+        if (snIa) call mechanical_feedback_snIa_fine(ilevel,icount)
+
+   #ifdef SOLVERmhd
+        do ivar=1,nvar+3
+   #else
+        do ivar=1,nvar
+   #endif
+           call make_virtual_fine_dp(uold(1,ivar),ilevel)
+   #ifdef SOLVERmhd
+        end do
+   #else
+        end do
+   #endif
+
+     endif
 
      ! Synchronize remaining particles for gravity
      if(pic)then
@@ -400,6 +399,7 @@ recursive subroutine amr_step(ilevel,icount)
 #endif
 
   ! Stellar winds from stars
+                               call timer('star - feedback','start')
   if(hydro.and.star.and.stellar_winds) call stellar_winds_fine(ilevel)
 
 

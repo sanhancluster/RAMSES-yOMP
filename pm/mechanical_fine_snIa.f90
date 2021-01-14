@@ -32,18 +32,18 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
   integer::npart1,npart2,icpu,icount,idim,ip,ich
   integer::ind,ind_son,ind_cell,ilevel,iskip,info
   integer::nSNc,nSNc_mpi
-  integer,dimension(1:nvector),save::ind_grid,ind_pos_cell
+  integer,dimension(1:nvector)::ind_grid,ind_pos_cell
   real(dp)::nsnIa_star,mass0,nsnIa_tot,nsnIa_mpi
   real(dp)::current_time,dteff
   real(dp)::skip_loc(1:3),scale,dx,dx_loc,vol_loc,x0(1:3)
-  real(dp),dimension(1:twotondim,1:ndim),save::xc
+  real(dp),dimension(1:twotondim,1:ndim)::xc
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_msun
-  real(dp),dimension(1:twotondim),save::m8, mz8, n8, nph8 ! SNe
-  real(dp),dimension(1:twotondim,1:3),save:: p8  ! SNe
-  real(dp),dimension(1:nvector),save::nSNe, mSNe, mZSNe, nphSNe
-  real(dp),dimension(1:nvector,1:3),save::pSNe
-  real(dp),dimension(1:nvector,1:nchem),save::mchSNe
-  real(dp),dimension(1:twotondim,1:nchem),save::mch8 ! SNe
+  real(dp),dimension(1:twotondim)::m8, mz8, n8, nph8 ! SNe
+  real(dp),dimension(1:twotondim,1:3):: p8  ! SNe
+  real(dp),dimension(1:nvector)::nSNe, mSNe, mZSNe, nphSNe
+  real(dp),dimension(1:nvector,1:3)::pSNe
+  real(dp),dimension(1:nvector,1:nchem)::mchSNe
+  real(dp),dimension(1:twotondim,1:nchem)::mch8 ! SNe
   real(dp)::mejecta,mejecta_ch(1:nchem),Zejecta,M_SNIa_var
   real(dp),parameter::msun2g=1.989d33
   real(dp),parameter::myr2s=3.1536000d+13
@@ -127,10 +127,10 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
 !$omp & reduction(+:nSNc,nsnIa_tot) default(none) &
 !$omp & shared(ncpu,numbl,ilevel,myid,active,reception,numbp,xg,dx,skip_loc,headp,nextp,typep,use_initial_mass,mp0, &
 !$omp & scale_msun,mp,sn2_real_delay,tp,snII_Zdep_yield,zp,snII_freq,yield,dteff,idp,xp,scale, &
-!$omp & ncoarse,ngridmax,son,vp,metal,MC_tracer,tmpp,eta_sn,mejecta_Ia,Zejecta_chem_Ia)
+!$omp & ncoarse,ngridmax,son,vp,metal,MC_tracer,tmpp,eta_sn,mejecta_Ia,Zejecta_chem_Ia,next,headl)
   do icpu=1,ncpu
+!     igrid=headl(icpu,ilevel)
      ip=0
-
      ! Loop over grids
 !$omp do schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
@@ -209,8 +209,8 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
                     end do 
 
                     ! subtract the mass return
-                    mp(ipart)=mp(ipart)-mejecta
                     if (MC_tracer) tmpp(ipart) = mejecta / mp(ipart)
+                    mp(ipart)=mp(ipart)-mejecta
 
                  endif
               endif
@@ -238,26 +238,25 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
  
                  ! statistics
                  nSNc=nSNc+1
-                 nsnIa_tot=nsnIa_tot+nsnIa_star
+                 nsnIa_tot=nsnIa_tot+n8(ind)
                  if(ip==nvector)then
-!$omp critical
+!$omp critical(omp_sn)
                     call mech_fine_snIa(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
-!$omp end critical
+!$omp end critical(omp_sn)
                     ip=0
                  endif 
               endif
            enddo
         end if
+        igrid = next(igrid)
      end do ! End loop over grids
 !$omp end do nowait
-
      if (ip>0) then
-!$omp critical
+!$omp critical(omp_sn)
         call mech_fine_snIa(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
-!$omp end critical
+!$omp end critical(omp_sn)
         ip=0
      endif
-
   end do ! End loop over cpus
 !$omp end parallel
 
@@ -324,6 +323,7 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
   call MPI_ALLREDUCE(nsnIa_tot,nsnIa_mpi,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,info)
   nSNc = nSNc_mpi
   nsnIa_tot = nsnIa_mpi
+  nsnIa_comm = nsnIa_comm + nsnIa_tot
   if(myid.eq.1.and.nSNc>0.and.log_mfb) then
      ttend=MPI_WTIME(info)
      write(*,*) '--------------------------------------'
@@ -331,7 +331,6 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
      write(*,*) '--------------------------------------'
   endif
 #endif
-  nsnIa_comm = nsnIa_comm + nsnIa_tot
 
 end subroutine mechanical_feedback_snIa_fine
 !################################################################
@@ -383,6 +382,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
   real(dp),dimension(1:NVAR)::fractions ! not compatible with delayed cooling
   integer::i_fractions
   real(dp)::emag
+  real(dp),dimension(1:3)::fpos
 
   ! starting index for passive variables except for imetal and chem
   i_fractions = ichem+nchem
@@ -417,13 +417,14 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
      ind_cell = ncoarse+ind_grid(i)+(ind_pos_cell(i)-1)*ngridmax
 
      ! redistribute the mass/metals to the central cell
-     call get_icell_from_pos (xc2(1:3,i), ilevel+1, igrid, icell,ilevel2)
+     fpos(1:3) = xc2(1:3,i)
+     call get_icell_from_pos (fpos, ilevel+1, igrid, icell,ilevel2)
 
      ! Sanity Check
      if((cpu_map(father(igrid)).ne.myid).or.&
         (ilevel.ne.ilevel2).or.&
         (ind_cell.ne.icell))     then 
-        print *,'>>> fatal error in mech_fine'
+        print *,'>>> fatal error in mech_fine_Ia'
         print *, cpu_map(father(igrid)),myid
         print *, ilevel, ilevel2
         print *, ind_cell, icell
@@ -530,7 +531,8 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
      end do 
  
      do j=1,nSNnei
-        call get_icell_from_pos (xc2(1:3,i)+xSNnei(1:3,j)*dx, ilevel+1, igrid, icell,ilevel2)
+        fpos(1:3) = xc2(1:3,i)+xSNnei(1:3,j)*dx
+        call get_icell_from_pos (fpos, ilevel+1, igrid, icell,ilevel2)
         if(cpu_map(father(igrid)).eq.myid) then ! if belong to myid
 
            Z_nei = z_ave*0.02 ! For metal=.false. 
@@ -680,7 +682,8 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 
      nwco=0; icpuSNnei=0
      do j=1,nSNnei
-        call get_icell_from_pos (xc2(1:3,i)+xSNnei(1:3,j)*dx, ilevel+1, igrid, icell,ilevel2)
+        fpos(1:3) = xc2(1:3,i)+xSNnei(1:3,j)*dx
+        call get_icell_from_pos (fpos, ilevel+1, igrid, icell,ilevel2)
  
         if(cpu_map(father(igrid)).ne.myid) then ! need mpi
            nwco=nwco+1
@@ -852,6 +855,7 @@ subroutine mech_fine_snIa_mpi(ilevel)
   real(dp),dimension(1:NVAR),save::fractions ! not compatible with delayed cooling
   integer::i_fractions
   real(dp)::emag
+  real(dp),dimension(1:3)::fpos
 
   if(ndim.ne.3) return
 
@@ -1036,7 +1040,8 @@ subroutine mech_fine_snIa_mpi(ilevel)
      M_SNIa_var = mSN_i*scale_msun/num_sn
 
      do j=1,nSNnei
-        call get_icell_from_pos (xSN_i+xSNnei(1:3,j)*dx, ilevel+1, igrid, icell,ilevel2)
+        fpos(1:3) = xSN_i+xSNnei(1:3,j)*dx
+        call get_icell_from_pos (fpos, ilevel+1, igrid, icell,ilevel2)
         if(cpu_map(father(igrid)).eq.myid) then ! if belong to myid
            Z_nei = z_ave*0.02 ! for metal=.false.
            if(ilevel>ilevel2)then ! touching level-1 cells
@@ -1103,8 +1108,8 @@ subroutine mech_fine_snIa_mpi(ilevel)
      end do
 
      do j=1,nSNnei
- 
-        call get_icell_from_pos (xSN_i(1:3)+xSNnei(1:3,j)*dx, ilevel+1, igrid, icell, ilevel2)
+        fpos(1:3) = xSN_i(1:3)+xSNnei(1:3,j)*dx
+        call get_icell_from_pos (fpos, ilevel+1, igrid, icell, ilevel2)
         if(cpu_map(father(igrid))==myid)then
 
            vol_nei = vol_loc*(2d0**ndim)**(ilevel-ilevel2)
@@ -1252,6 +1257,5 @@ subroutine get_number_of_snIa (birth_time, dteff, id_star, mass0, nsnIa )
      xdum = ran1(localseed)
      ydum = exp(xdum / A_DTD + log(t_ini))/1d6
      if(ydum.ge.age1.and.ydum.le.age2) nsnIa = nsnIa + 1
-  end do 
-
+  end do
 end subroutine get_number_of_snIa

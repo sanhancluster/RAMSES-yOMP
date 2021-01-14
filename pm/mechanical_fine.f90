@@ -35,18 +35,18 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   integer::npart1,npart2,icpu,icount,idim,ip,ich
   integer::ind,ind_son,ind_cell,ilevel,iskip,info
   integer::nSNc,nSNc_mpi
-  integer,dimension(1:nvector),save::ind_grid,ind_pos_cell
+  integer,dimension(1:nvector)::ind_grid,ind_pos_cell
   real(dp)::nsnII_star,mass0,mass_t,nsnII_tot,nsnII_mpi
   real(dp)::tyoung,current_time,dteff
   real(dp)::skip_loc(1:3),scale,dx,dx_loc,vol_loc,x0(1:3)
-  real(dp),dimension(1:twotondim,1:ndim),save::xc
+  real(dp),dimension(1:twotondim,1:ndim)::xc
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_msun
-  real(dp),dimension(1:twotondim),save::m8, mz8, n8, nph8 ! SNe
-  real(dp),dimension(1:twotondim,1:3),save:: p8  ! SNe
-  real(dp),dimension(1:nvector),save::nSNe, mSNe, mZSNe, nphSNe
-  real(dp),dimension(1:nvector,1:3),save::pSNe
-  real(dp),dimension(1:nvector,1:nchem),save::mchSNe
-  real(dp),dimension(1:twotondim,1:nchem),save::mch8 ! SNe
+  real(dp),dimension(1:twotondim)::m8, mz8, n8, nph8 ! SNe
+  real(dp),dimension(1:twotondim,1:3):: p8  ! SNe
+  real(dp),dimension(1:nvector)::nSNe, mSNe, mZSNe, nphSNe
+  real(dp),dimension(1:nvector,1:3)::pSNe
+  real(dp),dimension(1:nvector,1:nchem)::mchSNe
+  real(dp),dimension(1:twotondim,1:nchem)::mch8 ! SNe
   real(dp)::mejecta,mejecta_ch(1:nchem),Zejecta,mfrac_snII
   real(dp)::snII_freq_noboost, M_SNII_var=0.0
   real(dp),parameter::msun2g=1.989d33
@@ -169,8 +169,9 @@ subroutine mechanical_feedback_fine(ilevel,icount)
 !$omp & Zejecta,Zejecta_chem_II,M_SNII_var) reduction(+:nSNc,nsnII_tot) default(none) &
 !$omp & shared(ncpu,numbl,ilevel,myid,active,reception,numbp,xg,dx,skip_loc,headp,nextp,typep,use_initial_mass,mp0, &
 !$omp & scale_msun,mp,sn2_real_delay,tp,tyoung,snII_Zdep_yield,zp,snII_freq,yield,dteff,idp,done_star,xp,scale, &
-!$omp & ncoarse,ngridmax,son,vp,metal,MC_tracer,tmpp)
+!$omp & ncoarse,ngridmax,son,vp,metal,MC_tracer,tmpp,next,headl)
   do icpu=1,ncpu
+!     igrid=headl(icpu,ilevel)
      ip=0
 
      ! Loop over grids
@@ -187,7 +188,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
 
         ! Count star particles
         if(npart1>0)then
-           do idim=1,ndim
+          do idim=1,ndim
               x0(idim) = xg(igrid,idim) -dx -skip_loc(idim) 
            end do
  
@@ -292,8 +293,8 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                     end do 
 
                     ! subtract the mass return
-                    mp(ipart)=mp(ipart)-mejecta
                     if (MC_tracer) tmpp(ipart) = mejecta / mp(ipart)
+                    mp(ipart)=mp(ipart)-mejecta
 
                     ! mark if we are done with this particle
                     if(sn2_real_delay) then
@@ -351,22 +352,22 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                  ! statistics
                  nSNc=nSNc+1
                  nsnII_tot = nsnII_tot + nsnII_star
- 
                  if(ip==nvector)then
-!$omp critical
+!$omp critical(omp_sn)
                     call mech_fine(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
-!$omp end critical
+!$omp end critical(omp_sn)
                     ip=0
                  endif 
               endif
            enddo
         end if
+!        igrid = next(igrid)
      end do ! End loop over grids
 !$omp end do nowait
      if (ip>0) then
-!$omp critical
+!$omp critical(omp_sn)
         call mech_fine(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
-!$omp end critical
+!$omp end critical(omp_sn)
         ip=0
      endif
   end do ! End loop over cpus
@@ -466,7 +467,7 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
   !-----------------------------------------------------------------------
   ! This routine is called by subroutine mechanical_feedback_fine 
   !-----------------------------------------------------------------------
-  integer::i,j,nwco,nwco_here,idim,icell,igrid,ista,iend,ilevel2
+  integer::i,j,k,nwco,nwco_here,idim,icell,igrid,ista,iend,ilevel2
   integer::ind_cell,ncell,irad,ii,ich
   real(dp)::d,u,v,w,e,z,eth,ekk,Tk,d0,u0,v0,w0,dteff
   real(dp)::dx,dx_loc,scale,vol_loc,nH_cen,fleftSN
@@ -497,6 +498,7 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
   real(dp),dimension(1:NVAR)::fractions ! not compatible with delayed cooling
   integer::i_fractions
   real(dp)::emag
+  real(dp),dimension(1:3)::fpos
 
   ! starting index for passive variables except for imetal and chem
   i_fractions = ichem+nchem
@@ -530,8 +532,11 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
   do i=1,np
      ind_cell = ncoarse+ind_grid(i)+(ind_pos_cell(i)-1)*ngridmax
 
+     do k=1,3
+        fpos(k) = xc2(k,i)
+     end do
      ! redistribute the mass/metals to the central cell
-     call get_icell_from_pos (xc2(1:3,i), ilevel+1, igrid, icell,ilevel2)
+     call get_icell_from_pos (fpos, ilevel+1, igrid, icell,ilevel2)
 
      ! Sanity Check
      if((cpu_map(father(igrid)).ne.myid).or.&
@@ -650,7 +655,10 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
      end do 
  
      do j=1,nSNnei
-        call get_icell_from_pos (xc2(1:3,i)+xSNnei(1:3,j)*dx, ilevel+1, igrid, icell,ilevel2)
+        do k=1,3
+           fpos(k) = xc2(k,i)+xSNnei(k,j)*dx
+        end do
+        call get_icell_from_pos (fpos, ilevel+1, igrid, icell,ilevel2)
         if(cpu_map(father(igrid)).eq.myid) then ! if belong to myid
 
            Z_nei = z_ave*0.02 ! For metal=.false. 
@@ -831,7 +839,10 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
 
      nwco=0; icpuSNnei=0
      do j=1,nSNnei
-        call get_icell_from_pos (xc2(1:3,i)+xSNnei(1:3,j)*dx, ilevel+1, igrid, icell,ilevel2)
+        do k=1,3
+           fpos(k) = xc2(k,i)+xSNnei(k,j)*dx
+        end do
+        call get_icell_from_pos (fpos, ilevel+1, igrid, icell,ilevel2)
  
         if(cpu_map(father(igrid)).ne.myid) then ! need mpi
            nwco=nwco+1
@@ -978,7 +989,7 @@ subroutine mech_fine_mpi(ilevel)
   implicit none
 #ifndef WITHOUTMPI
   include 'mpif.h'
-  integer::i,j,info,nSN_tot,icpu,ncpu_send,ncpu_recv,ncc
+  integer::i,j,k,info,nSN_tot,icpu,ncpu_send,ncpu_recv,ncc
   integer::ncell_recv,ncell_send,cpu2send,cpu2recv,tag,np
   integer::isend_sta,irecv_sta,irecv_end
   real(dp),dimension(:,:),allocatable::SNsend,SNrecv,p_solid,ek_solid
@@ -1003,6 +1014,7 @@ subroutine mech_fine_mpi(ilevel)
   real(dp),dimension(1:NVAR),save::fractions ! not compatible with delayed cooling
   integer::i_fractions,idim
   real(dp)::emag
+  real(dp),dimension(1:3)::fpos
 
   if(ndim.ne.3) return
 
@@ -1187,7 +1199,10 @@ subroutine mech_fine_mpi(ilevel)
      M_SNII_var = mSN_i*scale_msun/num_sn
 
      do j=1,nSNnei
-        call get_icell_from_pos (xSN_i+xSNnei(1:3,j)*dx, ilevel+1, igrid, icell,ilevel2)
+        do k=1,3
+           fpos(k) = xSN_i(k)+xSNnei(k,j)*dx
+        end do
+        call get_icell_from_pos (fpos, ilevel+1, igrid, icell,ilevel2)
         if(cpu_map(father(igrid)).eq.myid) then ! if belong to myid
            Z_nei = z_ave*0.02 ! for metal=.false.
            if(ilevel>ilevel2)then ! touching level-1 cells
@@ -1277,7 +1292,8 @@ subroutine mech_fine_mpi(ilevel)
 
      do j=1,nSNnei
  
-        call get_icell_from_pos (xSN_i(1:3)+xSNnei(1:3,j)*dx, ilevel+1, igrid, icell, ilevel2)
+        fpos(1:3) = xSN_i(1:3)+xSNnei(1:3,j)*dx
+        call get_icell_from_pos (fpos, ilevel+1, igrid, icell, ilevel2)
         if(cpu_map(father(igrid))==myid)then
 
            vol_nei = vol_loc*(2d0**ndim)**(ilevel-ilevel2)
@@ -1646,12 +1662,12 @@ subroutine get_icell_from_pos (fpos,ilevel_max,ind_grid,ind_cell,ilevel_out)
   scale=boxlen/dble(nx_loc)
  
   fpos2=fpos
-  if (fpos2(1).gt.1d0) fpos2(1)=fpos2(1)-1d0
-  if (fpos2(2).gt.1d0) fpos2(2)=fpos2(2)-1d0
-  if (fpos2(3).gt.1d0) fpos2(3)=fpos2(3)-1d0
-  if (fpos2(1).lt.0d0) fpos2(1)=fpos2(1)+1d0
-  if (fpos2(2).lt.0d0) fpos2(2)=fpos2(2)+1d0
-  if (fpos2(3).lt.0d0) fpos2(3)=fpos2(3)+1d0
+  if (fpos2(1).gt.boxlen) fpos2(1)=fpos2(1)-boxlen
+  if (fpos2(2).gt.boxlen) fpos2(2)=fpos2(2)-boxlen
+  if (fpos2(3).gt.boxlen) fpos2(3)=fpos2(3)-boxlen
+  if (fpos2(1).lt.0d0) fpos2(1)=fpos2(1)+boxlen
+  if (fpos2(2).lt.0d0) fpos2(2)=fpos2(2)+boxlen
+  if (fpos2(3).lt.0d0) fpos2(3)=fpos2(3)+boxlen
 
   not_found=.true.
   ind_grid =1  ! this is level=1 grid
