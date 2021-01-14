@@ -702,7 +702,9 @@ subroutine cmp_stellar_wind_props (birth_time,dteff, zstar,dfmloss, log_deloss_e
    dum1 = log_ceSW(itg2,izg  )*ft2 + log_ceSW(itg2+1,izg  )*(1d0-ft2)
    dum2 = log_ceSW(itg2,izg+1)*ft2 + log_ceSW(itg2+1,izg+1)*(1d0-ft2)
    ce2  = dum1*fz + dum2*(1d0-fz)
-   log_deloss_erg = log10(10d0**dble(ce2) - 10d0**dble(ce1) + 1d-50) 
+   if(ce1 < ce2) then
+      log_deloss_erg = log10(10d0**dble(ce2) - 10d0**dble(ce1) + 1d-50)
+   end if
 
    do ich=1,nchem
       ! mass loss fraction during [birth_time, birth_time+dteff]

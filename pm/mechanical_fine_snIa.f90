@@ -1209,7 +1209,7 @@ subroutine get_number_of_snIa (birth_time, dteff, id_star, mass0, nsnIa )
   integer ::id_star
   real(dp)::mass0 ! initial mass of a star particle in Msun
   real(dp)::nsnIa ! number of snIa
-  real(dp)::birth_time,dteff
+  real(dp)::birth_time,dteff,A_SNIa
 !-------------------------------------------------------------
 !	Use the inverse method to generate random numbers for snIa
 !-------------------------------------------------------------
@@ -1236,8 +1236,9 @@ subroutine get_number_of_snIa (birth_time, dteff, id_star, mass0, nsnIa )
   age1 = age1*1d3
   age2 = age2*1d3
 
-  t_ini = 50d6
-  t_fin = 1.37d10
+  t_ini = t_ini_snIa
+  t_fin = t_fin_snIa
+  A_SNIa = phi_snIa * (log(t_fin) - log(t_ini)) / 1d1
   A_DTD = 1d0 / (log(t_fin) - log(t_ini))
 
   nsnIa = 0d0
