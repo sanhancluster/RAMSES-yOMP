@@ -272,17 +272,17 @@ recursive subroutine amr_step(ilevel,icount)
         call mechanical_feedback_fine(ilevel,icount)
         if (snIa) call mechanical_feedback_snIa_fine(ilevel,icount)
 
-   #ifdef SOLVERmhd
+#ifdef SOLVERmhd
         do ivar=1,nvar+3
-   #else
+#else
         do ivar=1,nvar
-   #endif
+#endif
            call make_virtual_fine_dp(uold(1,ivar),ilevel)
-   #ifdef SOLVERmhd
+#ifdef SOLVERmhd
         end do
-   #else
+#else
         end do
-   #endif
+#endif
 
      endif
 
