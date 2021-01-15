@@ -125,29 +125,19 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   ! MC Tracer =================================================
   ! Reset tmpp array that contains the probability to be detached from the particle
   if (MC_tracer) then
-!$omp parallel private(igrid,npart1,ipart)
-     do icpu=1,ncpu
-        ! Loop over grids
-!$omp do
-        do jgrid=1,numbl(icpu,ilevel)
-           if(icpu==myid)then
-              igrid=active(ilevel)%igrid(jgrid)
-           else
-              igrid=reception(icpu,ilevel)%igrid(jgrid)
-           end if
-           npart1=numbp(igrid)  ! Number of particles in the grid
-           ! Count star particles
-           if(npart1>0)then
-              ipart=headp(igrid)
-              do jpart=1,npart1
-                 if(is_star(typep(ipart))) tmpp(ipart) = 0d0
-                 ipart=nextp(ipart)
-              end do
-           end if
-        end do
-!$omp end do nowait
+!$omp parallel do private(igrid,npart1,ipart)
+     do jgrid=1,active(ilevel)%ngrid
+        igrid=active(ilevel)%igrid(jgrid)
+        npart1=numbp(igrid)  ! Number of particles in the grid
+        ! Count star particles
+        if(npart1>0)then
+           ipart=headp(igrid)
+           do jpart=1,npart1
+              if(is_star(typep(ipart))) tmpp(ipart) = 0d0
+              ipart=nextp(ipart)
+           end do
+        end if
      end do
-!$omp end parallel
   end if
   ! End MC Tracer
 
@@ -169,262 +159,243 @@ subroutine mechanical_feedback_fine(ilevel,icount)
 !$omp & Zejecta,Zejecta_chem_II,M_SNII_var) reduction(+:nSNc,nsnII_tot) default(none) &
 !$omp & shared(ncpu,numbl,ilevel,myid,active,reception,numbp,xg,dx,skip_loc,headp,nextp,typep,use_initial_mass,mp0, &
 !$omp & scale_msun,mp,sn2_real_delay,tp,tyoung,snII_Zdep_yield,zp,snII_freq,yield,dteff,idp,done_star,xp,scale, &
-!$omp & ncoarse,ngridmax,son,vp,metal,MC_tracer,tmpp,next,headl)
-  do icpu=1,ncpu
-!     igrid=headl(icpu,ilevel)
+!$omp & ncoarse,ngridmax,son,vp,metal,MC_tracer,tmpp)
      ip=0
-
      ! Loop over grids
 !$omp do schedule(dynamic,nchunk)
-     do jgrid=1,numbl(icpu,ilevel)
-        if(icpu==myid)then
-           igrid=active(ilevel)%igrid(jgrid)
-        else
-           igrid=reception(icpu,ilevel)%igrid(jgrid)
-        end if
+  do jgrid = 1, active(ilevel)%ngrid
+     igrid=active(ilevel)%igrid(jgrid)
 
-        npart1=numbp(igrid)  ! Number of particles in the grid
-        npart2=0
+     npart1=numbp(igrid)  ! Number of particles in the grid
+     npart2=0
 
-        ! Count star particles
-        if(npart1>0)then
-          do idim=1,ndim
-              x0(idim) = xg(igrid,idim) -dx -skip_loc(idim) 
-           end do
- 
-           ipart=headp(igrid)
+     ! Count star particles
+     if(npart1>0)then
+       do idim=1,ndim
+           x0(idim) = xg(igrid,idim) -dx -skip_loc(idim)
+        end do
 
-           m8=0d0;mz8=0d0;p8=0d0;n8=0d0;nph8=0d0;mch8=0d0
-    
-           ! Loop over particles
-           do jpart=1,npart1
-              ! Save next particle   <--- Very important !!!
-              next_part=nextp(ipart)
+        ipart=headp(igrid)
+
+        m8=0d0;mz8=0d0;p8=0d0;n8=0d0;nph8=0d0;mch8=0d0
+
+        ! Loop over particles
+        do jpart=1,npart1
+           ! Save next particle   <--- Very important !!!
+           next_part=nextp(ipart)
 #ifdef POP3
-              if(pop3 .and. (zp(ipart).lt.Zcrit_pop3) ) then
-                 ok=.false. ! this will be done elsewhere
-                 done_star=.false.
-              else
+           if(pop3 .and. (zp(ipart).lt.Zcrit_pop3) ) then
+              ok=.false. ! this will be done elsewhere
+              done_star=.false.
+           else
 #endif
-                 nsnII_star=0d0
+              nsnII_star=0d0
 
-                 ! active star particles?
-                 ok = is_star_active(typep(ipart))    ! SanHan: check this out
-
-                 if(ok)then
-                    ! initial mass
-                    if(use_initial_mass) then
-                       mass0 = mp0(ipart)*scale_msun
-                    else
-                       mass0 = mp (ipart)*scale_msun
-                    endif
-                    mass_t = mp (ipart)*scale_msun
-
-                    ok=.false.
-                    if(sn2_real_delay)then
-                       if(tp(ipart).ge.tyoung)then  ! if younger than t_sne
-
-                          if(SNII_zdep_yield)then
-                             call SNII_yield (zp(ipart), mfrac_snII, Zejecta, Zejecta_chem_II)
-                             ! Adjust M_SNII mass not to double-count the mass loss from massive stars
-                             M_SNII_var = mfrac_snII / snII_freq ! ex) 0.1 / 0.01 = 10 Msun
-                          else
-                             Zejecta = zp(ipart)+(1d0-zp(ipart))*yield
-                          endif
-
-                          call get_number_of_sn2  (tp(ipart), dteff, zp(ipart), idp(ipart),&
-                                & mass0, mass_t, M_SNII_var, nsnII_star, done_star)
-                          if(nsnII_star>0)ok=.true.
-
-                       endif
-
-                    else ! single SN event
-                       if(tp(ipart).le.tyoung)then   ! if older than t_sne
-                          ok=.true.
-
-                          if(SNII_zdep_yield)then
-                             call SNII_yield (zp(ipart), mfrac_snII, Zejecta, Zejecta_chem_II)
-                             ! Adjust M_SNII mass not to double-count the mass loss from massive stars
-                             M_SNII_var = mfrac_snII / snII_freq ! ex) 0.1 / 0.05 = 2 Msun
-                          else
-                             Zejecta = zp(ipart)+(1d0-zp(ipart))*yield
-                          endif
-
-                          ! number of sn doesn't have to be an integer
-                          nsnII_star = mass0*snII_freq
-                       endif
-                    endif
-                 endif
-#ifdef POP3
-              endif
-#endif
+              ! active star particles?
+              ok = is_star_active(typep(ipart))    ! SanHan: check this out
 
               if(ok)then
-                 ! Find the cell index to get the position of it
-                 ind_son=1
-                 do idim=1,ndim
-                    ind = int((xp(ipart,idim)/scale - x0(idim))/dx)
-                    ind_son=ind_son+ind*2**(idim-1)
-                 end do 
-                 iskip=ncoarse+(ind_son-1)*ngridmax
-                 ind_cell=iskip+igrid
-                 if(son(ind_cell)==0)then  ! leaf cell
+                 ! initial mass
+                 if(use_initial_mass) then
+                    mass0 = mp0(ipart)*scale_msun
+                 else
+                    mass0 = mp (ipart)*scale_msun
+                 endif
+                 mass_t = mp (ipart)*scale_msun
 
-                    !----------------------------------
-                    ! For Type II explosions
-                    !----------------------------------
-                    ! total ejecta mass in code units
-                    mejecta = M_SNII_var/scale_msun*nsnII_star
+                 ok=.false.
+                 if(sn2_real_delay)then
+                    if(tp(ipart).ge.tyoung)then  ! if younger than t_sne
 
-                    ! number of SNII
-                    n8(ind_son) = n8(ind_son) + nsnII_star
-                    ! mass return from SNe
-                    m8 (ind_son)  = m8(ind_son) + mejecta
-                    ! momentum from the original star, not the one generated by SNe
-                    p8 (ind_son,1) = p8(ind_son,1) + mejecta*vp(ipart,1)
-                    p8 (ind_son,2) = p8(ind_son,2) + mejecta*vp(ipart,2)
-                    p8 (ind_son,3) = p8(ind_son,3) + mejecta*vp(ipart,3)
-                    ! metal mass return from SNe including the newly synthesised one
-                    if(metal)then
-                       mz8(ind_son) = mz8(ind_son) + mejecta*Zejecta
+                       if(SNII_zdep_yield)then
+                          call SNII_yield (zp(ipart), mfrac_snII, Zejecta, Zejecta_chem_II)
+                          ! Adjust M_SNII mass not to double-count the mass loss from massive stars
+                          M_SNII_var = mfrac_snII / snII_freq ! ex) 0.1 / 0.01 = 10 Msun
+                       else
+                          Zejecta = zp(ipart)+(1d0-zp(ipart))*yield
+                       endif
+
+                       call get_number_of_sn2  (tp(ipart), dteff, zp(ipart), idp(ipart),&
+                             & mass0, mass_t, M_SNII_var, nsnII_star, done_star)
+                       if(nsnII_star>0)ok=.true.
+
                     endif
-                    do ich=1,nchem
-                       mch8(ind_son,ich) = mch8(ind_son,ich) + mejecta*Zejecta_chem_II(ich)
-                    end do 
 
-                    ! subtract the mass return
-                    if (MC_tracer) tmpp(ipart) = mejecta / mp(ipart)
-                    mp(ipart)=mp(ipart)-mejecta
+                 else ! single SN event
+                    if(tp(ipart).le.tyoung)then   ! if older than t_sne
+                       ok=.true.
 
-                    ! mark if we are done with this particle
-                    if(sn2_real_delay) then
-                       if(done_star)then ! only if all SNe exploded
-                          !idp(ipart)=abs(idp(ipart))
-                          typep(ipart)%tag = 0 
-                       endif 
-                    else
-                       !idp(ipart)=abs(idp(ipart))
-                       typep(ipart)%tag = 0 
+                       if(SNII_zdep_yield)then
+                          call SNII_yield (zp(ipart), mfrac_snII, Zejecta, Zejecta_chem_II)
+                          ! Adjust M_SNII mass not to double-count the mass loss from massive stars
+                          M_SNII_var = mfrac_snII / snII_freq ! ex) 0.1 / 0.05 = 2 Msun
+                       else
+                          Zejecta = zp(ipart)+(1d0-zp(ipart))*yield
+                       endif
+
+                       ! number of sn doesn't have to be an integer
+                       nsnII_star = mass0*snII_freq
                     endif
-                  
-#ifdef RT
-                    ! Enhanced momentum due to pre-processing of the ISM due to radiation
-                    if(rt.and.mechanical_geen) then
-                       ! Let's count the total number of ionising photons per sec 
-                       call getAgeGyr(tp(ipart), age)
-                       if(metal) Z_star=zp(ipart)
-                       Z_star=max(Z_star,10.d-5)
-
-                       ! compute the number of ionising photons from SED
-                       call inp_SED_table(age, Z_star, 1, .false., L_star) ! L_star = [# s-1 Msun-1]
-                       L_star_ion = 0d0
-                       do igroup=1,nSEDgroups
-                          if(group_egy(igroup).ge.13.6) L_star_ion = L_star_ion + L_star(igroup)
-                       end do
-                       nph8 (ind_son)=nph8(ind_son) + mass0*L_star_ion ! [# s-1]
-                    endif
-#endif
-
                  endif
               endif
-              ipart=next_part  ! Go to next particle
-           end do
-           ! End loop over particles
-    
-           do ind=1,twotondim
-              if (abs(n8(ind))>0d0)then
-                 ip=ip+1
-                 ind_grid(ip)=igrid
-                 ind_pos_cell(ip)=ind
-     
-                 ! collect information 
-                 nSNe(ip)=n8(ind)
-                 mSNe(ip)=m8(ind)
-                 mZSNe(ip)=mz8(ind)
-                 pSNe(ip,1)=p8(ind,1)
-                 pSNe(ip,2)=p8(ind,2)
-                 pSNe(ip,3)=p8(ind,3)
-                 nphSNe(ip)=nph8(ind)  ! mechanical_geen
+#ifdef POP3
+           endif
+#endif
+
+           if(ok)then
+              ! Find the cell index to get the position of it
+              ind_son=1
+              do idim=1,ndim
+                 ind = int((xp(ipart,idim)/scale - x0(idim))/dx)
+                 ind_son=ind_son+ind*2**(idim-1)
+              end do
+              iskip=ncoarse+(ind_son-1)*ngridmax
+              ind_cell=iskip+igrid
+              if(son(ind_cell)==0)then  ! leaf cell
+
+                 !----------------------------------
+                 ! For Type II explosions
+                 !----------------------------------
+                 ! total ejecta mass in code units
+                 mejecta = M_SNII_var/scale_msun*nsnII_star
+
+                 ! number of SNII
+                 n8(ind_son) = n8(ind_son) + nsnII_star
+                 ! mass return from SNe
+                 m8 (ind_son)  = m8(ind_son) + mejecta
+                 ! momentum from the original star, not the one generated by SNe
+                 p8 (ind_son,1) = p8(ind_son,1) + mejecta*vp(ipart,1)
+                 p8 (ind_son,2) = p8(ind_son,2) + mejecta*vp(ipart,2)
+                 p8 (ind_son,3) = p8(ind_son,3) + mejecta*vp(ipart,3)
+                 ! metal mass return from SNe including the newly synthesised one
+                 if(metal)then
+                    mz8(ind_son) = mz8(ind_son) + mejecta*Zejecta
+                 endif
                  do ich=1,nchem
-                    mchSNe(ip,ich)=mch8(ind,ich)
+                    mch8(ind_son,ich) = mch8(ind_son,ich) + mejecta*Zejecta_chem_II(ich)
                  end do
-   
-                 ! statistics
-                 nSNc=nSNc+1
-                 nsnII_tot = nsnII_tot + nsnII_star
-                 if(ip==nvector)then
-!$omp critical(omp_sn)
-                    call mech_fine(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
-!$omp end critical(omp_sn)
-                    ip=0
-                 endif 
+
+                 ! subtract the mass return
+                 if (MC_tracer) tmpp(ipart) = mejecta / mp(ipart)
+                 mp(ipart)=mp(ipart)-mejecta
+
+                 ! mark if we are done with this particle
+                 if(sn2_real_delay) then
+                    if(done_star)then ! only if all SNe exploded
+                       !idp(ipart)=abs(idp(ipart))
+                       typep(ipart)%tag = 0
+                    endif
+                 else
+                    !idp(ipart)=abs(idp(ipart))
+                    typep(ipart)%tag = 0
+                 endif
+
+#ifdef RT
+                 ! Enhanced momentum due to pre-processing of the ISM due to radiation
+                 if(rt.and.mechanical_geen) then
+                    ! Let's count the total number of ionising photons per sec
+                    call getAgeGyr(tp(ipart), age)
+                    if(metal) Z_star=zp(ipart)
+                    Z_star=max(Z_star,10.d-5)
+
+                    ! compute the number of ionising photons from SED
+                    call inp_SED_table(age, Z_star, 1, .false., L_star) ! L_star = [# s-1 Msun-1]
+                    L_star_ion = 0d0
+                    do igroup=1,nSEDgroups
+                       if(group_egy(igroup).ge.13.6) L_star_ion = L_star_ion + L_star(igroup)
+                    end do
+                    nph8 (ind_son)=nph8(ind_son) + mass0*L_star_ion ! [# s-1]
+                 endif
+#endif
+
               endif
-           enddo
-        end if
-!        igrid = next(igrid)
-     end do ! End loop over grids
-!$omp end do nowait
-     if (ip>0) then
+           endif
+           ipart=next_part  ! Go to next particle
+        end do
+        ! End loop over particles
+
+        do ind=1,twotondim
+           if (abs(n8(ind))>0d0)then
+              ip=ip+1
+              ind_grid(ip)=igrid
+              ind_pos_cell(ip)=ind
+
+              ! collect information
+              nSNe(ip)=n8(ind)
+              mSNe(ip)=m8(ind)
+              mZSNe(ip)=mz8(ind)
+              pSNe(ip,1)=p8(ind,1)
+              pSNe(ip,2)=p8(ind,2)
+              pSNe(ip,3)=p8(ind,3)
+              nphSNe(ip)=nph8(ind)  ! mechanical_geen
+              do ich=1,nchem
+                 mchSNe(ip,ich)=mch8(ind,ich)
+              end do
+
+              ! statistics
+              nSNc=nSNc+1
+              nsnII_tot = nsnII_tot + nsnII_star
+              if(ip==nvector)then
 !$omp critical(omp_sn)
-        call mech_fine(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
+                 call mech_fine(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
 !$omp end critical(omp_sn)
-        ip=0
-     endif
-  end do ! End loop over cpus
+                 ip=0
+              endif
+           endif
+        enddo
+     end if
+  end do ! End loop over grids
+!$omp end do nowait
+  if (ip>0) then
+!$omp critical(omp_sn)
+     call mech_fine(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
+!$omp end critical(omp_sn)
+     ip=0
+  endif
 !$omp end parallel
 
    if (MC_tracer) then
-      ! MC Tracer =================================================
-!$omp parallel private(igrid,npart1,ipart,next_part,rand,irand,new_xp)
-      do icpu=1,ncpu
-        ! Loop over grids
-!$omp do
-        do jgrid = 1, numbl(icpu, ilevel)
-           if(icpu==myid)then
-              igrid=active(ilevel)%igrid(jgrid)
-           else
-              igrid=reception(icpu,ilevel)%igrid(jgrid)
-           end if
-           npart1 = numbp(igrid)  ! Number of particles in the grid
-           ipart = headp(igrid)
+     ! MC Tracer =================================================
+!$omp parallel do private(igrid,npart1,ipart,next_part,rand,irand,new_xp)
+     do jgrid = 1, active(ilevel)%ngrid
+        igrid=active(ilevel)%igrid(jgrid)
+        npart1 = numbp(igrid)  ! Number of particles in the grid
+        ipart = headp(igrid)
 
-           ! Loop over tracer particles
-           do jpart = 1, npart1
-              next_part=nextp(ipart)
+        ! Loop over tracer particles
+        do jpart = 1, npart1
+           next_part=nextp(ipart)
 
-              if (is_star_tracer(typep(ipart))) then
-                 ! Detach particle if required
+           if (is_star_tracer(typep(ipart))) then
+              ! Detach particle if required
+              call ranf(ompseed, rand)
+
+              ! Detach particles
+              if (rand < tmpp(partp(ipart))) then
+                 typep(ipart)%family = FAM_TRACER_GAS
+
+                 ! Change here to tag the particle with the star id
+                 typep(ipart)%tag = typep(ipart)%tag + 1
+                 move_flag(ipart) = 0
+
+                 ! Detached, now decide where to move it
                  call ranf(ompseed, rand)
 
-                 ! Detach particles
-                 if (rand < tmpp(partp(ipart))) then
-                    typep(ipart)%family = FAM_TRACER_GAS
+                 do idim = 1, ndim
+                    ! Draw number between 1 and nSNnei
+                    irand = floor(rand * nSNnei) + 1
+                    new_xp(idim) = xSNnei(idim, irand)*dx
+                 end do
 
-                    ! Change here to tag the particle with the star id
-                    typep(ipart)%tag = typep(ipart)%tag + 1
-                    move_flag(ipart) = 0
-
-                    ! Detached, now decide where to move it
-                    call ranf(ompseed, rand)
-
-                    do idim = 1, ndim
-                       ! Draw number between 1 and nSNnei
-                       irand = floor(rand * nSNnei) + 1
-                       new_xp(idim) = xSNnei(idim, irand)*dx
-                    end do
-
-                    do idim = 1, ndim
-                       xp(ipart, idim) = xp(ipart, idim) + new_xp(idim)
-                    end do
-                 end if
+                 do idim = 1, ndim
+                    xp(ipart, idim) = xp(ipart, idim) + new_xp(idim)
+                 end do
               end if
-              ipart = next_part ! Go to next particle
-           end do ! End loop over particles
-        end do ! End loop over grids
-!$omp end do nowait
+           end if
+           ipart = next_part ! Go to next particle
+        end do ! End loop over particles
+     end do ! End loop over grids
         ! End MC Tracer =============================================
-      end do ! End loop over cpus
-!$omp end parallel
    end if
 
 

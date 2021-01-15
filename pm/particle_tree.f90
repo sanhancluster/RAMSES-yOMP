@@ -198,16 +198,29 @@ subroutine make_tree_fine(ilevel)
   scale=boxlen/dble(nx_loc)
 
   ! Particle tree structure changes while run, so we copy the current state and use them for indexing.
-!$omp parallel
+!$omp parallel private(igrid,npart1,ipart,next_part)
+  do icpu=1,ncpu
 !$omp do
-  do ipart=1,npartmax
-     itmpp(ipart)=nextp(ipart)
-  end do
+     do jgrid=1,numbl(icpu,ilevel)
+        if(icpu==myid)then
+           igrid=active(ilevel)%igrid(jgrid)
+        else
+           igrid=reception(icpu,ilevel)%igrid(jgrid)
+        end if
+        npart1=numbp_old(igrid)  ! Number of particles in the grid
+        numbp_old(igrid)=npart1
+        if(npart1>0)then
+           headp_old(igrid)=headp(igrid)
+           ipart=headp(igrid)
+           do jpart=1,npart1
+              ! Save next particle  <--- Very important !!!
+              next_part=nextp(ipart)
+              itmpp(ipart)=next_part
+              ipart=next_part  ! Go to next particle
+           end do
+        end if
+     end do
 !$omp end do nowait
-!$omp do
-  do igrid=1,ngridmax
-     headp_old(igrid)=headp(igrid)
-     numbp_old(igrid)=numbp(igrid)
   end do
 !$omp end parallel
 

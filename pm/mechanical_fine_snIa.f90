@@ -88,29 +88,20 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
   ! MC Tracer =================================================
   ! Reset tmpp array that contains the probability to be detached from the particle
   if (MC_tracer) then
-!$omp parallel private(igrid,npart1,ipart)
-     do icpu=1,ncpu
-        ! Loop over grids
-!$omp do
-        do jgrid=1,numbl(icpu,ilevel)
-           if(icpu==myid)then
-              igrid=active(ilevel)%igrid(jgrid)
-           else
-              igrid=reception(icpu,ilevel)%igrid(jgrid)
-           end if
-           npart1=numbp(igrid)  ! Number of particles in the grid
-           ! Count star particles
-           if(npart1>0)then
-              ipart=headp(igrid)
-              do jpart=1,npart1
-                 if(is_star(typep(ipart))) tmpp(ipart) = 0d0
-                 ipart=nextp(ipart)
-              end do
-           end if
-        end do
-!$omp end do nowait
+!$omp parallel do private(igrid,npart1,ipart)
+     ! Loop over grids
+     do jgrid=1,active(ilevel)%ngrid
+        igrid=active(ilevel)%igrid(jgrid)
+        npart1=numbp(igrid)  ! Number of particles in the grid
+        ! Count star particles
+        if(npart1>0)then
+           ipart=headp(igrid)
+           do jpart=1,npart1
+              if(is_star(typep(ipart))) tmpp(ipart) = 0d0
+              ipart=nextp(ipart)
+           end do
+        end if
      end do
-!$omp end parallel
   end if
   ! End MC Tracer
 
@@ -127,191 +118,174 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
 !$omp & reduction(+:nSNc,nsnIa_tot) default(none) &
 !$omp & shared(ncpu,numbl,ilevel,myid,active,reception,numbp,xg,dx,skip_loc,headp,nextp,typep,use_initial_mass,mp0, &
 !$omp & scale_msun,mp,sn2_real_delay,tp,snII_Zdep_yield,zp,snII_freq,yield,dteff,idp,xp,scale, &
-!$omp & ncoarse,ngridmax,son,vp,metal,MC_tracer,tmpp,eta_sn,mejecta_Ia,Zejecta_chem_Ia,next,headl)
-  do icpu=1,ncpu
-!     igrid=headl(icpu,ilevel)
-     ip=0
+!$omp & ncoarse,ngridmax,son,vp,metal,MC_tracer,tmpp,eta_sn,mejecta_Ia,Zejecta_chem_Ia)
      ! Loop over grids
+  ip=0
 !$omp do schedule(dynamic,nchunk)
-     do jgrid=1,numbl(icpu,ilevel)
-        if(icpu==myid)then
-           igrid=active(ilevel)%igrid(jgrid)
-        else
-           igrid=reception(icpu,ilevel)%igrid(jgrid)
-        end if
+  do jgrid=1,active(ilevel)%ngrid
+     igrid=active(ilevel)%igrid(jgrid)
 
-        npart1=numbp(igrid)  ! Number of particles in the grid
-        npart2=0
+     npart1=numbp(igrid)  ! Number of particles in the grid
+     npart2=0
 
-        ! Count star particles
-        if(npart1>0)then
-           do idim=1,ndim
-              x0(idim) = xg(igrid,idim) -dx -skip_loc(idim) 
-           end do
- 
-           ipart=headp(igrid)
+     ! Count star particles
+     if(npart1>0)then
+        do idim=1,ndim
+           x0(idim) = xg(igrid,idim) -dx -skip_loc(idim)
+        end do
 
-           m8=0d0;mz8=0d0;p8=0d0;n8=0d0;nph8=0d0;mch8=0d0
-    
-           ! Loop over particles
-           do jpart=1,npart1
-              ! Save next particle   <--- Very important !!!
-              next_part=nextp(ipart)
+        ipart=headp(igrid)
 
-              ! is star particle?
-              ok_star = is_star(typep(ipart))    ! SanHan: check this out
-             
-              ! compute the number of snIa 
-              nsnIa_star=0d0
-              if(ok_star)then
-                 if(use_initial_mass) then
-                    mass0 = mp0(ipart)*scale_msun
-                 else ! do not recommend; make sure you are doing the right thing
-                    mass0 = mp (ipart)*scale_msun
-                    if(idp(ipart)>0) mass0 = mass0 / (1d0 - eta_sn)
-                 endif
+        m8=0d0;mz8=0d0;p8=0d0;n8=0d0;nph8=0d0;mch8=0d0
 
-                 call get_number_of_snIa (tp(ipart),dteff,idp(ipart),mass0,nsnIa_star)
+        ! Loop over particles
+        do jpart=1,npart1
+           ! Save next particle   <--- Very important !!!
+           next_part=nextp(ipart)
 
+           ! is star particle?
+           ok_star = is_star(typep(ipart))    ! SanHan: check this out
+
+           ! compute the number of snIa
+           nsnIa_star=0d0
+           if(ok_star)then
+              if(use_initial_mass) then
+                 mass0 = mp0(ipart)*scale_msun
+              else ! do not recommend; make sure you are doing the right thing
+                 mass0 = mp (ipart)*scale_msun
+                 if(idp(ipart)>0) mass0 = mass0 / (1d0 - eta_sn)
               endif
 
-              if(nsnIa_star>0)then
-                 ! Find the cell index to get the position of it
-                 ind_son=1
-                 do idim=1,ndim
-                    ind = int((xp(ipart,idim)/scale - x0(idim))/dx)
-                    ind_son=ind_son+ind*2**(idim-1)
-                 end do 
-                 iskip=ncoarse+(ind_son-1)*ngridmax
-                 ind_cell=iskip+igrid
-                 if(son(ind_cell)==0)then  ! leaf cell
+              call get_number_of_snIa (tp(ipart),dteff,idp(ipart),mass0,nsnIa_star)
 
-                    !----------------------------------
-                    ! For Type Ia explosions
-                    !----------------------------------
-                    ! total ejecta mass in code units
-                    mejecta = mejecta_Ia / scale_msun * nsnIa_star
+           endif
 
-                    ! number of SNIa
-                    n8(ind_son) = n8(ind_son) + nsnIa_star
-                    ! mass return from SNe
-                    m8 (ind_son)  = m8(ind_son) + mejecta
-                    ! momentum from the original star, not the one generated by SNe
-                    p8 (ind_son,1) = p8(ind_son,1) + mejecta*vp(ipart,1)
-                    p8 (ind_son,2) = p8(ind_son,2) + mejecta*vp(ipart,2)
-                    p8 (ind_son,3) = p8(ind_son,3) + mejecta*vp(ipart,3)
-                    ! metal mass return from SNe including the newly synthesised one
-                    if(metal)then
-                       mz8(ind_son) = mz8(ind_son) + mejecta*1.0 ! 100% metals
-                    endif
-                    do ich=1,nchem
-                       mch8(ind_son,ich) = mch8(ind_son,ich) + mejecta*Zejecta_chem_Ia(ich)
-                    end do 
+           if(nsnIa_star>0)then
+              ! Find the cell index to get the position of it
+              ind_son=1
+              do idim=1,ndim
+                 ind = int((xp(ipart,idim)/scale - x0(idim))/dx)
+                 ind_son=ind_son+ind*2**(idim-1)
+              end do
+              iskip=ncoarse+(ind_son-1)*ngridmax
+              ind_cell=iskip+igrid
+              if(son(ind_cell)==0)then  ! leaf cell
 
-                    ! subtract the mass return
-                    if (MC_tracer) tmpp(ipart) = mejecta / mp(ipart)
-                    mp(ipart)=mp(ipart)-mejecta
+                 !----------------------------------
+                 ! For Type Ia explosions
+                 !----------------------------------
+                 ! total ejecta mass in code units
+                 mejecta = mejecta_Ia / scale_msun * nsnIa_star
 
+                 ! number of SNIa
+                 n8(ind_son) = n8(ind_son) + nsnIa_star
+                 ! mass return from SNe
+                 m8 (ind_son)  = m8(ind_son) + mejecta
+                 ! momentum from the original star, not the one generated by SNe
+                 p8 (ind_son,1) = p8(ind_son,1) + mejecta*vp(ipart,1)
+                 p8 (ind_son,2) = p8(ind_son,2) + mejecta*vp(ipart,2)
+                 p8 (ind_son,3) = p8(ind_son,3) + mejecta*vp(ipart,3)
+                 ! metal mass return from SNe including the newly synthesised one
+                 if(metal)then
+                    mz8(ind_son) = mz8(ind_son) + mejecta*1.0 ! 100% metals
                  endif
-              endif
-              ipart=next_part  ! Go to next particle
-           end do
-           ! End loop over particles
-    
-           do ind=1,twotondim
-              if (abs(n8(ind))>0d0)then
-                 ip=ip+1
-                 ind_grid(ip)=igrid
-                 ind_pos_cell(ip)=ind
-     
-                 ! collect information 
-                 nSNe(ip)=n8(ind)
-                 mSNe(ip)=m8(ind)
-                 mZSNe(ip)=mz8(ind)
-                 pSNe(ip,1)=p8(ind,1)
-                 pSNe(ip,2)=p8(ind,2)
-                 pSNe(ip,3)=p8(ind,3)
-                 nphSNe(ip)=nph8(ind)  ! mechanical_geen
                  do ich=1,nchem
-                    mchSNe(ip,ich)=mch8(ind,ich)
+                    mch8(ind_son,ich) = mch8(ind_son,ich) + mejecta*Zejecta_chem_Ia(ich)
                  end do
- 
-                 ! statistics
-                 nSNc=nSNc+1
-                 nsnIa_tot=nsnIa_tot+n8(ind)
-                 if(ip==nvector)then
-!$omp critical(omp_sn)
-                    call mech_fine_snIa(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
-!$omp end critical(omp_sn)
-                    ip=0
-                 endif 
+
+                 ! subtract the mass return
+                 if (MC_tracer) tmpp(ipart) = mejecta / mp(ipart)
+                 mp(ipart)=mp(ipart)-mejecta
+
               endif
-           enddo
-        end if
-        igrid = next(igrid)
-     end do ! End loop over grids
-!$omp end do nowait
-     if (ip>0) then
+           endif
+           ipart=next_part  ! Go to next particle
+        end do
+        ! End loop over particles
+
+        do ind=1,twotondim
+           if (abs(n8(ind))>0d0)then
+              ip=ip+1
+              ind_grid(ip)=igrid
+              ind_pos_cell(ip)=ind
+
+              ! collect information
+              nSNe(ip)=n8(ind)
+              mSNe(ip)=m8(ind)
+              mZSNe(ip)=mz8(ind)
+              pSNe(ip,1)=p8(ind,1)
+              pSNe(ip,2)=p8(ind,2)
+              pSNe(ip,3)=p8(ind,3)
+              nphSNe(ip)=nph8(ind)  ! mechanical_geen
+              do ich=1,nchem
+                 mchSNe(ip,ich)=mch8(ind,ich)
+              end do
+
+              ! statistics
+              nSNc=nSNc+1
+              nsnIa_tot=nsnIa_tot+n8(ind)
+              if(ip==nvector)then
 !$omp critical(omp_sn)
-        call mech_fine_snIa(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
+                 call mech_fine_snIa(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
 !$omp end critical(omp_sn)
-        ip=0
-     endif
-  end do ! End loop over cpus
+                 ip=0
+              endif
+           endif
+        enddo
+     end if
+  end do ! End loop over grids
+!$omp end do nowait
+  if (ip>0) then
+!$omp critical(omp_sn)
+     call mech_fine_snIa(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
+!$omp end critical(omp_sn)
+     ip=0
+  endif
 !$omp end parallel
 
   if (MC_tracer) then
      ! MC Tracer =================================================
-!$omp parallel private(igrid,npart1,ipart,next_part,rand,irand,new_xp)
-     do icpu=1,ncpu
-!$omp do
-        ! Loop over grids
-        do jgrid = 1, numbl(icpu, ilevel)
-           if(icpu==myid)then
-              igrid=active(ilevel)%igrid(jgrid)
-           else
-              igrid=reception(icpu,ilevel)%igrid(jgrid)
-           end if
-           npart1 = numbp(igrid)  ! Number of particles in the grid
-           ipart = headp(igrid)
+     ! Loop over grids
+!$omp parallel do private(igrid,npart1,ipart,next_part,rand,irand,new_xp)
+     do jgrid = 1, active(ilevel)%ngrid
+        igrid=active(ilevel)%igrid(jgrid)
+        npart1 = numbp(igrid)  ! Number of particles in the grid
+        ipart = headp(igrid)
 
-           ! Loop over tracer particles
-           do jpart = 1, npart1
-              next_part=nextp(ipart)
+        ! Loop over tracer particles
+        do jpart = 1, npart1
+           next_part=nextp(ipart)
 
-              if (is_star_tracer(typep(ipart))) then
-                 ! Detach particle if required
+           if (is_star_tracer(typep(ipart))) then
+              ! Detach particle if required
+              call ranf(ompseed, rand)
+
+              ! Detach particles
+              if (rand < tmpp(partp(ipart))) then
+                 typep(ipart)%family = FAM_TRACER_GAS
+
+                 ! Change here to tag the particle with the star id
+                 typep(ipart)%tag = typep(ipart)%tag + 1
+                 move_flag(ipart) = 1
+
+                 ! Detached, now decide where to move it
                  call ranf(ompseed, rand)
 
-                 ! Detach particles
-                 if (rand < tmpp(partp(ipart))) then
-                    typep(ipart)%family = FAM_TRACER_GAS
+                 do idim = 1, ndim
+                    ! Draw number between 1 and nSNnei
+                    irand = floor(rand * nSNnei) + 1
+                    new_xp(idim) = xSNnei(idim, irand)*dx
+                 end do
 
-                    ! Change here to tag the particle with the star id
-                    typep(ipart)%tag = typep(ipart)%tag + 1
-                    move_flag(ipart) = 1
-
-                    ! Detached, now decide where to move it
-                    call ranf(ompseed, rand)
-
-                    do idim = 1, ndim
-                       ! Draw number between 1 and nSNnei
-                       irand = floor(rand * nSNnei) + 1
-                       new_xp(idim) = xSNnei(idim, irand)*dx
-                    end do
-
-                    do idim = 1, ndim
-                       xp(ipart, idim) = xp(ipart, idim) + new_xp(idim)
-                    end do
-                 end if
+                 do idim = 1, ndim
+                    xp(ipart, idim) = xp(ipart, idim) + new_xp(idim)
+                 end do
               end if
-              ipart = next_part ! Go to next particle
-           end do ! End loop over particles
-        end do ! End loop over grids
-!$omp end do nowait
-        ! End MC Tracer =============================================
-     end do ! End loop over cpus
-!$omp end parallel
+           end if
+           ipart = next_part ! Go to next particle
+        end do ! End loop over particles
+     end do ! End loop over grids
+     ! End MC Tracer =============================================
   end if
 
 

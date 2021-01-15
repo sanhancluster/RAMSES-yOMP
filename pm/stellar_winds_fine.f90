@@ -211,25 +211,19 @@ subroutine stellar_winds_fine(ilevel)
   ! MC Tracer =================================================
   ! Reset tmpp array that contains the probability to be detached from the particle
   if (MC_tracer) then
-     do icpu=1,ncpu
-        ! Loop over grids
-!$omp do private(igrid,npart1,ipart) schedule(dynamic,nchunk)
-        do jgrid=1,numbl(icpu,ilevel)
-           if(icpu==myid)then
-              igrid=active(ilevel)%igrid(jgrid)
-           else
-              igrid=reception(icpu,ilevel)%igrid(jgrid)
-           end if
-           npart1=numbp(igrid)  ! Number of particles in the grid
-           ! Count star particles
-           if(npart1>0)then
-              ipart=headp(igrid)
-              do jpart=1,npart1
-                 if(is_star(typep(ipart))) tmpp(ipart) = 0d0
-                 ipart=nextp(ipart)
-              end do
-           end if
-        end do
+     ! Loop over grids
+!$omp parallel do private(igrid,npart1,ipart) schedule(dynamic,nchunk)
+     do jgrid=1,active(ilevel)%ngrid
+        igrid=active(ilevel)%igrid(jgrid)
+        npart1=numbp(igrid)  ! Number of particles in the grid
+        ! Count star particles
+        if(npart1>0)then
+           ipart=headp(igrid)
+           do jpart=1,npart1
+              if(is_star(typep(ipart))) tmpp(ipart) = 0d0
+              ipart=nextp(ipart)
+           end do
+        end if
      end do
   end if
   ! End MC Tracer
@@ -250,118 +244,94 @@ subroutine stellar_winds_fine(ilevel)
         end do
         do i=1,ngrid
            do ivar=ipvar,nvar
-              unew(ind_cell(i),ivar) = unew(ind_cell(i),ivar)/unew(ind_cell(i),1)
+              unew(ind_cell(i),ivar) = unew(ind_cell(i),ivar)/max(unew(ind_cell(i),1),smallr)
            end do
         end do
      end do
   end do
 
-  ! Gather star particles only.
-  ! Loop over cpus
 !$omp parallel private(igrid,ig,ip,npart1,npart2,ipart,next_part,ok_star,ind_grid,ind_part,ind_grid_part)
-  do icpu=1,ncpu
-     ig=0
-     ip=0
-     ! Loop over grids
-!$omp do
-     do jgrid=1,numbl(icpu,ilevel)
-        if(icpu==myid)then
-           igrid=active(ilevel)%igrid(jgrid)
-        else
-           igrid=reception(icpu,ilevel)%igrid(jgrid)
-        end if
+  ig=0
+  ip=0
+!$omp do schedule(dynamic,ncache)
+  do jgrid=1,active(ilevel)%ngrid
+     igrid=active(ilevel)%igrid(jgrid)
+     npart1=numbp(igrid)  ! Number of particles in the grid
+     npart2=0
 
-        npart1=numbp(igrid)  ! Number of particles in the grid
-        npart2=0
+     ! Count star particles
+     if(npart1>0)then
+        ipart=headp(igrid)
+        ! Loop over particles
+        do jpart=1,npart1
+           ! Save next particle   <--- Very important !!!
+           next_part=nextp(ipart)
+           ! Select star particles
+           ok_star = is_star(typep(ipart))
+           if(ok_star)then
+              npart2=npart2+1
+           endif
+           ipart=next_part  ! Go to next particle
+        end do
+     endif
 
-        ! Count star particles
-        if(npart1>0)then
-           ipart=headp(igrid)
-           ! Loop over particles
-           do jpart=1,npart1
-              ! Save next particle   <--- Very important !!!
-              next_part=nextp(ipart)
-              ! Select star particles
-              ok_star = is_star(typep(ipart))
-              if(ok_star)then
-                 npart2=npart2+1
-              endif
-              ipart=next_part  ! Go to next particle
-           end do
-        endif
-        
-        ! Gather star particles
-        if(npart2>0)then        
-           ig=ig+1
-           ind_grid(ig)=igrid
-           ipart=headp(igrid)
-           ! Loop over particles
-           do jpart=1,npart1
-              ! Save next particle   <--- Very important !!!
-              next_part=nextp(ipart)
-              ! Select only star particles
-              ok_star = is_star(typep(ipart))
-              if(ok_star)then
-                 if(ig==0)then
-                    ig=1
-                    ind_grid(ig)=igrid
-                 end if
-                 ip=ip+1
-                 ind_part(ip)=ipart
-                 ind_grid_part(ip)=ig   
-              endif
-              if(ip==nvector)then
-                 call stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
-                 ip=0
-                 ig=0
+     ! Gather star particles
+     if(npart2>0)then
+        ig=ig+1
+        ind_grid(ig)=igrid
+        ipart=headp(igrid)
+        ! Loop over particles
+        do jpart=1,npart1
+           ! Save next particle   <--- Very important !!!
+           next_part=nextp(ipart)
+           ! Select only star particles
+           ok_star = is_star(typep(ipart))
+           if(ok_star)then
+              if(ig==0)then
+                 ig=1
+                 ind_grid(ig)=igrid
               end if
-              ipart=next_part  ! Go to next particle
-           end do
-           ! End loop over particles
-        end if
-     end do
-!$omp end do nowait
-     ! End loop over grids
-     if(ip>0)call stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
-  end do 
+              ip=ip+1
+              ind_part(ip)=ipart
+              ind_grid_part(ip)=ig
+           endif
+           if(ip==nvector)then
+              call stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+              ip=0
+              ig=0
+           end if
+           ipart=next_part  ! Go to next particle
+        end do
+        ! End loop over particles
+     end if
+  end do
+  if(ip>0)call stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
 !$omp end parallel
-  ! End loop over cpus
 
 
   if (MC_tracer) then
      ! MC Tracer =================================================
      ! Detach tracer particles from stars
-!$omp parallel private(igrid,npart1,ipart,next_part,rand)
-     do icpu=1,ncpu
-        ! Loop over grids
-!$omp do
-        do jgrid=1,numbl(icpu,ilevel)
-           if(icpu==myid)then
-              igrid=active(ilevel)%igrid(jgrid)
-           else
-              igrid=reception(icpu,ilevel)%igrid(jgrid)
-           end if
-
-           npart1=numbp(igrid)  ! Number of particles in the grid
-           if(npart1>0)then
-              ipart=headp(igrid)
-              do jpart=1,npart1
-                 next_part=nextp(ipart)
-                 if(is_star_tracer(typep(ipart))) then
-                    call ranf(ompseed, rand)
-                    if (rand < tmpp(partp(ipart))) then
-                       typep(ipart)%family = FAM_TRACER_GAS
-                       typep(ipart)%tag = typep(ipart)%tag + 1
-                       move_flag(ipart) = 1
-                    end if
+!$omp parallel do private(igrid,npart1,ipart,next_part,rand)
+     do jgrid=1,active(ilevel)%ngrid
+        igrid=active(ilevel)%igrid(jgrid)
+        npart1=numbp(igrid)  ! Number of particles in the grid
+        if(npart1>0)then
+           ipart=headp(igrid)
+           do jpart=1,npart1
+              next_part=nextp(ipart)
+              if(is_star_tracer(typep(ipart))) then
+                 call ranf(ompseed, rand)
+                 if (rand < tmpp(partp(ipart))) then
+                    typep(ipart)%family = FAM_TRACER_GAS
+                    typep(ipart)%tag = typep(ipart)%tag + 1
+                    move_flag(ipart) = 1
                  end if
-                 ipart = next_part
-              end do
-           end if
-        end do
-!$omp end do nowait
+              end if
+              ipart = next_part
+           end do
+        end if
      end do
-!$omp end parallel
   end if
 
   ! Update the rest of the passive scales so that the fractional quantities are not changed
@@ -580,8 +550,8 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
         end do
      endif
      ! Reduce star particle mass
-     mp(ind_part(j))=mp(ind_part(j))-mejecta
      if(MC_tracer) tmpp(ind_part(j)) = mejecta / mp(ind_part(j))
+     mp(ind_part(j))=mp(ind_part(j))-mejecta
   end do
 
   ! Update hydro variables due to feedback
