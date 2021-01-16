@@ -250,7 +250,8 @@ subroutine stellar_winds_fine(ilevel)
      end do
   end do
 
-!$omp parallel private(igrid,ig,ip,npart1,npart2,ipart,next_part,ok_star,ind_grid,ind_part,ind_grid_part)
+!$omp parallel private(igrid,ig,ip,npart1,npart2,ipart,next_part,ok_star,ind_grid,ind_part,ind_grid_part) &
+!$omp & default(none) shared(active,ilevel,numbp,headp,nextp,typep)
   ig=0
   ip=0
 !$omp do schedule(dynamic,ncache)

@@ -578,12 +578,13 @@ SUBROUTINE getAgeGyr(t_birth_proper, age)
   use amr_commons
   use pm_commons
   implicit none
-  real(dp):: t_birth_proper, age
-  real(dp), parameter:: yr = 3.15569d+07
+  real(dp) :: t_birth_proper, age
+  real(dp) :: yr
   real(dp) :: scale_t_Gyr
-  logical :: scale_init=.false.
-  real(dp):: scale_nH, scale_T2, scale_l, scale_d, scale_t, scale_v
+  logical  :: scale_init=.false.
+  real(dp) :: scale_nH, scale_T2, scale_l, scale_d, scale_t, scale_v
 
+  yr = 3.15569d+07
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
   scale_t_Gyr = (scale_t/aexp**2)/yr/1.e9
   age = (texp - t_birth_proper) * scale_t_Gyr
