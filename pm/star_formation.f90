@@ -375,7 +375,7 @@ subroutine star_formation(ilevel)
         call add_list(ind_part,ind_grid_new,ok_new,nnew)
 
         ! Update linked list for debris
-        if(f_w>0 .and. mechanical_feedback==0)then
+        if(f_w>0 .and. .not. mechanical_feedback)then
            call remove_free(ind_debris,nnew)
            call add_list(ind_debris,ind_grid_new,ok_new,nnew)
         endif
@@ -462,7 +462,7 @@ subroutine star_formation(ilevel)
            ! End random kick ---------------------------------------------
 
            ! Set GMC particle variables
-           if(f_w>0 .and. mechanical_feedback==0)then
+           if(f_w>0 .and. .not. mechanical_feedback)then
               ! Compute GMC mass without more than 50% of gas depletion
               mdebris=min(f_w*n*mstar,0.5*d*vol_loc-n*mstar)
               ! Add supernova ejecta
@@ -516,7 +516,7 @@ subroutine star_formation(ilevel)
         do i=1,nnew
            n=flag2(ind_cell_new(i))
            d=uold(ind_cell_new(i),1)
-           if(mechanical_feedback==0) then
+           if(.not. mechanical_feedback) then
               delta_m_over_m = min(n*dstar*(1.0+f_w), 0.5_dp*d) / d
               uold(ind_cell_new(i),1)=max(d-n*dstar*(1.0+f_w), 0.5*d)
            else
