@@ -293,7 +293,7 @@ subroutine make_sink(ilevel)
   !------------------------------
   ! Determine AGN formation sites
   !------------------------------
-  call quenching(ilevel)
+!  call quenching(ilevel)
 
   !----------------------------
   ! Compute number of new sinks
@@ -340,7 +340,7 @@ subroutine make_sink(ilevel)
            ! Check if gas is Jeans unstable
            if(d    <d_thres)ok(i)=.false.
            ! Quenching criterion
-           if(flag2(ind_cell(i))==1)ok(i)=.false.
+           ! if(flag2(ind_cell(i))==1)ok(i)=.false.
 
            ! ENFORCE MASS CRITERION (MT)
            ! Check if the mass criterion will be met
