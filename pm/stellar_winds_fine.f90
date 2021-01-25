@@ -399,7 +399,6 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   real(dp)::unit_e_code
   real(dp)::dfmloss_spec(1:nchem)
   real(dp),dimension(1:nchem,1:nvector)::mloss_spec
-  ! fractional abundances ; for ionisation fraction and ref, etc
   real(dp),dimension(1:nvar)::uadd
   integer::indp_now
 
@@ -550,6 +549,7 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
            mloss_spec(ich,j)=mloss_spec(ich,j)+mstar_ini*dfmloss_spec(ich)/vol_loc(j)
         end do
      endif
+
      ! Reduce star particle mass
      if(MC_tracer) tmpp(ind_part(j)) = mejecta / mp(ind_part(j))
      mp(ind_part(j))=mp(ind_part(j))-mejecta
@@ -560,10 +560,12 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   indp_now=0
   do j=1,np
      if(indp(j)/=indp_now) then
-        do ivar=1,ichem+nchem-1
+        if(indp_now > 0) then
+           do ivar=1,ichem+nchem-1
 !$omp atomic update
-           unew(indp_now,ivar)=unew(indp_now,ivar)+uadd(ivar)
-        end do
+              unew(indp_now,ivar)=unew(indp_now,ivar)+uadd(ivar)
+           end do
+        end if
         uadd=0d0
         indp_now=indp(j)
      end if
@@ -590,10 +592,12 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
         end do
      endif
   end do
-  do ivar=1,ichem+nchem-1
+  if(indp_now > 0) then
+     do ivar=1,ichem+nchem-1
 !$omp atomic update
-     unew(indp_now,ivar)=unew(indp_now,ivar)+uadd(ivar)
-  end do
+        unew(indp_now,ivar)=unew(indp_now,ivar)+uadd(ivar)
+     end do
+  end if
 
 end subroutine stellar_winds_dump
 !################################################################
@@ -615,6 +619,7 @@ subroutine cmp_stellar_wind_props (birth_time,dteff, zstar,dfmloss, log_deloss_e
    ! initialise
    dfmloss = 0d0
    dfmzloss = 0d0
+   dfmloss_spec = 0d0
    log_deloss_erg = -99.
 
    ! convert the time to physical units
