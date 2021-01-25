@@ -104,7 +104,7 @@ subroutine init_sink
   dMEd_coarse=0; dMsmbh=0; Esave=0; Efeed=0; dMBH_coarse_new=0; dMEd_coarse_new=0; dMsmbh_new =0
   Esave_new=0; Efeed_new=0; dMBH_coarse_all=0; dMEd_coarse_all=0; dMsmbh_all =0; Esave_all=0
   Efeed_all=0; sink_stat=0; sink_stat_all=0; v_avgptr=0; c_avgptr=0; d_avgptr=0; spinmag=0
-  spinmag_new=0; spinmag_all=0; eps_sink=0
+  spinmag_new=0; spinmag_all=0; eps_sink=0;
 
 #ifdef RT
   ! Only allocate some variables if AGNRT is activated

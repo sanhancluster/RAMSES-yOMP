@@ -1343,7 +1343,6 @@ subroutine mech_fine_mpi(ilevel)
            else
               uold(icell,1:nvarMHD) = pvar(1:nvarMHD)
            endif
- 
         endif ! if this belongs to me
 
 

@@ -770,7 +770,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
      do i=1,nb_noneigh
         do ivar=1,nvar
 !$omp atomic update
-         unew(ind_buffer(i),ivar)=unew(ind_buffer(i),ivar)+uflow(i,ivar)*oneontwotondim
+        unew(ind_buffer(i),ivar)=unew(ind_buffer(i),ivar)+uflow(i,ivar)*oneontwotondim
         end do
      end do
      if(pressure_fix) then

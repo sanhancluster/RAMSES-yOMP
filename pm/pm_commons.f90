@@ -55,7 +55,6 @@ module pm_commons
   integer :: nindsink = 0
   real(dp), allocatable, dimension(:,:) :: DF_factor,DF_factor_new
 
-
   ! Particles related arrays
   real(dp), allocatable, dimension(:,:) :: xp        ! Positions
   real(dp), allocatable, dimension(:,:) :: vp        ! Velocities
