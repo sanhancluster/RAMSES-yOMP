@@ -146,7 +146,7 @@ subroutine add_free(ind_part,np)
   ! Add particles to the free memory linked list
   ! and reset all particle variables
   !
-  integer::j,idim
+  integer::j,idim,ich
 
   do idim=1,ndim
      do j=1,np
@@ -176,6 +176,15 @@ subroutine add_free(ind_part,np)
            zp(ind_part(j))=0.0
         end do
      end if
+#ifdef NCHEM
+     if(nchem>0)then
+        do ich=1,nchem
+           do j=1,np
+              chp(ind_part(j),ich)=0.0
+           end do
+        end do
+     end if
+#endif
   end if
 #ifdef DICE
   ! DICE patch
@@ -225,7 +234,7 @@ subroutine add_free_cond(ind_part,ok,np)
   ! Add particles to the free memory linked list
   ! and reset all particle variables
   !
-  integer::j,idim
+  integer::j,idim,ich
 
   do idim=1,ndim
      do j=1,np
@@ -263,6 +272,15 @@ subroutine add_free_cond(ind_part,ok,np)
            endif
         end do
      end if
+#ifdef NCHEM
+     if(nchem>0)then
+        do ich=1,nchem
+           do j=1,np
+              chp(ind_part(j),ich)=0.0
+           end do
+        end do
+     end if
+#endif
   end if
 
 #ifdef DICE

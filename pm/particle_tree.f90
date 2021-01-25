@@ -1013,7 +1013,7 @@ subroutine fill_comm(ind_part,ind_com,ind_list,np,ilevel,icpu)
   integer::np,ilevel,icpu
   integer,dimension(1:nvector)::ind_part,ind_com,ind_list
   integer::current_property
-  integer::i,idim
+  integer::i,idim,ich
   logical,dimension(1:nvector)::ok=.true.
 
   ! Gather particle level and identity
@@ -1058,6 +1058,16 @@ subroutine fill_comm(ind_part,ind_com,ind_list,np,ilevel,icpu)
         end do
         current_property = current_property+1
      end if
+#ifdef NCHEM
+     if(nchem>0)then
+        do ich=1,nchem
+           do i=1,np
+              reception(icpu,ilevel)%up(ind_com(i),current_property)=chp(ind_part(i),ich)
+           end do
+           current_property = current_property+1
+        end do
+     end if
+#endif
      if(write_stellar_densities) then
         do i=1,np
            reception(icpu,ilevel)%up(ind_com(i),current_property)  =st_n_tp(ind_part(i))
@@ -1116,6 +1126,7 @@ end subroutine fill_comm
 subroutine empty_comm(ind_com,np,ilevel,icpu)
   use pm_commons
   use amr_commons
+  use amr_parameters,ONLY:nchem
 #ifdef DICE
   use dice_commons
 #endif
@@ -1123,7 +1134,7 @@ subroutine empty_comm(ind_com,np,ilevel,icpu)
   integer::np,icpu,ilevel
   integer,dimension(1:nvector)::ind_com
 
-  integer::i,idim,igrid
+  integer::i,idim,igrid,ich
   integer,dimension(1:nvector)::ind_list,ind_part
   logical,dimension(1:nvector)::ok=.true.
   integer::current_property
@@ -1182,6 +1193,16 @@ subroutine empty_comm(ind_com,np,ilevel,icpu)
         end do
         current_property = current_property+1
      end if
+#ifdef NCHEM
+     if(nchem>0)then
+        do ich=1,nchem
+           do i=1,np
+              chp(ind_part(i),ich)=emission(icpu,ilevel)%up(ind_com(i),current_property)
+           end do
+           current_property = current_property+1
+        end do
+     end if
+#endif
      if(write_stellar_densities) then
         do i=1,np
            st_n_tp(ind_part(i))=emission(icpu,ilevel)%up(ind_com(i),current_property)   !SD
