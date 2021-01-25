@@ -742,6 +742,9 @@ subroutine virtual_tree_fine(ilevel)
      if(write_stellar_densities) particle_data_width = particle_data_width + 3
      if(use_initial_mass) particle_data_width = particle_data_width + 1
   endif
+#ifdef NCHEM
+  particle_data_width=particle_data_width+nchem
+#endif
 
 #ifdef OUTPUT_PARTICLE_POTENTIAL
   particle_data_width=particle_data_width+1
