@@ -225,7 +225,7 @@ module amr_parameters
   real(dp) :: d_boost=1       ! Density for boost Booth and Schaye (HP)
   integer  :: df_ncells=4     ! number of cells for DF
   logical::point_mass_sink=.false.          ! deposit the mass on central sink for gravity 
-  real(dp)::t_que =10.0D0     ! Minimum stellar age to use for sink creation density threshold
+  real(dp)::t_que=-1.         ! Minimum stellar age to use for sink creation density threshold
   logical::weighted_drag=.false. ! Activate kernel-weighted drag force measurement
 
   real(dp)::zdmax=-1d0        ! Maximum allowed dust ratio

@@ -4216,8 +4216,9 @@ subroutine rhostar_from_current_level(ilevel)
   ! level ilevel (boundary particles).
   !------------------------------------------------------------------
   integer::igrid,jgrid,ipart,jpart,idim,icpu,local_count
-  integer::i,ig,ip,npart1
-  real(dp)::dx
+  integer::i,ig,ip,npart1,nx_loc
+  real(dp)::dx,mstar,scale,dx_min,vol_min
+  logical::ok_star
 
   integer,dimension(1:nvector)::ind_grid,ind_cell
   integer,dimension(1:nvector)::ind_part,ind_grid_part
@@ -4231,16 +4232,30 @@ subroutine rhostar_from_current_level(ilevel)
   ! Mesh spacing in that level
   dx=0.5D0**ilevel
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
+  nx_loc=(icoarse_max-icoarse_min+1)
+  scale=boxlen/dble(nx_loc)
+  dx_min=scale*0.5d0**(nlevelmax-nlevelsheld)
+  vol_min=dx_min**ndim
+
+  if(m_star < 0d0)then
+     mstar=n_star/(scale_nH*aexp**3)*vol_min*fstar_min
+  else
+     mstar=m_star*mass_sph
+  endif
 
   if (use_proper_time)then
      tquench = t_que*myr2s/(scale_t/aexp**2)
      current_time=texp
      dteff = dteff*aexp**2
   else
-     tquench = t_sne*myr2s/scale_t
+     tquench = t_que*myr2s/scale_t
      current_time=t
   endif
+
   tquench = current_time - tquench
+  if(t_que<0d0) then
+     tquench = -1d0
+  end if
 
   ! Loop over cpus
 !$omp parallel private(ig,ip,ind_cell,ind_part,ind_grid,ind_grid_part,x0,igrid,npart1,ipart,local_count)
@@ -4270,7 +4285,20 @@ subroutine rhostar_from_current_level(ilevel)
               end if
 
               ! Select only stars
-              if (is_star(typep(ipart)) .and. tp(ipart)<tquench) then
+              ok_star = is_star(typep(ipart))
+
+              if(tquench > 0d0) then
+                 ok_star = ok_star .and. tp(ipart)<tquench
+              end if
+
+              ! Use stars below minimum initial mass only
+              if(use_initial_mass) then
+                 ok_star = ok_star .and. mp0(ipart) < mstar * 1.1
+              else
+                 ok_star = ok_star .and. mp(ipart) < mstar * 1.1
+              end if
+
+              if (ok_star) then
                  local_count = local_count + 1
                  ip=ip+1
                  ind_part(ip)=ipart
