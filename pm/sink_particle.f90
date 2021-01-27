@@ -2764,17 +2764,9 @@ subroutine grow_bondi(ilevel)
      ! --------------------------
      v_avgptr(isink)=dsqrt(SUM((velocity(1:3)-vsink(isink,1:3))**2))
      v2mean =min(SUM((velocity(1:3)-vsink(isink,1:3))**2),sigmav2)
-     if(isnan(c2mean) .or. isnan(v2mean)) then
-        print *,'error in grow_bondi'
-        print *,weighted_c2(isink, :)
-        print *,weighted_volume(isink, :)
-        print *,volume, density
-        print *,r2k(isink),r2sink(isink)
-        stop
-     end if
      total_volume(isink)=volume
      alpha=max((density/(d_boost/scale_nH))**boost_acc,1d0)
-     if(Esave(isink).eq.0d0 .or. volume>0d0)then
+     if(Esave(isink).eq.0d0 .and. volume>0d0)then
         dMBHoverdt(isink)=alpha * fourpi *density* (factG*msink(isink))**2 &
              & / (c2mean+v2mean)**1.5d0
      else
@@ -2782,6 +2774,12 @@ subroutine grow_bondi(ilevel)
         ! energy has not been released in the previous coarse time step
         dMBHoverdt(isink)=0d0
      endif
+     if(isnan(c2mean) .or. isnan(v2mean)) then
+        print *,'error in grow_bondi'
+        print *,volume, density
+        print *,r2k(isink),r2sink(isink)
+        print *,dMBHoverdt(isink)
+     end if
 
      if(spin_bh)then
         ZZ1=1d0+(1d0-spinmag(isink)**2)**onethird*((1d0+spinmag(isink))**onethird &
@@ -3346,9 +3344,16 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
               do idim=1,ndim
                  fdrag(idim)= - factor * vrel(idim)
                  dvdrag = fdrag(idim)*ddt  ! HP: replaced dtnew(ilevel) by ddt
-                 dpdrag(idim)=mp(ind_part(j))*dvdrag
                  vp(ind_part(j),idim)=vp(ind_part(j),idim)+dvdrag
-                 vsink_add(idim)=vsink_add(idim)+dvdrag*mp(ind_part(j))
+                 if(weighted_drag)then
+                    if(total_volume(isink)>0d0)then
+                       dpdrag(idim)=weight/total_volume(isink)*msink(isink)*dvdrag
+                       vsink_add(idim)=vsink_add(idim)+dvdrag*weight/total_volume(isink)*msink(isink)
+                    end if
+                 else
+                    dpdrag(idim)=mp(ind_part(j))*dvdrag
+                    vsink_add(idim)=vsink_add(idim)+dvdrag*mp(ind_part(j))
+                 end if
               enddo
 
               ! HP: updates on the gas DF
