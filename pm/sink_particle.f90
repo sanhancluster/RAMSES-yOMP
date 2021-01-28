@@ -4291,7 +4291,7 @@ subroutine rhostar_from_current_level(ilevel)
   end if
 
   ! Loop over cpus
-!$omp parallel private(ig,ip,ind_cell,ind_part,ind_grid,ind_grid_part,x0,igrid,npart1,ipart,local_count)
+!$omp parallel private(ig,ip,ind_cell,ind_part,ind_grid,ind_grid_part,x0,igrid,npart1,ipart,local_count,ok_star)
   do icpu=1,ncpu
      ! Loop over grids
      ig=0
