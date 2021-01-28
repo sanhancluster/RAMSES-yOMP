@@ -2662,7 +2662,7 @@ subroutine grow_bondi(ilevel)
   ! sink particles. On exit, sink mass and velocity are modified.
   !------------------------------------------------------------------------
   integer::igrid,jgrid,ipart,jpart,next_part,info
-  integer::i,ig,ip,npart1,npart2,icpu,isink
+  integer::i,ig,ip,npart1,npart2,icpu,isink,idim
   integer,dimension(1:nvector)::ind_grid,ind_part,ind_grid_part
   real(dp)::density,volume
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_m
@@ -2935,6 +2935,42 @@ subroutine grow_bondi(ilevel)
      if(rt_AGN) dMeff_coarse(isink) = dMeff_coarse(isink) + dMeff_coarse_all(isink)
 #endif
   end do
+
+! Update the velocity of cloud particles
+!$omp parallel private(igrid,npart1,ipart,next_part,isink)
+  do icpu=1,ncpu
+     ! Loop over grids
+!$omp do schedule(dynamic,nchunk)
+     do jgrid=1,numbl(icpu,ilevel)
+        if(icpu==myid)then
+           igrid=active(ilevel)%igrid(jgrid)
+        else
+           igrid=reception(icpu,ilevel)%igrid(jgrid)
+        end if
+
+        npart1=numbp(igrid)  ! Number of particles in the grid
+        ! Count sink and cloud particles
+        if(npart1>0)then
+           ipart=headp(igrid)
+           ! Loop over particles
+           do jpart=1,npart1
+              ! Save next particle   <--- Very important !!!
+              next_part=nextp(ipart)
+              if (is_cloud(typep(ipart))) then
+                 isink = -idp(ipart)
+                 do idim=1,ndim
+                    vp(ipart,idim) = vp(ipart,idim) + vsink_all(isink,idim)/msink(isink)
+                 end do
+              endif
+              ipart=next_part  ! Go to next particle
+           end do
+        endif
+     end do
+!$omp end do nowait
+     ! End loop over grids
+  end do
+  ! End loop over cpus
+!$omp end parallel
 
   ! YDspin
   if(spin_bh)call growspin
@@ -3344,12 +3380,9 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
               do idim=1,ndim
                  fdrag(idim)= - factor * vrel(idim)
                  dvdrag = fdrag(idim)*ddt  ! HP: replaced dtnew(ilevel) by ddt
-                 vp(ind_part(j),idim)=vp(ind_part(j),idim)+dvdrag
-                 if(weighted_drag)then
-                    if(total_volume(isink)>0d0)then
-                       dpdrag(idim)=weight/total_volume(isink)*msink(isink)*dvdrag
-                       vsink_add(idim)=vsink_add(idim)+dvdrag*weight/total_volume(isink)*msink(isink)
-                    end if
+                 if(weighted_drag .and. total_volume(isink)>0d0)then
+                    dpdrag(idim)=weight/total_volume(isink)*msink(isink)*dvdrag
+                    vsink_add(idim)=vsink_add(idim)+dvdrag*weight/total_volume(isink)*msink(isink)
                  else
                     dpdrag(idim)=mp(ind_part(j))*dvdrag
                     vsink_add(idim)=vsink_add(idim)+dvdrag*mp(ind_part(j))
