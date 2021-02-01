@@ -53,7 +53,7 @@ module pm_commons
   integer::ncloud_sink                       !Number of cloud particles
   !/Particles dynamical friction (HP)
   integer :: nindsink = 0
-  real(dp), allocatable, dimension(:,:) :: DF_factor,DF_factor_new
+  real(dp), allocatable, dimension(:,:) :: DF_factor,DF_factor_new,DF_factor_all
 
   ! Particles related arrays
   real(dp), allocatable, dimension(:,:) :: xp        ! Positions

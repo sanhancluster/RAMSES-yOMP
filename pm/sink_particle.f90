@@ -2900,7 +2900,7 @@ subroutine grow_bondi(ilevel)
      call MPI_ALLREDUCE(dMBH_coarse_new,dMBH_coarse_all,nsinkmax,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,info)
      call MPI_ALLREDUCE(dMEd_coarse_new,dMEd_coarse_all,nsinkmax,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,info)
      call MPI_ALLREDUCE(dMsmbh_new     ,dMsmbh_all     ,nsinkmax,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,info)
-     call MPI_ALLREDUCE(DF_factor_new  ,DF_factor      ,nsinkmax*3,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,info)
+     call MPI_ALLREDUCE(DF_factor_new  ,DF_factor_all  ,nsinkmax*3,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,info)
 ! AGNRT
 #ifdef RT
      if(rt_AGN) call MPI_ALLREDUCE(dMeff_coarse_new,dMeff_coarse_all,nsinkmax,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,info)
@@ -2912,11 +2912,13 @@ subroutine grow_bondi(ilevel)
      dMBH_coarse_all=dMBH_coarse_new
      dMEd_coarse_all=dMEd_coarse_new
      dMsmbh_all     =dMBsmbh_new
+     DF_factor_all  =DF_factor_new
 #ifdef RT
      if(rt_AGN) dMeff_coarse_all = dMeff_coarse_new
 #endif
 #endif
   endif
+  DF_factor = DF_factor + DF_factor_all
   if(exact_timer) call timer('sinks - grow','start')
 
 !$omp parallel do
