@@ -1679,8 +1679,10 @@ subroutine SNII_yield (zp_star, ej_m, ej_Z, ej_chem)
   real(dp),dimension(1:5)::log_SNII_H,log_SNII_He,log_SNII_C,log_SNII_N,log_SNII_O
   real(dp),dimension(1:5)::log_SNII_Mg,log_SNII_Si,log_SNII_S,log_SNII_Fe, dum1d
   real(dp)::log_Zstar,fz
-  integer::nz_SN=5, izg, ich
+  integer::nz_SN, izg, ich
   character(len=2)::element_name
+
+  nz_sn=5
 
   ! These are the numbers calculated from Starburst99 (Chabrier+05 with 50Msun cut-off)
   ! (generating code: https://github.com/JinsuRhee/RAMSES-yomp_FB)

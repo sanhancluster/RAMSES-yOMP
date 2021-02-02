@@ -23,7 +23,7 @@
   integer::npart2,ndim2,ncpu2
   integer::ipart,jpart,ipart_old,ilevel,idim,ivar
   integer::i,j,igrid,ncache,ngrid,iskip
-  integer::ind,ix,iy,iz,ilun,icpu
+  integer::ind,ix,iy,iz,ilun,icpu,ich
   integer::i1,i2,i3
   integer::i1_min=0,i1_max=0,i2_min=0,i2_max=0,i3_min=0,i3_max=0
   integer::buf_count,indglob
@@ -147,6 +147,7 @@
 #ifdef NCHEM
      if(nchem>0)then
         allocate(chp(npartmax,1:nchem))
+        chp=0.0
      end if
 #endif
      if(use_initial_mass)then
@@ -1089,6 +1090,15 @@ contains
           if(metal)then
              zp(ipart)=0d0
           end if
+#ifdef NCHEM
+          if(nchem>0)then
+             do ich=1,nchem
+                do j=1,npart
+                   chp(ipart,ich)=0d0
+                end do
+             end do
+          end if
+#endif
        end do
     end if
 
