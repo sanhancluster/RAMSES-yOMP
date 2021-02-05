@@ -416,7 +416,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
         emag=emag+0.125d0*(uold(icell,idim+ndim+2)+uold(icell,idim+nvar))**2
      enddo
 #endif
-     d   = uold(icell,1)
+     d   = max(uold(icell,1), smallr)
      u   = uold(icell,2)/d
      v   = uold(icell,3)/d
      w   = uold(icell,4)/d
@@ -511,10 +511,10 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 
            Z_nei = z_ave*0.02 ! For metal=.false. 
            if(ilevel>ilevel2)then ! touching level-1 cells
-              d_nei     = unew(icell,1)
+              d_nei     = max(unew(icell,1), smallr)
               if(metal) Z_nei = unew(icell,imetal)/d_nei
            else
-              d_nei     = uold(icell,1)
+              d_nei     = max(uold(icell,1), smallr)
               if(metal) Z_nei = uold(icell,imetal)/d_nei
            endif
 
@@ -563,7 +563,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
   !-----------------------------------------
   do i=1,np
      icell = ncoarse+ind_grid(i)+(ind_pos_cell(i)-1)*ngridmax
-     d     = uold(icell,1)
+     d     = max(uold(icell,1), smallr)
      u     = uold(icell,2)/d
      v     = uold(icell,3)/d
      w     = uold(icell,4)/d
@@ -632,7 +632,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
  
 
      ! add the contribution from the original kinetic energy of SN particle
-     d = mSN(i)/vol_loc
+     d = max(mSN(i)/vol_loc, smallr)
      u = pSN(i,1)/mSN(i)
      v = pSN(i,2)/mSN(i)
      w = pSN(i,3)/mSN(i)
@@ -680,7 +680,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
               emag=emag+0.125d0*(pvar(idim+ndim+2)+pvar(idim+nvar))**2
            enddo
 #endif
-           d0=pvar(1)
+           d0=max(pvar(1), smallr)
            u0=pvar(2)/d0
            v0=pvar(3)/d0
            w0=pvar(4)/d0
@@ -698,7 +698,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
               eth0=T2min*d0/scale_T2/(gamma-1.0)
            endif 
 
-           d= mloadSN(i  )/dble(nSNnei)/vol_nei
+           d= max(mloadSN(i  )/dble(nSNnei)/vol_nei, smallr)
            u=(ploadSN(i,1)/dble(nSNnei)+p_solid(i,j)*vSNnei(1,j))/vol_nei/d
            v=(ploadSN(i,2)/dble(nSNnei)+p_solid(i,j)*vSNnei(2,j))/vol_nei/d
            w=(ploadSN(i,3)/dble(nSNnei)+p_solid(i,j)*vSNnei(3,j))/vol_nei/d
@@ -710,7 +710,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
            etot0  = eth0+ekk0+emag+ek_solid(i,j)/vol_nei ! additional energy from SNe+entrained gas
 
            ! the minimum thermal energy input floor
-           d   = pvar(1)
+           d   = max(pvar(1), smallr)
            u   = pvar(2)/d
            v   = pvar(3)/d
            w   = pvar(4)/d
@@ -1019,10 +1019,10 @@ subroutine mech_fine_snIa_mpi(ilevel)
         if(cpu_map(father(igrid)).eq.myid) then ! if belong to myid
            Z_nei = z_ave*0.02 ! for metal=.false.
            if(ilevel>ilevel2)then ! touching level-1 cells
-              d_nei     = unew(icell,1)
+              d_nei     = max(unew(icell,1), smallr)
               if(metal) Z_nei = unew(icell,imetal)/d_nei
            else
-              d_nei     = uold(icell,1)
+              d_nei     = max(uold(icell,1), smallr)
               if(metal) Z_nei = uold(icell,imetal)/d_nei
            endif
            if(loading_type.eq.1.and.fload_i<f_LOAD)then
@@ -1102,7 +1102,7 @@ subroutine mech_fine_snIa_mpi(ilevel)
               emag=emag+0.125d0*(pvar(idim+ndim+2)+pvar(idim+nvar))**2
            enddo
 #endif
-           d0=pvar(1)
+           d0=max(pvar(1), smallr)
            u0=pvar(2)/d0
            v0=pvar(3)/d0
            w0=pvar(4)/d0
@@ -1119,7 +1119,7 @@ subroutine mech_fine_snIa_mpi(ilevel)
               eth0 = T2min*d0/scale_T2/(gamma-1)
            endif 
 
-           d= mloadSN_i   /dble(nSNnei)/vol_nei
+           d= max(mloadSN_i   /dble(nSNnei)/vol_nei, smallr)
            u=(ploadSN_i(1)/dble(nSNnei)+p_solid(i,j)*vSNnei(1,j))/vol_nei/d
            v=(ploadSN_i(2)/dble(nSNnei)+p_solid(i,j)*vSNnei(2,j))/vol_nei/d
            w=(ploadSN_i(3)/dble(nSNnei)+p_solid(i,j)*vSNnei(3,j))/vol_nei/d
@@ -1132,7 +1132,7 @@ subroutine mech_fine_snIa_mpi(ilevel)
            etot0  = eth0+ekk0+emag+ek_solid(i,j)/vol_nei  ! additional energy from SNe+entrained gas
 
            ! the minimum thermal energy input floor
-           d   = pvar(1)
+           d   = max(pvar(1), smallr)
            u   = pvar(2)/d
            v   = pvar(3)/d
            w   = pvar(4)/d

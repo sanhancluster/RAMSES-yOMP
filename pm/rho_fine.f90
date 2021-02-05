@@ -649,7 +649,7 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
   ! are updated by the input particle list.
   !------------------------------------------------------------------
   logical::error
-  integer::j,ind,idim,nx_loc,ind2
+  integer::j,ind,idim,nx_loc,ind2,ind_nbor
   real(dp)::dx,dx_loc,scale,vol_loc
   ! Grid-based arrays
   integer ,dimension(1:nvector,1:threetondim)::nbors_father_cells
@@ -820,7 +820,12 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
 #endif
   do ind=1,twotondim
      do j=1,np
-        igrid(j,ind)=son(nbors_father_cells(ind_grid_part(j),kg(j,ind)))
+        ind_nbor=nbors_father_cells(ind_grid_part(j),kg(j,ind))
+        if(ind_nbor > 0)then
+           igrid(j,ind)=son(ind_nbor)
+        else
+           igrid(j,ind)=0
+        endif
      end do
   end do
 
@@ -1002,13 +1007,18 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
 
      do ind2=1,threetondim
         do ind=1,twotondim
-           indp_nb(ind2,ind)=ncoarse+(ind-1)*ngridmax+son(nbors_father_cells(1,ind2))
+           ind_nbor = nbors_father_cells(1,ind2)
+           if(ind_nbor>0)then
+              indp_nb(ind2,ind)=ncoarse+(ind-1)*ngridmax+son(ind_nbor)
+           else
+              indp_nb(ind2,ind)=0
+           end if
         end do
      end do
 
      do ind2=1,threetondim
         do ind=1,twotondim
-           if(rho_add(ind2,ind)>0d0) then
+           if(indp_nb(ind2,ind)>0 .and. rho_add(ind2,ind)>0d0) then
 !$omp atomic update
               rho(indp_nb(ind2,ind))=rho(indp_nb(ind2,ind))+rho_add(ind2,ind)
            end if
@@ -1017,7 +1027,7 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
 
      do ind2=1,threetondim
         do ind=1,twotondim
-           if(rho_top_add(ind2,ind)>0d0) then
+           if(indp_nb(ind2,ind)>0 .and. rho_top_add(ind2,ind)>0d0) then
 !$omp atomic update
               rho_top(indp_nb(ind2,ind))=rho_top(indp_nb(ind2,ind))+rho_top_add(ind2,ind)
            end if
@@ -1026,7 +1036,7 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
 
      do ind2=1,threetondim
         do ind=1,twotondim
-           if(phi_add(ind2,ind)>0d0) then
+           if(indp_nb(ind2,ind)>0 .and. phi_add(ind2,ind)>0d0) then
 !$omp atomic update
               phi(indp_nb(ind2,ind))=phi(indp_nb(ind2,ind))+phi_add(ind2,ind)
            end if
