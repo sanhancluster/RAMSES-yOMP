@@ -3001,13 +3001,13 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
 #endif
   !/AGNRT
   implicit none
-  integer::ng,np,ilevel,ic
+  integer::ng,np,ilevel,ic,ng2
   integer,dimension(1:nvector)::ind_grid
   integer,dimension(1:nvector)::ind_grid_part,ind_part
   !-----------------------------------------------------------------------
   ! This routine is called by subroutine bondi_hoyle.
   !-----------------------------------------------------------------------
-  integer::i,j,idim,nx_loc,isink,jpart,ind
+  integer::i,j,idim,nx_loc,isink,jpart,ind,ind_grid_now
   real(dp)::r2,d,u,v,w,e
 #ifdef SOLVERmhd
   real(dp)::bx1,bx2,by1,by2,bz1,bz2
@@ -3426,26 +3426,29 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
 
   if (MC_tracer) then
      acc_cell=0d0
+     i=0
+     ind_grid=0
+     ind_grid_now=0
      do j=1,np
         if(ok(j)) then
            if(isink/=-idp(ind_part(j))) then
               write(*,*) 'Error on accrete_bondi', myid, j, isink, -idp(ind_part(j)), ind_part(j)
            end if
-           ! Fix ind_grid if particle does not belong to it anymore
-           if(igrid(j)/=ind_grid(ind_grid_part(j))) then
-              ng=ng+1
-              ind_grid(ng)=igrid(j)
-              ind_grid_part(j)=ng
+           if(i == 0 .or. ind_grid_now /= igrid(j)) then
+              i=i+1
+              ind_grid_now=igrid(j)
+              ind_grid(i)=igrid(j)
            end if
-           acc_cell(ind_grid_part(j),icell(j)) = &
-                 & acc_cell(ind_grid_part(j),icell(j)) + acc_part(j)
+           acc_cell(i,icell(j)) = &
+                 & acc_cell(i,icell(j)) + acc_part(j)
         end if
      end do
+     ng2=i
      ! MC Tracer
      ! Init local index
      ii = 0
      ! The gas is coming from the central cell (and the tracers)
-     do i=1,ng
+     do i=1,ng2
         itracer = headp(ind_grid(i))
         do jpart=1,numbp(ind_grid(i))
            if(is_gas_tracer(typep(itracer)) .and. move_flag(itracer) == 0) then
