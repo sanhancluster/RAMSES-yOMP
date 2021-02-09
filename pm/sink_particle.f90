@@ -293,7 +293,7 @@ subroutine make_sink(ilevel)
   !------------------------------
   ! Determine AGN formation sites
   !------------------------------
-!  call quenching(ilevel)
+  call quenching(ilevel)
 
   !----------------------------
   ! Compute number of new sinks
@@ -340,7 +340,7 @@ subroutine make_sink(ilevel)
            ! Check if gas is Jeans unstable
            if(d    <d_thres)ok(i)=.false.
            ! Quenching criterion
-           ! if(flag2(ind_cell(i))==1)ok(i)=.false.
+           if(flag2(ind_cell(i))==1)ok(i)=.false.
 
            ! ENFORCE MASS CRITERION (MT)
            ! Check if the mass criterion will be met
@@ -4672,6 +4672,7 @@ subroutine quenching(ilevel)
 
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
+  if(sig_sink<=0.)return
 
   ! Conversion factor from user units to cgs units
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
@@ -4740,7 +4741,7 @@ subroutine quenching(ilevel)
         sig_u=sqrt(max(sig_u/tot_m-ave_u**2, 0._dp))*scale_v/1d5
         sig_v=sqrt(max(sig_v/tot_m-ave_v**2, 0._dp))*scale_v/1d5
         sig_w=sqrt(max(sig_w/tot_m-ave_w**2, 0._dp))*scale_v/1d5
-        str_d=tot_m/(2**ndim*vol_loc)*scale_nH
+        sig_tot=sqrt(sig_u**2+sig_v**2+sig_w**2)
      endif
 
      ! Loop over cells
@@ -4749,7 +4750,7 @@ subroutine quenching(ilevel)
         ind_cell=iskip+igrid
         ! AGN formation sites
         ! v_disp > sig_sink km/s
-        if(MAX(sig_u,sig_v,sig_w)>sig_sink)then
+        if(sig_tot>sig_sink)then
            flag2(ind_cell)=0
         else
            flag2(ind_cell)=1

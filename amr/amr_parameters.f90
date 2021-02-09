@@ -160,7 +160,7 @@ module amr_parameters
   real(dp)::n_sink = -1.d0    ! Sink particle density threshold in H/cc
   real(dp)::ns_sink = -1.d0   ! Sink particle stellar density threshold in H/cc
   real(dp)::rho_sink = -1.D0  ! Sink particle density threshold in g/cc
-  real(dp)::sig_sink = 20.    ! Sink particle stellar sigma threshold in km/s
+  real(dp)::sig_sink = -1.    ! Sink particle stellar 3D velocity dispersion threshold in km/s
   real(dp)::d_sink = -1.D0    ! Sink particle density threshold in user units
   real(dp)::m_star =-1.0      ! Star particle mass in units of mass_sph
   real(dp)::n_star =0.1D0     ! Star formation density threshold in H/cc
