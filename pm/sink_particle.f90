@@ -4665,7 +4665,7 @@ subroutine quenching(ilevel)
   !------------------------------------------------------------------------
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
   real(dp)::dx,dx_loc,scale,vol_loc
-  real(dp)::str_d,tot_m,ave_u,ave_v,ave_w,sig_u,sig_v,sig_w
+  real(dp)::str_d,tot_m,ave_u,ave_v,ave_w,sig_u,sig_v,sig_w,sig_tot
   integer::igrid,ipart,jpart,next_part,ind_cell,iskip,ind
   integer::i,npart1,npart2,nx_loc
   real(dp),dimension(1:3)::skip_loc
