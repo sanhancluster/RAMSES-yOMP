@@ -47,7 +47,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   real(dp),dimension(1:nvector,1:3)::pSNe
   real(dp),dimension(1:nvector,1:nchem)::mchSNe
   real(dp),dimension(1:twotondim,1:nchem)::mch8 ! SNe
-  real(dp)::mejecta,mejecta_ch(1:nchem),Zejecta,mfrac_snII
+  real(dp)::mejecta,Zejecta,mfrac_snII
   real(dp)::snII_freq_noboost, M_SNII_var=0.0
   real(dp),parameter::msun2g=1.989d33
   real(dp),parameter::myr2s=3.1536000d+13
@@ -1672,7 +1672,8 @@ subroutine SNII_yield (zp_star, ej_m, ej_Z, ej_chem)
   use amr_commons, ONLY:dp,nchem,chem_list
   use hydro_parameters, ONLY:ichem 
   implicit none
-  real(dp)::zp_star,ej_m,ej_Z,ej_chem(1:nchem)
+  real(dp)::zp_star,ej_m,ej_Z
+  real(dp),dimension(1:nchem)::ej_chem
 !-----------------------------------------------------------------
 ! Notice that even if the name is 'yield', 
 ! the return value is actually a metallicity fraction for simplicity
