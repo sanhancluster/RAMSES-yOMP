@@ -453,7 +453,7 @@ subroutine make_sink(ilevel)
               x_tmp(izero_myid+ninc_omp,1)=(xg(ind_grid(i),1)+xc(ind,1)-skip_loc(1))*scale
               x_tmp(izero_myid+ninc_omp,2)=(xg(ind_grid(i),2)+xc(ind,2)-skip_loc(2))*scale
               x_tmp(izero_myid+ninc_omp,3)=(xg(ind_grid(i),3)+xc(ind,3)-skip_loc(3))*scale
-              dens_tmp(izero_myid+ninc_omp)=uold(ind_cell(i),1) + rho_star(ind_cell(i))
+              dens_tmp(izero_myid+ninc_omp)=rho_star(ind_cell(i))
               flag_tmp(izero_myid+ninc_omp)=1
               point2flag2(ninc_omp)=ind_cell(i) ! This is a local pointer that is not shared with other cpus
            end if
