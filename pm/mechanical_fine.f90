@@ -52,6 +52,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   real(dp),parameter::msun2g=1.989d33
   real(dp),parameter::myr2s=3.1536000d+13
   real(dp)::ttsta,ttend
+  real(dp),dimension(1:nchem)::Zejecta_chem_II_local
   logical::ok,done_star
 #ifdef RT
   real(dp),allocatable,dimension(:)::L_star
@@ -156,10 +157,10 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   ! Loop over cpus
 !$omp parallel private(ip,ind_grid,ind_pos_cell,nSNe,mSNe,pSNe,nphSNe,mchSNe,mZSNe,igrid,npart1,npart2,ipart,next_part, &
 !$omp & x0,m8,mz8,p8,n8,nph8,mch8,ok,ind_son,ind,iskip,ind_cell,mejecta,nsnII_star,mass0,mass_t,mfrac_snII, &
-!$omp & Zejecta,Zejecta_chem_II) firstprivate(M_SNII_var) reduction(+:nSNc,nsnII_tot) default(none) &
+!$omp & Zejecta,Zejecta_chem_II_local) firstprivate(M_SNII_var) reduction(+:nSNc,nsnII_tot) default(none) &
 !$omp & shared(ncpu,numbl,ilevel,myid,active,reception,numbp,xg,dx,skip_loc,headp,nextp,typep,use_initial_mass,mp0, &
 !$omp & scale_msun,mp,sn2_real_delay,tp,tyoung,snII_Zdep_yield,zp,snII_freq,yield,dteff,idp,done_star,xp,scale, &
-!$omp & ncoarse,ngridmax,son,vp,metal,MC_tracer,tmpp)
+!$omp & ncoarse,ngridmax,son,vp,metal,MC_tracer,tmpp,Zejecta_chem_II)
      ip=0
      ! Loop over grids
 !$omp do schedule(dynamic,nchunk)
@@ -208,11 +209,12 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                     if(tp(ipart).ge.tyoung)then  ! if younger than t_sne
 
                        if(SNII_zdep_yield)then
-                          call SNII_yield (zp(ipart), mfrac_snII, Zejecta, Zejecta_chem_II)
+                          call SNII_yield (zp(ipart), mfrac_snII, Zejecta, Zejecta_chem_II_local)
                           ! Adjust M_SNII mass not to double-count the mass loss from massive stars
                           M_SNII_var = mfrac_snII / snII_freq ! ex) 0.1 / 0.01 = 10 Msun
                        else
                           Zejecta = zp(ipart)+(1d0-zp(ipart))*yield
+                          Zejecta_chem_II_local(:) = Zejecta_chem_II(:)
                        endif
 
                        call get_number_of_sn2  (tp(ipart), dteff, zp(ipart), idp(ipart),&
@@ -226,11 +228,12 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                        ok=.true.
 
                        if(SNII_zdep_yield)then
-                          call SNII_yield (zp(ipart), mfrac_snII, Zejecta, Zejecta_chem_II)
+                          call SNII_yield (zp(ipart), mfrac_snII, Zejecta, Zejecta_chem_II_local)
                           ! Adjust M_SNII mass not to double-count the mass loss from massive stars
                           M_SNII_var = mfrac_snII / snII_freq ! ex) 0.1 / 0.05 = 2 Msun
                        else
                           Zejecta = zp(ipart)+(1d0-zp(ipart))*yield
+                          Zejecta_chem_II_local(:) = Zejecta_chem_II(:)
                        endif
 
                        ! number of sn doesn't have to be an integer
@@ -273,7 +276,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                     mz8(ind_son) = mz8(ind_son) + mejecta*Zejecta
                  endif
                  do ich=1,nchem
-                    mch8(ind_son,ich) = mch8(ind_son,ich) + mejecta*Zejecta_chem_II(ich)
+                    mch8(ind_son,ich) = mch8(ind_son,ich) + mejecta*Zejecta_chem_II_local(ich)
                  end do
 
                  ! subtract the mass return
