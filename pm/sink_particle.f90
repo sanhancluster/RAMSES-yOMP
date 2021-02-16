@@ -3028,7 +3028,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
   real(dp)::floorB,d_ini,dmsink
   real(dp)::dx_min
   integer ::counter
-  real(dp)::dmom,ekk,dvdrag,vnorm_rel,factor,mach,alpha,cgas,fudge,factG
+  real(dp)::dmom,ekk,dvdrag,vnorm_rel,factor,mach,alpha,cgas,fudge,factG,mach_factor,max_factor
   real(dp),dimension(1:ndim)::dpdrag,vrel,fdrag
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,pi,d_star
   real(dp)::epsilon_r, Deltat, ddt, dvdrag_norm
@@ -3037,6 +3037,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
   real(dp),dimension(1:ndim)::vsink_add
   real(dp),dimension(1:nvector)::acc_part
   real(dp),dimension(1:nvector,1:twotondim)::acc_cell
+  real(dp),parameter::myr2s=3.1536000d+13
 
 #ifdef RT
   ! AGNRT
@@ -3244,7 +3245,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
         floorB=max(0.75*d_ini,1d-10)
 
         ! Allow for zero accretion (HP)
-        if (no_accretion) then
+        if (no_accretion .or. total_volume(isink) == 0d0) then
            acc_mass = 0d0
         else if (maximum_accretion) then
            ! Accrete up to 99 % of the cell mass, kernel weighted
@@ -3365,17 +3366,27 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
               else
                  alpha=max((d/(d_boost/scale_nH))**boost_drag,1d0)
               end if
-              factor=alpha * fudge * d*msink(isink)/cgas**2 / vnorm_rel
               ! Drag force as a function of the Mach number, see Chapon+ 2013, Ostriker 1999
               ! TODO: deal with very low mach number
-              if(mach.le.0.950d0)factor=factor/mach**2*(0.5d0*log((1d0+mach)/(1d0-mach))-mach)
-              if(mach.ge.1.007d0)factor=factor/mach**2*(0.5d0*log(mach**2-1d0)+3.2d0)
+              mach_factor=1d0
+              if(mach<=0.950d0) then
+                 mach_factor=mach_factor/mach**2*(0.5d0*log((1d0+mach)/(1d0-mach))-mach)
+              else if(mach>=1.007d0) then
+                 mach_factor=mach_factor/mach**2*(0.5d0*log(mach**2-1d0)+3.2d0)
+              end if
+
+              factor = mach_factor * alpha * fudge * d*msink(isink)/cgas**2 / vnorm_rel
               ! HP: updates on the gas DF
               dvdrag_norm = factor * ddt * vnorm_rel
               if ((dvdrag_norm/vnorm_rel .ge. 0.1) .and. (counter .le. 9)) then
                  ddt=0.1/(dvdrag_norm/vnorm_rel)*ddt
               end if
-              factor = min(1/ddt, factor)
+              max_factor = 1/ddt
+              if(adfmax>0d0) then
+                 max_factor = min(adfmax*1d5/scale_v * (scale_t/myr2s) / vnorm_rel, max_factor)
+              end if
+
+              factor = min(max_factor, factor)
               DF_factor_add = DF_factor_add + factor * ddt * mp(ind_part(j)) / msink(isink)
               !/HP
 
