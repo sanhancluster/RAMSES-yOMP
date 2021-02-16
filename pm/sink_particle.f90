@@ -2961,7 +2961,7 @@ subroutine grow_bondi(ilevel)
               if (is_cloud(typep(ipart))) then
                  isink = -idp(ipart)
                  do idim=1,ndim
-                    vp(ipart,idim) = vp(ipart,idim) + vsink_all(isink,idim)/msink(isink)
+                    vp(ipart,idim) = vp(ipart,idim) + (vsink_all(isink,idim)-msink_all(isink)*vsink(isink,idim))/msink(isink)
                  end do
               endif
               ipart=next_part  ! Go to next particle
