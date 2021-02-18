@@ -2961,7 +2961,9 @@ subroutine grow_bondi(ilevel)
               if (is_cloud(typep(ipart))) then
                  isink = -idp(ipart)
                  do idim=1,ndim
-                    vp(ipart,idim) = vp(ipart,idim) + (vsink_all(isink,idim)-msink_all(isink)*vsink(isink,idim))/msink(isink)
+                    vp(ipart,idim) = vp(ipart,idim) + &
+                          & (vsink_all(isink,idim)-msink_all(isink)*vsink(isink,idim)) &
+                          & /(msink(isink)-msink_all(isink))
                  end do
               endif
               ipart=next_part  ! Go to next particle
@@ -3360,12 +3362,12 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
               vrel(3)=vp(ind_part(j),3)-w
               vnorm_rel=max(sqrt( vrel(1)**2 + vrel(2)**2 + vrel(3)**2 ), smallc)
               mach=vnorm_rel/cgas
-              if(drag_part) then
-                 d_star=m_background(isink,1)/vol_cloud
-                 alpha = max((d/max(d_star,d_boost/scale_nH))**boost_drag,1d0)
-              else
-                 alpha=max((d/(d_boost/scale_nH))**boost_drag,1d0)
-              end if
+              alpha=max((d/(d_boost/scale_nH))**boost_drag,1d0)
+              !if(drag_part) then
+              !   d_star=m_background(isink,1)/vol_cloud
+              !   alpha = max((d/max(d_star,d_boost/scale_nH))**boost_drag,1d0)
+              !else
+              !end if
               ! Drag force as a function of the Mach number, see Chapon+ 2013, Ostriker 1999
               ! TODO: deal with very low mach number
               mach_factor=1d0
@@ -6713,7 +6715,7 @@ subroutine get_drag_part(ilevel)
   integer :: npart1, isink, ipart, jpart, idim, itype
   integer :: ii,nsink_cell
 
-  real(dp) :: pi, factG, c, dx_min, scale, r2_cloud, vol_cloud
+  real(dp) :: pi, factG, c, dx_min, scale, r2_cloud, vol_cloud, alpha
   real(dp) :: scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2
   real(dp) :: b90, Rsh, bmin, CoulombLog, factor
   real(dp) :: dx_dm, r2_dm, vol_dm, rmax_dm, d2_sink_part
@@ -6981,7 +6983,7 @@ subroutine get_drag_part(ilevel)
   !   3) we remove the momentum due to matter which is at THIS level
   !   using eq. (6) and (7) from Antonini+11
 
-!$omp parallel do private(isink,itype,b90,Rsh,bmin,CoulombLog,volume,factor) schedule(static)
+!$omp parallel do private(isink,itype,b90,Rsh,bmin,CoulombLog,volume,factor,alpha) schedule(static)
   do isink = 1 ,nsink
      do itype = 1,2
         mass_DF(isink, ilevel, itype)       = mass_DFall(isink, itype)
@@ -7000,7 +7002,8 @@ subroutine get_drag_part(ilevel)
            volume = vol_dm
         end if
         if (CoulombLog .gt. 1) then
-           factor = 4*pi*factG**2*msink(isink)/vrel_sink_norm(isink, itype)**3 * &
+           alpha = max((m_background(isink,itype)/volume/(d_boost/scale_nH))**boost_drag_part, 1d0)
+           factor = alpha*4*pi*factG**2*msink(isink)/vrel_sink_norm(isink, itype)**3 * &
                 & (mass_lowspeedall(isink, itype)*log(CoulombLog)+&
                 &  fact_fastall(isink, itype)) / volume
         else
@@ -7027,7 +7030,7 @@ subroutine get_drag_part(ilevel)
 !$omp parallel
   do icpu=1, ncpu
      ! Loop over grids
-!$omp do private(igrid,npart1,ipart,next_part,isink,b90,Rsh,bmin,CoulombLog,volume,factor)
+!$omp do private(igrid,npart1,ipart,next_part,isink,b90,Rsh,bmin,CoulombLog,volume,factor,alpha)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -7064,7 +7067,8 @@ subroutine get_drag_part(ilevel)
                                &mass_lowspeed(isink, ii, itype)*log(CoulombLog)+&
                                &fact_fast(isink, ii, itype)) / volume
                        end do
-                       factor = factor * 4*pi*factG**2*msink(isink)/vrel_sink_norm(isink, itype)**3
+                       alpha = max((m_background(isink,itype)/vol_cloud/(d_boost/scale_nH))**boost_drag_part, 1d0)
+                       factor = factor * alpha * 4*pi*factG**2*msink(isink)/vrel_sink_norm(isink, itype)**3
                     else
                        factor = 0
                     end if
