@@ -640,7 +640,7 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
 #endif
   use hydro_commons, ONLY: mass_sph
   implicit none
-  integer::ng,np,ilevel
+  integer::ng,np,ilevel,ind_grid_now
   integer ,dimension(1:nvector)::ind_cell,ind_grid_part,ind_part
   real(dp),dimension(1:nvector,1:ndim)::x0
   !------------------------------------------------------------------
@@ -872,25 +872,27 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
 #endif
      end do
 
-     if (.not. point_mass_sink) then
-        do j=1,np
-            vol2(j,ind)=mmm(j)*vol(j,ind)/vol_loc
-        end do
-     else
-        do j=1,np
-            vol2(j,ind)=mmm(j)*vol(j,ind)/vol_loc
-            if (is_cloud(fam(j))) then
-                if (is_central_cloud(fam(j))) then
-                    vol2(j,ind)=vol(j,ind)/vol_loc*msink(-idp(ind_part(j)))
-                else
-                    vol2(j,ind)=0
-                end if
-            end if
-        end do
-     end if
+     do j=1,np
+        if(is_cloud(fam(j))) then
+           vol2(j,ind)=mmm(j)*vol(j,ind)/vol_loc
+        else
+           vol2(j,ind)=mmm(j)*vol(j,ind)/vol_loc * factor
+        end if
+        if (point_mass_sink .and. is_cloud(fam(j))) then
+           if (is_central_cloud(fam(j))) then
+              vol2(j,ind)=vol(j,ind)/vol_loc*msink(-idp(ind_part(j)))
+           else
+              vol2(j,ind)=0
+           end if
+        end if
+     end do
 
      do j=1,np
-        vol3(j,ind)=vol(j,ind)
+        if(is_cloud(fam(j))) then
+           vol3(j,ind)=vol(j,ind)
+        else
+           vol3(j,ind)=vol(j,ind) * factor
+        end if
      end do
 
      ! Remove test particles for static runs
@@ -923,91 +925,102 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
      endif
   end do
 
-  ! OMPNOTE: We use 2 strategies
-  ! Single grid case: deposit rho to temporary array and put it to common array later (Faster at high density)
-  ! Multiple grid case: classical way (Faster at low density)
-  if(ng==1) then
-     rho_add = 0d0
+  rho_add = 0d0; rho_top_add = 0d0; phi_add = 0d0
+  ind_grid_now = 0
+  do j=1,np
+     if(ind_grid_part(j) /= ind_grid_now) then
+        if(ind_grid_now > 0) then
+           ! Compute neighboring grid indices
+           do ind2=1,threetondim
+              do ind=1,twotondim
+                 ind_nbor = nbors_father_cells(ind_grid_now,ind2)
+                 if(ind_nbor>0)then
+                    indp_nb(ind2,ind)=ncoarse+(ind-1)*ngridmax+son(ind_nbor)
+                 else
+                    indp_nb(ind2,ind)=0
+                 end if
+              end do
+           end do
+           ! Add temporal arrays to common arrays
+           do ind2=1,threetondim
+              do ind=1,twotondim
+                 if(indp_nb(ind2,ind)>0 .and. rho_add(ind2,ind)>0d0) then
+!$omp atomic update
+                    rho(indp_nb(ind2,ind))=rho(indp_nb(ind2,ind))+rho_add(ind2,ind)
+                 end if
+              end do
+           end do
+           do ind2=1,threetondim
+              do ind=1,twotondim
+                 if(indp_nb(ind2,ind)>0 .and. rho_top_add(ind2,ind)>0d0) then
+!$omp atomic update
+                    rho_top(indp_nb(ind2,ind))=rho_top(indp_nb(ind2,ind))+rho_top_add(ind2,ind)
+                 end if
+              end do
+           end do
+           do ind2=1,threetondim
+              do ind=1,twotondim
+                 if(indp_nb(ind2,ind)>0 .and. phi_add(ind2,ind)>0d0) then
+!$omp atomic update
+                    phi(indp_nb(ind2,ind))=phi(indp_nb(ind2,ind))+phi_add(ind2,ind)
+                 end if
+              end do
+           end do
+        end if
+        rho_add = 0d0; rho_top_add = 0d0; phi_add = 0d0
+        ind_grid_now = ind_grid_part(j)
+     end if
+
      do ind=1,twotondim
         if(cic_levelmax==0.or.ilevel<=cic_levelmax)then
-           do j=1,np
-              if(ok(j,ind)) then
-                 if(is_cloud(fam(j)))then
-                    rho_add(kg(j,ind),icell(j,ind))=rho_add(kg(j,ind),icell(j,ind))+vol2(j,ind)
-                 else
-                    rho_add(kg(j,ind),icell(j,ind))=rho_add(kg(j,ind),icell(j,ind))+vol2(j,ind)*factor
-                 end if
-              end if
-           end do
+           if(ok(j,ind)) then
+              rho_add(kg(j,ind),icell(j,ind))=rho_add(kg(j,ind),icell(j,ind))+vol2(j,ind)
+           end if
         else if(ilevel>cic_levelmax)then
-           do j=1,np
-              ! check for non-DM (and non-tracer)
-              if ( ok(j,ind) .and. is_not_DM(fam(j)) ) then
-                 if(is_cloud(fam(j)))then
-                    rho_add(kg(j,ind),icell(j,ind))=rho_add(kg(j,ind),icell(j,ind))+vol2(j,ind)
-                 else
-                    rho_add(kg(j,ind),icell(j,ind))=rho_add(kg(j,ind),icell(j,ind))+vol2(j,ind)*factor
-                 end if
-              end if
-           end do
+           ! check for non-DM (and non-tracer)
+           if ( ok(j,ind) .and. is_not_DM(fam(j)) ) then
+              rho_add(kg(j,ind),icell(j,ind))=rho_add(kg(j,ind),icell(j,ind))+vol2(j,ind)
+           end if
         end if
      end do
 
-     rho_top_add = 0d0
      do ind=1,twotondim
         if(ilevel==cic_levelmax)then
-           do j=1,np
-              ! check for DM
-              if ( ok(j,ind) .and. is_DM(fam(j)) ) then
-                 if(is_cloud(fam(j)))then
-                    rho_top_add(kg(j,ind),icell(j,ind))=rho_top_add(kg(j,ind),icell(j,ind))+vol2(j,ind)
-                 else
-                    rho_top_add(kg(j,ind),icell(j,ind))=rho_top_add(kg(j,ind),icell(j,ind))+vol2(j,ind)*factor
-                 end if
-              end if
-           end do
+           ! check for DM
+           if ( ok(j,ind) .and. is_DM(fam(j)) ) then
+              rho_top_add(kg(j,ind),icell(j,ind))=rho_top_add(kg(j,ind),icell(j,ind))+vol2(j,ind)
+           end if
         endif
      end do
 
-     phi_add = 0d0
      do ind=1,twotondim
         if(cic_levelmax==0.or.ilevel<cic_levelmax)then
-           do j=1,np
-              if(ok2(j,ind))then
-                 if(is_cloud(fam(j)))then
-                    phi_add(kg(j,ind),icell(j,ind))=phi_add(kg(j,ind),icell(j,ind))+vol3(j,ind)
-                 else
-                    phi_add(kg(j,ind),icell(j,ind))=phi_add(kg(j,ind),icell(j,ind))+vol3(j,ind)*factor
-                 end if
-              end if
-           end do
+           if(ok2(j,ind))then
+              phi_add(kg(j,ind),icell(j,ind))=phi_add(kg(j,ind),icell(j,ind))+vol3(j,ind)
+           end if
         else if(ilevel>=cic_levelmax)then
-           do j=1,np
-              if ( ok2(j,ind) .and. is_not_DM(fam(j)) ) then
-                 if(is_cloud(fam(j)))then
-                    phi_add(kg(j,ind),icell(j,ind))=phi_add(kg(j,ind),icell(j,ind))+vol3(j,ind)
-                 else
-                    phi_add(kg(j,ind),icell(j,ind))=phi_add(kg(j,ind),icell(j,ind))+vol3(j,ind)*factor
-                 end if
-              end if
-           end do
+           if ( ok2(j,ind) .and. is_not_DM(fam(j)) ) then
+              phi_add(kg(j,ind),icell(j,ind))=phi_add(kg(j,ind),icell(j,ind))+vol3(j,ind)
+           end if
         endif
         ! Always refine sinks to the maximum level
         ! by setting particle number density above m_refine(ilevel)
         if(sink_refine)then
-           do j=1,np
-              if ( is_cloud(fam(j)) ) then
-                 ! if (direct_force_sink(-1*idp(ind_part(j))))then
-                 phi_add(kg(j,ind),icell(j,ind))=phi_add(kg(j,ind),icell(j,ind))+m_refine(ilevel)
-                 ! endif
-              end if
-           end do
+           if ( is_cloud(fam(j)) ) then
+              ! if (direct_force_sink(-1*idp(ind_part(j))))then
+              phi_add(kg(j,ind),icell(j,ind))=phi_add(kg(j,ind),icell(j,ind))+m_refine(ilevel)
+              ! endif
+           end if
         end if
      end do
+  end do
 
+  ! Empty remaining cache
+  if(ind_grid_now > 0) then
+     ! Compute neighboring grid indices
      do ind2=1,threetondim
         do ind=1,twotondim
-           ind_nbor = nbors_father_cells(1,ind2)
+           ind_nbor = nbors_father_cells(ind_grid_now,ind2)
            if(ind_nbor>0)then
               indp_nb(ind2,ind)=ncoarse+(ind-1)*ngridmax+son(ind_nbor)
            else
@@ -1015,7 +1028,7 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
            end if
         end do
      end do
-
+     ! Add temporal arrays to common arrays
      do ind2=1,threetondim
         do ind=1,twotondim
            if(indp_nb(ind2,ind)>0 .and. rho_add(ind2,ind)>0d0) then
@@ -1024,7 +1037,6 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
            end if
         end do
      end do
-
      do ind2=1,threetondim
         do ind=1,twotondim
            if(indp_nb(ind2,ind)>0 .and. rho_top_add(ind2,ind)>0d0) then
@@ -1033,7 +1045,6 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
            end if
         end do
      end do
-
      do ind2=1,threetondim
         do ind=1,twotondim
            if(indp_nb(ind2,ind)>0 .and. phi_add(ind2,ind)>0d0) then
@@ -1042,106 +1053,7 @@ subroutine cic_amr(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel,multipole_tmp
            end if
         end do
      end do
-
-  else
-     ! Compute parent cell adress
-     do ind=1,twotondim
-        do j=1,np
-           indp(j,ind)=ncoarse+(icell(j,ind)-1)*ngridmax+igrid(j,ind)
-        end do
-     end do
-
-     do ind=1,twotondim
-        if(cic_levelmax==0.or.ilevel<=cic_levelmax)then
-           do j=1,np
-              if(ok(j,ind))then
-                 if(is_cloud(fam(j)))then
-!$omp atomic update
-                    rho(indp(j,ind))=rho(indp(j,ind))+vol2(j,ind)
-                 else
-!$omp atomic update
-                    rho(indp(j,ind))=rho(indp(j,ind))+vol2(j,ind)*factor
-                 end if
-              end if
-           end do
-        else if(ilevel>cic_levelmax)then
-           do j=1,np
-              ! check for non-DM (and non-tracer)
-              if ( ok(j,ind) .and. is_not_DM(fam(j)) ) then
-                 if(is_cloud(fam(j)))then
-!$omp atomic update
-                    rho(indp(j,ind))=rho(indp(j,ind))+vol2(j,ind)
-                 else
-!$omp atomic update
-                    rho(indp(j,ind))=rho(indp(j,ind))+vol2(j,ind)*factor
-                 end if
-              end if
-           end do
-        endif
-     end do
-
-     do ind=1,twotondim
-        if(ilevel==cic_levelmax)then
-           do j=1,np
-              ! check for DM
-              if ( ok(j,ind) .and. is_DM(fam(j)) ) then
-                 if(is_cloud(fam(j)))then
-!$omp atomic update
-                    rho_top(indp(j,ind))=rho_top(indp(j,ind))+vol2(j,ind)
-                 else
-!$omp atomic update
-                    rho_top(indp(j,ind))=rho_top(indp(j,ind))+vol2(j,ind)*factor
-                 end if
-              end if
-           end do
-        endif
-     end do
-
-     do ind=1,twotondim
-        if(cic_levelmax==0.or.ilevel<cic_levelmax)then
-           do j=1,np
-              if(ok2(j,ind))then
-                 if(is_cloud(fam(j)))then
-!$omp atomic update
-                    phi(indp(j,ind))=phi(indp(j,ind))+vol3(j,ind)
-                 else
-!$omp atomic update
-                    phi(indp(j,ind))=phi(indp(j,ind))+vol3(j,ind)*factor
-                 end if
-              end if
-           end do
-        else if(ilevel>=cic_levelmax)then
-           do j=1,np
-              if ( ok2(j,ind) .and. is_not_DM(fam(j)) ) then
-                 if(is_cloud(fam(j)))then
-!$omp atomic update
-                    phi(indp(j,ind))=phi(indp(j,ind))+vol3(j,ind)
-                 else
-!$omp atomic update
-                    phi(indp(j,ind))=phi(indp(j,ind))+vol3(j,ind)*factor
-                 end if
-              end if
-           end do
-        endif
-     end do
-
-     do ind=1,twotondim
-        ! Always refine sinks to the maximum level
-        ! by setting particle number density above m_refine(ilevel)
-        if(sink_refine)then
-           do j=1,np
-              if ( is_cloud(fam(j)) ) then
-                 ! if (direct_force_sink(-1*idp(ind_part(j))))then
-!$omp atomic update
-                 phi(indp(j,ind))=phi(indp(j,ind))+m_refine(ilevel)
-                 ! endif
-              end if
-           end do
-        end if
-     end do
-
   end if
-
 end subroutine cic_amr
 !###########################################################
 !###########################################################
