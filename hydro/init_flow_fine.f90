@@ -292,7 +292,8 @@ subroutine init_flow_fine(ilevel)
                  if(ivar==imetal)init_array=z_ave*0.02 ! from solar units
                  if(nchem>0)then
                     if(ivar>=ichem .and. ivar<ichem+nchem) then
-                       call init_chem(ivar-ichem+1,z_chem)
+                       !call init_chem(ivar-ichem+1,z_chem)
+                       z_chem=tiny(0d0)
                        init_array=z_chem ! from solar units
                     end if
                  end if
