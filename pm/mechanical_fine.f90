@@ -380,7 +380,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
 
                  ! Change here to tag the particle with the star id
                  typep(ipart)%tag = typep(ipart)%tag + 1
-                 move_flag(ipart) = 0
+                 move_flag(ipart) = 1
 
                  ! Detached, now decide where to move it
                  call ranf(ompseed, rand)
