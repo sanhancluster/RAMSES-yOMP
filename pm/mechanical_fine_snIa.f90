@@ -6,6 +6,9 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
   use amr_commons
   use mechanical_commons
   use hydro_commons,only:uold
+#ifdef _OPENMP
+  use omp_lib
+#endif
 #ifdef RT
   use rt_parameters,only:group_egy
   use SED_module,only:nSEDgroups,inp_SED_table
@@ -84,6 +87,16 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
   else
      dteff = dtnew(ilevel-1)
   endif
+
+#ifdef _OPENMP
+!$omp parallel
+    ! Give slight offsets for each OMP threads
+    ompseed=MOD(tracer_seed+omp_get_thread_num()+1,4096)
+!$omp end parallel
+#else
+    ompseed=MOD(tracer_seed+1,4096)
+#endif
+    call ranf(tracer_seed,rand)
 
   ! MC Tracer =================================================
   ! Reset tmpp array that contains the probability to be detached from the particle
