@@ -207,7 +207,7 @@ subroutine make_tree_fine(ilevel)
         else
            igrid=reception(icpu,ilevel)%igrid(jgrid)
         end if
-        npart1=numbp_old(igrid)  ! Number of particles in the grid
+        npart1=numbp(igrid) ! Number of particles in the grid
         numbp_old(igrid)=npart1
         if(npart1>0)then
            headp_old(igrid)=headp(igrid)
