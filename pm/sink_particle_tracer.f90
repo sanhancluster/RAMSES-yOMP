@@ -649,7 +649,7 @@ contains
 !             reception(icpu,ilevel)%up(ind_com(i),current_property+1)=st_n_SN(ind_part(i))
 !             reception(icpu,ilevel)%up(ind_com(i),current_property+2)=st_e_SN(ind_part(i))
           end do
-          current_property = current_property+3
+          current_property = current_property+1
        endif
        if(use_initial_mass)then
           do i=1,np
@@ -774,7 +774,7 @@ contains
 !             st_n_SN(ind_part(i)) = emission(icpu, ilevel)%up(ind_com(i), current_property+1) !SD
 !             st_e_SN(ind_part(i)) = emission(icpu, ilevel)%up(ind_com(i), current_property+2) !SD
           end do
-          current_property = current_property+3
+          current_property = current_property+1
        endif
        if(use_initial_mass)then
           do i = 1, np
