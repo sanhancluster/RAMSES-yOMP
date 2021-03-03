@@ -739,12 +739,12 @@ subroutine virtual_tree_fine(ilevel)
      else
         particle_data_width=twondim+2
      endif
-     if(write_stellar_densities) particle_data_width = particle_data_width + 3
+#ifdef NCHEM
+     particle_data_width=particle_data_width+nchem
+#endif
+     if(write_stellar_densities) particle_data_width = particle_data_width + 1
      if(use_initial_mass) particle_data_width = particle_data_width + 1
   endif
-#ifdef NCHEM
-  particle_data_width=particle_data_width+nchem
-#endif
 
 #ifdef OUTPUT_PARTICLE_POTENTIAL
   particle_data_width=particle_data_width+1
@@ -1074,8 +1074,8 @@ subroutine fill_comm(ind_part,ind_com,ind_list,np,ilevel,icpu)
      if(write_stellar_densities) then
         do i=1,np
            reception(icpu,ilevel)%up(ind_com(i),current_property)  =st_n_tp(ind_part(i))
-           reception(icpu,ilevel)%up(ind_com(i),current_property+1)=st_n_SN(ind_part(i))
-           reception(icpu,ilevel)%up(ind_com(i),current_property+2)=st_e_SN(ind_part(i))
+!           reception(icpu,ilevel)%up(ind_com(i),current_property+1)=st_n_SN(ind_part(i))
+!           reception(icpu,ilevel)%up(ind_com(i),current_property+2)=st_e_SN(ind_part(i))
         end do
         current_property = current_property+3
      endif
@@ -1209,8 +1209,8 @@ subroutine empty_comm(ind_com,np,ilevel,icpu)
      if(write_stellar_densities) then
         do i=1,np
            st_n_tp(ind_part(i))=emission(icpu,ilevel)%up(ind_com(i),current_property)   !SD
-           st_n_SN(ind_part(i))=emission(icpu,ilevel)%up(ind_com(i),current_property+1) !SD
-           st_e_SN(ind_part(i))=emission(icpu,ilevel)%up(ind_com(i),current_property+2) !SD
+!           st_n_SN(ind_part(i))=emission(icpu,ilevel)%up(ind_com(i),current_property+1) !SD
+!           st_e_SN(ind_part(i))=emission(icpu,ilevel)%up(ind_com(i),current_property+2) !SD
         end do
         current_property=current_property+3
      endif

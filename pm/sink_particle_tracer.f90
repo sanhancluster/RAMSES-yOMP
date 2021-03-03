@@ -2,12 +2,15 @@ module sink_particle_tracer
   use amr_parameters, only : dp, ndim, nvector, verbose, aexp, nlevelmax, boxlen, icoarse_max, icoarse_min, nlevelsheld
   use amr_parameters, only : X_floor, nchunk
   use amr_commons, only: ncpu, MC_tracer, metal, myid, star, sink, twondim, use_initial_mass, &
-       write_stellar_densities, communicator
+       write_stellar_densities, communicator, nchem
   ! Particle list and stuff
   use pm_commons, only: numbp_free, numbp_free_tot, headp, itmpp, nextp, numbp, headp, nextp, levelp, &
        typep, tracer_seed
   ! Particle data
-  use pm_commons, only: idp, itmpp, typep, xp, vp, mp, tp, zp, st_n_tp, st_n_SN, st_e_SN, mp0, partp, move_flag
+  use pm_commons, only: idp, itmpp, typep, xp, vp, mp, tp, zp, st_n_tp, mp0, partp, move_flag
+#ifdef NCHEM
+  use pm_commons, only: chp
+#endif
   ! Particle functions
   use pm_commons, only: is_gas_tracer, int2part, part2int
 
@@ -372,10 +375,16 @@ contains
        else
           particle_data_width=twondim+5 !2
        endif
+#ifdef NCHEM
+       particle_data_width=particle_data_width+nchem
+#endif
        if(write_stellar_densities) &
-            particle_data_width = particle_data_width + 3
+            particle_data_width = particle_data_width + 1
        if(use_initial_mass) particle_data_width = particle_data_width + 1
     endif
+#ifdef NCHEM
+  particle_data_width=particle_data_width+nchem
+#endif
 
 #ifdef OUTPUT_PARTICLE_POTENTIAL
     particle_data_width=particle_data_width+1
@@ -578,7 +587,7 @@ contains
     integer,  intent(in) :: np, ilevel, icpu
     integer, intent(in), dimension(1:nvector) :: ind_part, ind_com, ind_list
     integer :: current_property
-    integer :: i, idim
+    integer :: i, idim, ich
     logical, dimension(1:nvector) :: ok=.true.
 
     type(communicator), intent(inout) :: reception(:, :)
@@ -624,11 +633,21 @@ contains
           end do
           current_property = current_property+1
        end if
+#ifdef NCHEM
+       if(nchem>0)then
+          do ich=1,nchem
+             do i=1,np
+                reception(icpu,ilevel)%up(ind_com(i),current_property)=chp(ind_part(i),ich)
+             end do
+             current_property = current_property+1
+          end do
+       end if
+#endif
        if(write_stellar_densities) then
           do i=1,np
              reception(icpu,ilevel)%up(ind_com(i),current_property)  =st_n_tp(ind_part(i))
-             reception(icpu,ilevel)%up(ind_com(i),current_property+1)=st_n_SN(ind_part(i))
-             reception(icpu,ilevel)%up(ind_com(i),current_property+2)=st_e_SN(ind_part(i))
+!             reception(icpu,ilevel)%up(ind_com(i),current_property+1)=st_n_SN(ind_part(i))
+!             reception(icpu,ilevel)%up(ind_com(i),current_property+2)=st_e_SN(ind_part(i))
           end do
           current_property = current_property+3
        endif
@@ -675,7 +694,7 @@ contains
     integer, intent(in), dimension(1:nvector)::ind_com
     type(communicator), intent(in) :: emission(:, :)
 
-    integer :: i, idim
+    integer :: i, idim, ich
     integer, dimension(1:nvector) :: ind_list, ind_part, ind_cell, ind_level
     logical, dimension(1:nvector) :: ok=.true.
     integer :: current_property
@@ -739,11 +758,21 @@ contains
           end do
           current_property = current_property+1
        end if
+#ifdef NCHEM
+       if(nchem>0)then
+          do ich=1,nchem
+             do i=1,np
+                chp(ind_part(i),ich)=emission(icpu,ilevel)%up(ind_com(i),current_property)
+             end do
+             current_property = current_property+1
+          end do
+       end if
+#endif
        if(write_stellar_densities) then
           do i = 1, np
              st_n_tp(ind_part(i)) = emission(icpu, ilevel)%up(ind_com(i), current_property)   !SD
-             st_n_SN(ind_part(i)) = emission(icpu, ilevel)%up(ind_com(i), current_property+1) !SD
-             st_e_SN(ind_part(i)) = emission(icpu, ilevel)%up(ind_com(i), current_property+2) !SD
+!             st_n_SN(ind_part(i)) = emission(icpu, ilevel)%up(ind_com(i), current_property+1) !SD
+!             st_e_SN(ind_part(i)) = emission(icpu, ilevel)%up(ind_com(i), current_property+2) !SD
           end do
           current_property = current_property+3
        endif

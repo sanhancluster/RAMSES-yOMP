@@ -79,8 +79,8 @@ module pm_commons
   integer, allocatable, dimension(:)  :: levelp    ! Current level of particle
   integer(i8b), allocatable, dimension(:) :: idp   ! Identity of particle
   real(dp),allocatable,dimension(:)  ::st_n_tp  ! Gas density at birth epoch         !SD
-  real(dp),allocatable,dimension(:)  ::st_n_sn  ! Gas density at SN epoch            !SD
-  real(dp),allocatable,dimension(:)  ::st_e_sn  ! SN energy injected                 !SD
+!  real(dp),allocatable,dimension(:)  ::st_n_sn  ! Gas density at SN epoch            !SD
+!  real(dp),allocatable,dimension(:)  ::st_e_sn  ! SN energy injected                 !SD
 
   ! Tree related arrays
   integer, allocatable, dimension(:)   :: headp    ! Head particle in grid

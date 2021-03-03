@@ -135,10 +135,10 @@
      if(write_stellar_densities) then
         allocate(st_n_tp(npartmax))
         st_n_tp=0.0
-        allocate(st_n_SN(npartmax))
-        st_n_SN=0.0
-        allocate(st_e_SN(npartmax))
-        st_e_SN=0.0
+!        allocate(st_n_SN(npartmax))
+!        st_n_SN=0.0
+!        allocate(st_e_SN(npartmax))
+!        st_e_SN=0.0
      endif
      if(metal)then
         allocate(zp(npartmax))
@@ -255,19 +255,6 @@
               call getProperTime(tp(i),tp(i))
            enddo
         endif
-        ! BEGIN SD PATCH----------------------------------------------------!SD
-        if(write_stellar_densities) then
-           ! Read gas density at birth
-           read(ilun)xdp
-           st_n_tp(1:npart2) = xdp
-           ! Read gas density at SN
-           read(ilun)xdp
-           st_n_SN(1:npart2) = xdp
-           ! Read SN energy injected
-           read(ilun)xdp
-           st_e_SN(1:npart2) = xdp
-        endif
-        ! END SD PATCH------------------------------------------------------!SD
 
         if(metal)then
            ! Read metallicity
@@ -286,6 +273,20 @@
            end do
         endif
 #endif
+        ! BEGIN SD PATCH----------------------------------------------------!SD
+        if(write_stellar_densities) then
+           ! Read gas density at birth
+           read(ilun)xdp
+           st_n_tp(1:npart2) = xdp
+!           ! Read gas density at SN
+!           read(ilun)xdp
+!           st_n_SN(1:npart2) = xdp
+!           ! Read SN energy injected
+!           read(ilun)xdp
+!           st_e_SN(1:npart2) = xdp
+        endif
+        ! END SD PATCH------------------------------------------------------!SD
+
         deallocate(xdp)
      end if
 

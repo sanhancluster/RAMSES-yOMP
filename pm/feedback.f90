@@ -421,7 +421,7 @@ subroutine feedbk(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
            ! The star is no longer active
            typep(ind_part(j))%tag = 0
            ! Update local density at SN event:
-           if(write_stellar_densities) st_n_SN(ind_part(j)) = unew(indp(j),1)
+!           if(write_stellar_densities) st_n_SN(ind_part(j)) = unew(indp(j),1)
            ! Boost SNII energy and depopulate accordingly
            if(SN_BOOST>1d0)then
               call ranf(localseed,RandNum)
@@ -457,10 +457,10 @@ subroutine feedbk(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
            endif
            E_SN_got = E_SN_got + ethermal(j) * vol_loc(j)        ! Statistics
            !END Dalla Vecchia & Schaye feedback------------------------------
-           if(ethermal(j) .gt. 0d0 .and. write_stellar_densities) then
-              st_e_SN(ind_part(j)) = ethermal(j) * vol_loc(j) * scale_d  &!SD
-                   * scale_l**3 * scale_v**2 / 1d51        !--------------!SD
-           endif
+!           if(ethermal(j) .gt. 0d0 .and. write_stellar_densities) then
+!              st_e_SN(ind_part(j)) = ethermal(j) * vol_loc(j) * scale_d  &!SD
+!                   * scale_l**3 * scale_v**2 / 1d51        !--------------!SD
+!           endif
 
 
            if(sf_log_properties) then

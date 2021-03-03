@@ -167,8 +167,8 @@ subroutine add_free(ind_part,np)
         tp(ind_part(j))=0.0
         if(write_stellar_densities) then
            st_n_tp(ind_part(j))=0.0
-           st_n_SN(ind_part(j))=0.0
-           st_e_SN(ind_part(j))=0.0
+!           st_n_SN(ind_part(j))=0.0
+!           st_e_SN(ind_part(j))=0.0
         endif
      end do
      if(metal)then
@@ -260,8 +260,8 @@ subroutine add_free_cond(ind_part,ok,np)
            tp(ind_part(j))=0.0
            if(write_stellar_densities) then
               st_n_tp(ind_part(j))=0.0
-              st_n_SN(ind_part(j))=0.0
-              st_e_SN(ind_part(j))=0.0
+!              st_n_SN(ind_part(j))=0.0
+!              st_e_SN(ind_part(j))=0.0
            endif
         endif
      end do

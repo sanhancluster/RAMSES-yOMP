@@ -173,37 +173,6 @@ subroutine backup_part(filename, filename_desc)
         end if
      end do
      call generic_dump("birth_time", ivar, xdp, unit_out, dump_info, unit_info)
-     ! BEGIN SD PATCH----------------------------------------------------!SD
-     if(write_stellar_densities) then
-        ! Write gas density at birth
-        ipart=0
-        do i=1,npartmax
-           if(levelp(i)>0)then
-              ipart=ipart+1
-              xdp(ipart)=st_n_tp(i)
-           end if
-        end do
-        call generic_dump("birth_density", ivar, xdp, unit_out, dump_info, unit_info)
-        ! Write gas density at SN
-        ipart=0
-        do i=1,npartmax
-           if(levelp(i)>0)then
-              ipart=ipart+1
-              xdp(ipart)=st_n_SN(i)
-           end if
-        end do
-        call generic_dump("sn_density", ivar, xdp, unit_out, dump_info, unit_info)
-        ! Write SN energy injected
-        ipart=0
-        do i=1,npartmax
-           if(levelp(i)>0)then
-              ipart=ipart+1
-              xdp(ipart)=st_e_SN(i)
-           end if
-        end do
-        call generic_dump("sn_energy", ivar, xdp, unit_out, dump_info, unit_info)
-     endif
-     ! END SD PATCH------------------------------------------------------!SD
 
      ! Write metallicity
      if (metal) then
@@ -243,6 +212,37 @@ subroutine backup_part(filename, filename_desc)
      end if
 #endif
      deallocate(xdp)
+     ! BEGIN SD PATCH----------------------------------------------------!SD
+     if(write_stellar_densities) then
+        ! Write gas density at birth
+        ipart=0
+        do i=1,npartmax
+           if(levelp(i)>0)then
+              ipart=ipart+1
+              xdp(ipart)=st_n_tp(i)
+           end if
+        end do
+        call generic_dump("birth_density", ivar, xdp, unit_out, dump_info, unit_info)
+!        ! Write gas density at SN
+!        ipart=0
+!        do i=1,npartmax
+!           if(levelp(i)>0)then
+!              ipart=ipart+1
+!              xdp(ipart)=st_n_SN(i)
+!           end if
+!        end do
+!        call generic_dump("sn_density", ivar, xdp, unit_out, dump_info, unit_info)
+!        ! Write SN energy injected
+!        ipart=0
+!        do i=1,npartmax
+!           if(levelp(i)>0)then
+!              ipart=ipart+1
+!              xdp(ipart)=st_e_SN(i)
+!           end if
+!        end do
+!        call generic_dump("sn_energy", ivar, xdp, unit_out, dump_info, unit_info)
+     endif
+! END SD PATCH------------------------------------------------------!SD
   end if
 
   if (MC_tracer) then

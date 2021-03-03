@@ -416,8 +416,8 @@ subroutine star_formation(ilevel)
            idp(ind_part(i)) = index_star_omp  ! Star identity
            if(write_stellar_densities) then
               st_n_tp(ind_part(i))=d       ! Cell density                   !SD
-              st_n_SN(ind_part(i))=0d0                                      !SD
-              st_e_SN(ind_part(i))=0d0                                      !SD
+!              st_n_SN(ind_part(i))=0d0                                      !SD
+!              st_e_SN(ind_part(i))=0d0                                      !SD
            endif
            typep(ind_part(i))%family = FAM_STAR
            typep(ind_part(i))%tag = TAG_STAR_ACTIVE
