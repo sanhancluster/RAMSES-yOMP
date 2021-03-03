@@ -285,7 +285,7 @@ module amr_parameters
 
   ! SN Type Ia
   logical ::snIa=.false.
-  real(dp)::phi_snIa=2.35E-3        ! DTD amplitude (per yr * 10^10 Msol), Maoz+ 2012
+  real(dp)::phi_snIa=2.35E-3        ! DTD amplitude Gyr / (yr * 10^10 Msol), derived from Maoz+ 2012
   real(dp)::E_SNIa=1d51             ! SNIa energy release per explosion
   real(dp)::t_ini_snIa=5d7          ! DTD lower cut
   real(dp)::t_fin_snIa=1.37d10      ! DTD upper cut
