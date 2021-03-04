@@ -3208,6 +3208,24 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
   dMBH_coarse_add=0d0; dMEd_coarse_add=0d0; dMsmbh_add=0d0; msink_add=0d0; vsink_add=0d0
   DF_factor_add=0d0;
 
+  if(spin_bh)then
+     epsilon_r=eps_sink(isink)
+  else
+     epsilon_r=0.1d0
+  endif
+  if(mad_jet)then
+     if(dMBHoverdt(isink)/dMEdoverdt(isink).lt.X_floor)then
+        ! from Benson & Babul 2009, for an ADAF
+        epsilon_r=epsilon_r*(dMBHoverdt(isink)/(X_floor*dMEdoverdt(isink)))
+     endif
+  endif
+
+  ! If there is no feedback, accrete 100% of the removed mass
+  if(.not.sink_AGN)then
+     epsilon_r=0d0
+  endif
+
+  acc_part=0d0
   ! Remove mass from hydro cells
   do j=1,np
      if(ok(j))then
@@ -3262,24 +3280,6 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
         end if
         ! avoid numerial instability due to absorbing too much fraction of cell mass
         acc_mass=max( min(acc_mass, (d-floorB)*vol_loc), 0d0)
-
-        if(spin_bh)then
-           epsilon_r=eps_sink(isink)
-        else
-           epsilon_r=0.1d0
-        endif
-        if(mad_jet)then
-           if(dMBHoverdt(isink)/dMEdoverdt(isink).lt.X_floor)then
-              ! from Benson & Babul 2009, for an ADAF
-              epsilon_r=epsilon_r*(dMBHoverdt(isink)/(X_floor*dMEdoverdt(isink)))
-           endif
-        endif
-
-        ! If there is no feedback, accrete 100% of the removed mass
-        if(.not.sink_AGN)then
-           epsilon_r=0d0
-        endif
-
         dmsink=acc_mass*(1d0-epsilon_r)
 
         ! Add the accreted mass to the total accreted mass over
@@ -3467,10 +3467,10 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
            if(is_gas_tracer(typep(itracer)) .and. move_flag(itracer) == 0) then
               ! Check in which cell tracer particle is on
               do ind=1,twotondim
-                 ic=ncoarse+(ind-1)*ngridmax+ind_grid(i)
                  acc_mass = acc_cell(i,ind)
+                 ic=ncoarse+(ind-1)*ngridmax+ind_grid(i)
                  if(partp(itracer) == ic .and. acc_mass>0d0) then
-                    d = uold(ic,1)
+                    d = max(uold(ic,1), smallr)
                     !if(uold<=smallr)d=0d0
                     proba = acc_mass / (d * vol_loc + acc_mass)
                     ii = ii + 1
