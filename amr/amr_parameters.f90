@@ -231,7 +231,8 @@ module amr_parameters
   real(dp)::adfmax=-1.        ! Maximum acceleration from gas drag force (km/s/Myr)
 
   real(dp)::zdmax=-1d0        ! Maximum allowed dust ratio
-  
+  character(len=128)::sinkprops_dir='SINKPROPS/'
+
   logical ::self_shielding=.false.
   logical ::pressure_fix=.false.
   logical ::nordlund_fix=.true.
