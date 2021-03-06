@@ -1487,7 +1487,7 @@ subroutine merge_sink(ilevel)
                     ! Get old sink index
                     isink_old = partp(ipart)
                     ! Compute new sink index
-                    isink_new = gsink(psink_inv(isink_old))
+                    isink_new = gsink(isink_old)
 
                     partp(ipart) = isink_new
 
