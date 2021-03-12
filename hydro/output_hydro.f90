@@ -135,6 +135,8 @@ subroutine backup_hydro(filename, filename_desc)
                     field_name = 'refinement_scalar'
                  else if (ivar == idust) then
                     field_name = 'dust'
+                 else if (ivar >= ichem .and. ivar < ichem+nchem) then
+                    field_name = 'chem_'//TRIM(chem_list(ivar - ichem + 1))
                  else
                     write(field_name, '("scalar_", i0.2)') ivar - ndim - 3 - nener
                  end if

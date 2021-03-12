@@ -207,7 +207,7 @@ subroutine backup_part(filename, filename_desc)
                  xdp(ipart) = chp(i,ich)
               end if
            end do
-           call generic_dump("chem_"//chem_list(ich), ivar, xdp, unit_out, dump_info, unit_info)
+           call generic_dump("chem_"//TRIM(chem_list(ich)), ivar, xdp, unit_out, dump_info, unit_info)
         end do
      end if
 #endif

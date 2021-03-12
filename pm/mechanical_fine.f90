@@ -1749,6 +1749,8 @@ subroutine SNII_yield (zp_star, ej_m, ej_Z, ej_chem)
             dum1d = log_SNII_S
          case ('Fe')
             dum1d = log_SNII_Fe
+         case ('D ')
+            dum1d = -99.
          case default
             dum1d = 0d0
       end select

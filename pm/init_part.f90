@@ -3,7 +3,7 @@
   use pm_commons
   use clfind_commons
   use random
-  use hydro_commons, only : uold
+  use hydro_commons, only : uold, nvar, ichem
 #ifdef DICE
   ! DICE patch
   use dice_commons
@@ -267,9 +267,13 @@
         endif
 #ifdef NCHEM
         if(nchem>0)then
-           do ivar=1,nchem
-              read(ilun)xdp
-              chp(1:npart2,ivar)=xdp
+           do ich=1,nchem
+              do ivar=1,nvar-ndim-2
+                 if(remap_pscalar(ivar) == ichem+ich-1)then
+                    read(ilun)xdp
+                    chp(1:npart2,ich)=xdp
+                 end if
+              end do
            end do
         endif
 #endif

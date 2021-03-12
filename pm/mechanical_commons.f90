@@ -189,6 +189,8 @@ subroutine init_mechanical
                Zejecta_chem_II(ich) = 10.**(-2.2964020)
             case ('Fe')
                Zejecta_chem_II(ich) = 10.**(-2.2126987)
+            case ('D ')
+               Zejecta_chem_II(ich) = 0d0
             case default
                Zejecta_chem_II(ich)=0
          end select
@@ -261,6 +263,8 @@ subroutine init_snIa_yield
             Zejecta_chem_Ia(ich)=sum(yield_snIa(21:24))/mejecta_Ia
          case ('Fe')
             Zejecta_chem_Ia(ich)=sum(yield_snIa(51:54))/mejecta_Ia
+         case ('D ')
+            Zejecta_chem_Ia(ich)=0d0
          case default
             Zejecta_chem_Ia(ich)=0d0
       end select     

@@ -290,12 +290,12 @@ subroutine init_flow_fine(ilevel)
               ! Default value for metals
               if(cosmo .and. metal) then
                  if(ivar==imetal)init_array=z_ave*0.02 ! from solar units
-                 if(nchem>0)then
-                    if(ivar>=ichem .and. ivar<ichem+nchem) then
-                       call init_chem(ivar-ichem+1,z_chem)
-                       !z_chem=tiny(0d0)
-                       init_array=z_chem ! from solar units
-                    end if
+              end if
+              if(nchem>0)then
+                 if(ivar>=ichem .and. ivar<ichem+nchem) then
+                    call init_chem(ivar-ichem+1,z_chem)
+                    !z_chem=tiny(0d0)
+                    init_array=z_chem ! from solar units
                  end if
               end if
               ! Default value for ionization fraction
@@ -738,6 +738,8 @@ subroutine init_chem(ich,z_chem)
          z_chem=tiny(0d0)
       case ('Fe')
          z_chem=tiny(0d0)
+      case ('D ')
+         z_chem=(1d0-Yp-z_ini)*2.55d-5
       case default
          z_chem=0d0
    end select

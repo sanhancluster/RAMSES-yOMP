@@ -154,6 +154,7 @@ subroutine init_stellar_winds
           if(TRIM(chem_list(i))=='Si') log_cmSW_spec(ich,:,:)=log_cmSiSW 
           if(TRIM(chem_list(i))=='S')  log_cmSW_spec(ich,:,:)=log_cmSSW 
           if(TRIM(chem_list(i))=='Fe') log_cmSW_spec(ich,:,:)=log_cmFeSW 
+          if(TRIM(chem_list(i))=='D') log_cmSW_spec(ich,:,:)=0d0
       end do
       
       deallocate(log_cmHSW,log_cmCSW,log_cmNSW,log_cmOSW)

@@ -9,12 +9,12 @@ subroutine init_hydro
 #ifndef WITHOUTMPI
   integer::info,info2,dummy_io
 #endif
-  integer::ncell,ncache,iskip,igrid,i,ilevel,ind,ivar
+  integer::ncell,ncache,iskip,igrid,i,ilevel,ind,ivar,ivar2
   integer::nvar2,ilevel2,numbl2,ilun,ibound,istart
   integer::ncpu2,ndim2,nlevelmax2,nboundary2
   integer ,dimension(:),allocatable::ind_grid
   real(dp),dimension(:),allocatable::xx
-  real(dp)::gamma2
+  real(dp)::gamma2,init_value,z_chem
   character(LEN=80)::fileloc
   character(LEN=5)::nchar,ncharcpu
   integer,parameter::tag=1108
@@ -87,13 +87,14 @@ subroutine init_hydro
      if(myid==1)then
         write(*,*)'Restart - Non-thermal pressure / Passive scalar mapping'
         write(*,'(A50)')"__________________________________________________"
-        do i=1,nvar2-(ndim+2)
+        do i=1,nvar-(ndim+2)
             if(remap_pscalar(i).gt.0) then
                write(*,'(A,I3,A,I3)') ' Restart var',i+ndim+2,' loaded in var',remap_pscalar(i)
             else if(remap_pscalar(i).gt.-1)then
                write(*,'(A,I3,A)') ' Restart var',i+ndim+2,' read but not loaded'
             else
                write(*,'(A,I3,A)') ' Restart var',i+ndim+2,' not read'
+               write(*,'(A,I3,A)') ' Initialize var',abs(remap_pscalar(i)),' with default value'
             endif
         enddo
         write(*,'(A50)')"__________________________________________________"
@@ -196,16 +197,31 @@ subroutine init_hydro
 #if NVAR>NDIM+2+NENER
                  ! Read passive scalars
                  do ivar=ndim+3+nener,max(nvar2,nvar)
-                    if(remap_pscalar(ivar-ndim-2).gt.-1) read(ilun)xx
-                    if(remap_pscalar(ivar-ndim-2).gt.0) ok=.true.
+                    ivar2=remap_pscalar(ivar-ndim-2)
+                    if(ivar2<0) then
+                       init_value=0d0
+                       ! Default value for metals
+                       if(cosmo .and. metal) then
+                          if(-ivar2==imetal)init_value=z_ave*0.02 ! from solar units
+                       end if
+                       if(nchem>0)then
+                          if(-ivar2>=ichem .and. -ivar2<ichem+nchem) then
+                             call init_chem(-ivar2-ichem+1,z_chem)
+                             !z_chem=tiny(0d0)
+                             init_value=z_chem ! from solar units
+                          end if
+                       end if
+                    end if
+
+                    if(ivar2>-1) read(ilun)xx
                     if(ivar.gt.nvar)then
                        continue
                     endif
                     do i=1,ncache
-                       if(ok)then
-                          uold(ind_grid(i)+iskip,remap_pscalar(ivar-ndim-2))=xx(i)*max(uold(ind_grid(i)+iskip,1),smallr)
-                       else if(remap_pscalar(ivar-ndim-2).lt.0) then
-                          uold(ind_grid(i)+iskip,abs(remap_pscalar(ivar-ndim-2)))=0d0
+                       if(ivar2>0)then
+                          uold(ind_grid(i)+iskip,ivar2)=xx(i)*max(uold(ind_grid(i)+iskip,1),smallr)
+                       else if(ivar2<0) then
+                          uold(ind_grid(i)+iskip,abs(ivar2))=init_value*max(uold(ind_grid(i)+iskip,1),smallr)
                        endif
                     end do
                  end do

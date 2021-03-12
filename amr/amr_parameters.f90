@@ -280,7 +280,13 @@ module amr_parameters
   ! Stellar winds for yOMP
   logical::stellar_winds=.false.
   character(len=128)::stellar_winds_file='none'
-  character(LEN=2),dimension(1:8)::chem_list=(/'H ','O ','Fe','Mg','C ','N ','Si','S '/)
+#ifdef NCHEM
+#if NCHEM==8
+  character(LEN=2),dimension(1:nchem)::chem_list=(/'H ','O ','Fe','Mg','C ','N ','Si','S '/)
+#else
+  character(LEN=2),dimension(1:nchem)::chem_list
+#endif
+#endif
   logical::SNII_zdep_yield=.false.  ! TypeII yields are computed according to metallicities base
   logical::no_wind_energy=.false.   ! Disable energy output from stellar winds
 
