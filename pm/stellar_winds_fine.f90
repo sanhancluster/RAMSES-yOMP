@@ -255,7 +255,7 @@ subroutine stellar_winds_fine(ilevel)
 !$omp & default(none) shared(active,ilevel,numbp,headp,nextp,typep)
   ig=0
   ip=0
-!$omp do schedule(dynamic,ncache)
+!$omp do schedule(dynamic,nchunk)
   do jgrid=1,active(ilevel)%ngrid
      igrid=active(ilevel)%igrid(jgrid)
      npart1=numbp(igrid)  ! Number of particles in the grid
