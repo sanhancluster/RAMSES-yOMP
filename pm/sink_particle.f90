@@ -3389,7 +3389,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
               end if
 
               factor = min(max_factor, factor)
-              DF_factor_add = DF_factor_add + factor * ddt * mp(ind_part(j)) / msink(isink)
+              DF_factor_add = DF_factor_add + factor * ddt * mp(ind_part(j)) / msink(isink) * vnorm_rel * scale_v / 1d5
               !/HP
 
               do idim=1,ndim
@@ -7015,7 +7015,8 @@ subroutine get_drag_part(ilevel)
         else
            factor = 0
         end if
-        DF_factor(isink, itype+1) = DF_factor(isink, itype+1) + factor * dtnew(ilevel)
+        DF_factor(isink, itype+1) = DF_factor(isink, itype+1) + factor * dtnew(ilevel) &
+              & * vrel_sink_norm(isink, itype) * scale_v / 1d5
 
         do idim = 1, ndim
            vsink(isink, idim) = vsink(isink, idim) - factor*dtnew(ilevel)*vrel_sink(isink, idim, itype)
