@@ -23,7 +23,7 @@ subroutine move_fine(ilevel)
   type(part_t) :: part_type
 
   !OMP
-  real, dimension(1:nsinkmax,1:ndim*2+1) :: sink_stat_local
+  real(dp), dimension(1:nsinkmax,1:ndim*2+1) :: sink_stat_local
   integer, dimension(1:IRandNumSize), save :: ompseed
 !$omp threadprivate(ompseed)
 
@@ -253,7 +253,7 @@ subroutine move_fine_static(ilevel)
 #ifndef WITHOUTMPI
   integer::info
 #endif
-  real, dimension(1:nsinkmax,1:ndim*2+1) :: sink_stat_local
+  real(dp), dimension(1:nsinkmax,1:ndim*2+1) :: sink_stat_local
 
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
@@ -429,7 +429,7 @@ subroutine move1(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,sink_stat_local)
   ! Family
   logical,dimension(1:nvector) :: classical_tracer
 
-  real, dimension(1:nsinkmax,1:ndim*2+1) :: sink_stat_local
+  real(dp), dimension(1:nsinkmax,1:ndim*2+1) :: sink_stat_local
 
   ! Conversion factor from user units to cgs units
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
