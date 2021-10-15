@@ -92,6 +92,11 @@ subroutine adaptive_loop
      end do
   end if
 
+  do ilevel=1,nlevelmax
+     if((nlevelmax_current.le.ilevel).and.(numbtot(1,ilevel)>0))then
+        nlevelmax_current = ilevel
+     end if
+  end do
   nstep_coarse_old=nstep_coarse
 
   if(myid==1)write(*,*)'Starting time integration'

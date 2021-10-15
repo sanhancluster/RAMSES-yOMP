@@ -333,44 +333,44 @@ subroutine init_sink
      ! 10,5,5,5,0,0,0,0,0,0
      ! ------ End of file ic_sink
 
-     do isink=1, nsinknew
+     do isink=nsinkold+1, nsink
         read(10,*,end=102) mm1, xx1, xx2, xx3, vv1, vv2, vv3, ll1, ll2, ll3
         nindsink=nindsink+1
-        idsink(nindsink)=nindsink
-        msink(nindsink)=mm1*2.d33/(scale_d*scale_l**3)
-        xsink(nindsink,1)=xx1
-        xsink(nindsink,2)=xx2
-        xsink(nindsink,3)=xx3
-        vsink(nindsink,1)=vv1*1.d5/scale_v
-        vsink(nindsink,2)=vv2*1d5/scale_v
-        vsink(nindsink,3)=vv3*1d5/scale_v
-        jsink(nindsink,1)=ll1
-        jsink(nindsink,2)=ll2
-        jsink(nindsink,3)=ll3
-        tsink(nindsink)=t
-        dMsmbh(nindsink)=0d0
-        Esave(nindsink)=0d0
-        dMBH_coarse(nindsink)=0d0
-        dMEd_coarse(nindsink)=0d0
-        spinmag(nindsink)=0d0
-        eps_sink(nindsink)=0d0
-        bhspin(nindsink,1:3)=jsink(nindsink,1:3)
+        idsink(isink)=nindsink
+        msink(isink)=mm1*2.d33/(scale_d*scale_l**3)
+        xsink(isink,1)=xx1
+        xsink(isink,2)=xx2
+        xsink(isink,3)=xx3
+        vsink(isink,1)=vv1*1.d5/scale_v
+        vsink(isink,2)=vv2*1d5/scale_v
+        vsink(isink,3)=vv3*1d5/scale_v
+        jsink(isink,1)=ll1
+        jsink(isink,2)=ll2
+        jsink(isink,3)=ll3
+        tsink(isink)=t
+        dMsmbh(isink)=0d0
+        Esave(isink)=0d0
+        dMBH_coarse(isink)=0d0
+        dMEd_coarse(isink)=0d0
+        spinmag(isink)=0d0
+        eps_sink(isink)=0d0
+        bhspin(isink,1:3)=jsink(isink,1:3)
         ! AGNRT
 #ifdef RT
-        if (rt_AGN) LAGN_coarse(nindsink) = 0.d0
+        if (rt_AGN) LAGN_coarse(isink) = 0.d0
 #endif
         !/AGNRT
         ! Particles dynamical friction (HP)
         ! itype=1 for stars, itype=2 for DM
         if (drag_part) then
            do itype = 1, 2
-              v_DF(nindsink, levelmin:nlevelmax, 1, itype) = vsink(nindsink, 1)
-              v_DF(nindsink, levelmin:nlevelmax, 2, itype) = vsink(nindsink, 2)
-              v_DF(nindsink, levelmin:nlevelmax, 3, itype) = vsink(nindsink, 3)
-              mass_DF(nindsink, levelmin:nlevelmax, itype) = 0d0
-              mass_lowspeed(nindsink, levelmin:nlevelmax, itype) = 0d0
-              fact_fast(nindsink, levelmin:nlevelmax, itype) = 0d0
-              n_part(nindsink, levelmin:nlevelmax, itype) = 0
+              v_DF(isink, levelmin:nlevelmax, 1, itype) = vsink(isink, 1)
+              v_DF(isink, levelmin:nlevelmax, 2, itype) = vsink(isink, 2)
+              v_DF(isink, levelmin:nlevelmax, 3, itype) = vsink(isink, 3)
+              mass_DF(isink, levelmin:nlevelmax, itype) = 0d0
+              mass_lowspeed(isink, levelmin:nlevelmax, itype) = 0d0
+              fact_fast(isink, levelmin:nlevelmax, itype) = 0d0
+              n_part(isink, levelmin:nlevelmax, itype) = 0
            end do
         end if
         !/Particles dynamical friction (HP)
