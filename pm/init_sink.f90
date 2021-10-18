@@ -106,6 +106,9 @@ subroutine init_sink
   Efeed_all=0; sink_stat=0; sink_stat_all=0; v_avgptr=0; c_avgptr=0; d_avgptr=0; spinmag=0
   spinmag_new=0; spinmag_all=0; eps_sink=0;
 
+  ! Initial set to check it is updated
+  d_avgptr=-1d0
+
 #ifdef RT
   ! Only allocate some variables if AGNRT is activated
   if (rt_AGN) then
@@ -162,6 +165,9 @@ subroutine init_sink
      mass_DFall=0; mass_DF=0; mass_DFnew_all=0; fact_fastnew=0; fact_fastall=0; fact_fast=0;
      fact_fastnew_all=0; mass_lowspeednew=0; mass_lowspeedall=0; mass_lowspeed=0; mass_lowspeednew_all=0
      n_partnew=0; n_partall=0; n_part=0; n_partnew_all=0; DF_factor=0; DF_factor_new=0; DF_factor_all=0
+
+     ! Initial set to check it is updated
+     m_background=-1d0
 
      ! This table is needed to properly fill the above one
      ! after a merger

@@ -354,8 +354,8 @@ subroutine make_sink(ilevel)
               y=(xg(ind_grid(i),2)+xc(ind,2)-skip_loc(2))*scale
               z=(xg(ind_grid(i),3)+xc(ind,3)-skip_loc(3))*scale
               do isink=1,nsink
-                 if(.not. drag_part .or. (d_avgptr(isink) > d_gal &
-                       & .or. m_background(isink,1)/vol_cloud > d_star)) then
+                 if(.not. drag_part .or. (d_avgptr(isink) > 0d0 .and. d_avgptr(isink) > d_gal) &
+                       & .or. (m_background(isink,1) > 0d0 .and. m_background(isink,1)/vol_cloud > d_star)) then
                     rmax_sink2 = rmax_sink**2
                  else
                     rmax_sink2 = rmin_sink**2
