@@ -108,7 +108,7 @@ subroutine make_sink(ilevel)
   !----------------------------------------------------------------------
   ! local constants
   real(dp),dimension(1:twotondim,1:3)::xc
-  integer ::ncache,nnew,ngrid,icpu,index_sink,index_sink_tot,index_sink_omp,index_sink_tot_omp
+  integer ::ncache,nnew,ngrid,icpu,index_sink,index_sink_tot,index_sink_omp,index_sink_tot_omp,index_sink_tot_old
   integer ::igrid,ix,iy,iz,ind,i,j,iskip,isink,nx_loc
   integer ::ind_cloud,itype,idim
   integer ::ntot,ntot_all,info,ntot_tmp,izero_myid,ninc,ntot_myid,ninc_omp
@@ -596,6 +596,7 @@ subroutine make_sink(ilevel)
      index_sink=nsink-ntot_all+ntot_sink_cpu(myid-1)
      index_sink_tot=nindsink-ntot_all+ntot_sink_cpu(myid-1)
   end if
+  index_sink_tot_old = index_sink_tot
 
   ! Loop over grids
   ncache=active(ilevel)%ngrid
@@ -4420,7 +4421,7 @@ subroutine cic_star(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel)
   ! are updated by the input particle list.
   !------------------------------------------------------------------
   logical::error
-  integer::j,ind,idim,nx_loc,ind2
+  integer::j,ind,idim,nx_loc,ind2,ind_grid_now,ind_nbor
   real(dp)::dx,dx_loc,scale,vol_loc
   ! Grid-based arrays
   integer ,dimension(1:nvector,1:threetondim)::nbors_father_cells
@@ -4435,6 +4436,7 @@ subroutine cic_star(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel)
   integer ,dimension(1:nvector,1:twotondim)::igrid,icell,indp,kg
   real(dp),dimension(1:3)::skip_loc
   real(dp),dimension(1:threetondim,1:twotondim)::rho_star_add
+  real(dp),dimension(1:threetondim,1:twotondim,1:ndim)::v_star_add
   integer ,dimension(1:threetondim,1:twotondim)::indp_nb
 
   ! Mesh spacing in that level
@@ -4614,51 +4616,66 @@ subroutine cic_star(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel)
      end do
   end do
 
-  ! OMPNOTE: We use 2 strategies
-  ! Single grid case: deposit rho to temporary array and put it to common array later (Faster at high density)
-  ! Multiple grid case: classical way (Faster at low density)
-  if(ng==1) then
-     rho_star_add = 0d0
-     do ind=1,twotondim
-        do j=1,np
-           if(ok(j,ind)) then
-              rho_star_add(kg(j,ind),icell(j,ind))=rho_star_add(kg(j,ind),icell(j,ind))+vol2(j,ind)
-           end if
-        end do
-     end do
-
-     do ind2=1,threetondim
-        do ind=1,twotondim
-           indp_nb(ind2,ind)=ncoarse+(ind-1)*ngridmax+son(nbors_father_cells(1,ind2))
-        end do
-     end do
-
-     do ind2=1,threetondim
-        do ind=1,twotondim
-           if(rho_star_add(ind2,ind)>0d0) then
+   rho_star_add = 0d0
+   ind_grid_now = 0
+   do j=1,np
+      if(ind_grid_part(j) /= ind_grid_now) then
+         if(ind_grid_now > 0) then
+            ! Compute neighboring grid indices
+            do ind2=1,threetondim
+               do ind=1,twotondim
+                  ind_nbor = nbors_father_cells(ind_grid_now,ind2)
+                  if(ind_nbor>0)then
+                     indp_nb(ind2,ind)=ncoarse+(ind-1)*ngridmax+son(ind_nbor)
+                  else
+                     indp_nb(ind2,ind)=0
+                  end if
+               end do
+            end do
+            ! Add temporal arrays to common arrays
+            do ind2=1,threetondim
+               do ind=1,twotondim
+                  if(indp_nb(ind2,ind)>0 .and. rho_star_add(ind2,ind)>0d0) then
 !$omp atomic update
-              rho_star(indp_nb(ind2,ind))=rho_star(indp_nb(ind2,ind))+rho_star_add(ind2,ind)
-           end if
-        end do
-     end do
-  else
-     ! Compute parent cell adress
-     do ind=1,twotondim
-        do j=1,np
-           indp(j,ind)=ncoarse+(icell(j,ind)-1)*ngridmax+igrid(j,ind)
-        end do
-     end do
+                     rho_star(indp_nb(ind2,ind))=rho_star(indp_nb(ind2,ind))+rho_star_add(ind2,ind)
+                  end if
+               end do
+            end do
+         end if
+         rho_star_add = 0d0
+         ind_grid_now = ind_grid_part(j)
+      end if
 
-     do ind=1,twotondim
-        do j=1,np
-           if (ok(j,ind)) then
+      do ind=1,twotondim
+         if(ok(j,ind)) then
+            rho_star_add(kg(j,ind),icell(j,ind))=rho_star_add(kg(j,ind),icell(j,ind))+vol2(j,ind)
+         end if
+      end do
+   end do
+
+   ! Empty remaining cache
+   if(ind_grid_now > 0) then
+      ! Compute neighboring grid indices
+      do ind2=1,threetondim
+         do ind=1,twotondim
+            ind_nbor = nbors_father_cells(ind_grid_now,ind2)
+            if(ind_nbor>0)then
+               indp_nb(ind2,ind)=ncoarse+(ind-1)*ngridmax+son(ind_nbor)
+            else
+               indp_nb(ind2,ind)=0
+            end if
+         end do
+      end do
+      ! Add temporal arrays to common arrays
+      do ind2=1,threetondim
+         do ind=1,twotondim
+            if(indp_nb(ind2,ind)>0 .and. rho_star_add(ind2,ind)>0d0) then
 !$omp atomic update
-              rho_star(indp(j,ind))=rho_star(indp(j,ind))+vol2(j,ind)
-           end if
-        end do
-     end do
-  end if
-
+               rho_star(indp_nb(ind2,ind))=rho_star(indp_nb(ind2,ind))+rho_star_add(ind2,ind)
+            end if
+         end do
+      end do
+   end if
 end subroutine cic_star
 !###########################################################
 !###########################################################
