@@ -275,7 +275,7 @@ module amr_parameters
   logical ::momentum_feedback=.false.
   logical :: drag_part = .false. !activate the friction from stars/DM (HP)
   logical :: holdback = .true. ! Activate strict hold-back method to preserve max physical resolution
-
+  logical :: stellar_velocity_seed = .false. ! Set initial smbh seed to follow local stellar velocity
 
   ! Stellar winds for yOMP
   logical::stellar_winds=.false.
