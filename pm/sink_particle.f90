@@ -119,7 +119,7 @@ subroutine make_sink(ilevel)
   real(dp)::d_jeans,d_thres,dd_sink,ds_sink
   real(dp)::birth_epoch,rmax_sink2,x_half,y_half,z_half,x_box,y_box,z_box
   real(dp),dimension(1:3)::xbound,skip_loc
-  real(dp)::dx,dx_loc,scale,dxx,dyy,dzz,dr_sink,rmax_sink,rmin_sink,d_gal,vrel
+  real(dp)::dx,dx_loc,scale,dxx,dyy,dzz,dr_sink,rmax_sink,rmin_sink,d_gal
   real(dp)::factG,pi,d_star,star_ratio
 #ifdef SOLVERmhd
   real(dp)::bx1,bx2,by1,by2,bz1,bz2
@@ -641,9 +641,9 @@ subroutine make_sink(ilevel)
            d=max(uold(ind_cell_new(i),1), smallr)
            if (stellar_velocity_seed) then
               ! Set seed velocity to follow the local stellar velocity
-              u=f(ind_cell_new(i),1)/rho_star(ind_cell_new(i))
-              v=f(ind_cell_new(i),2)/rho_star(ind_cell_new(i))
-              w=f(ind_cell_new(i),3)/rho_star(ind_cell_new(i))
+              u=v_star(ind_cell_new(i),1)/max(rho_star(ind_cell_new(i)), smallr)
+              v=v_star(ind_cell_new(i),2)/max(rho_star(ind_cell_new(i)), smallr)
+              w=v_star(ind_cell_new(i),3)/max(rho_star(ind_cell_new(i)), smallr)
            else
               u=uold(ind_cell_new(i),2)
               v=uold(ind_cell_new(i),3)
@@ -4222,7 +4222,7 @@ subroutine get_rho_star(ilevel)
         rho_star(active(ilevel)%igrid(i)+iskip)=0.0D0
         if(stellar_velocity_seed) then
            do idim=1,ndim
-              f(active(ilevel)%igrid(i)+iskip,idim)=0.0D0
+              v_star(active(ilevel)%igrid(i)+iskip,idim)=0.0D0
            end do
         end if
      end do
@@ -4239,7 +4239,7 @@ subroutine get_rho_star(ilevel)
            rho_star(reception(icpu,ilevel)%igrid(i)+iskip)=0.0D0
            if(stellar_velocity_seed) then
               do idim=1,ndim
-                 f(reception(icpu,ilevel)%igrid(i)+iskip,idim)=0.0D0
+                 v_star(reception(icpu,ilevel)%igrid(i)+iskip,idim)=0.0D0
               end do
            end if
         end do
@@ -4256,8 +4256,8 @@ subroutine get_rho_star(ilevel)
   call make_virtual_fine_dp   (rho_star(1),ilevel)
   if(stellar_velocity_seed) then
      do idim=1,ndim
-        call make_virtual_reverse_dp(f(1,idim),ilevel)
-        call make_virtual_fine_dp   (f(1,idim),ilevel)
+        call make_virtual_reverse_dp(v_star(1,idim),ilevel)
+        call make_virtual_fine_dp   (v_star(1,idim),ilevel)
      end do
   end if
   !----------------------------------------------------
@@ -4271,7 +4271,7 @@ subroutine get_rho_star(ilevel)
            rho_star(boundary(ibound,ilevel)%igrid(i)+iskip)=0.0
            if(stellar_velocity_seed) then
               do idim=1,ndim
-                 f(boundary(ibound,ilevel)%igrid(i)+iskip,idim)=0.0D0
+                 v_star(boundary(ibound,ilevel)%igrid(i)+iskip,idim)=0.0D0
               end do
            end if
         end do
@@ -4688,7 +4688,7 @@ subroutine cic_star(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel)
                         ! Store stellar velocity field in temporal array f
                         do idim=1,ndim
 !$omp atomic update
-                           f(indp_nb(ind2,ind),idim)=f(indp_nb(ind2,ind),idim)+v_star_add(ind2,ind,idim)
+                           v_star(indp_nb(ind2,ind),idim)=v_star(indp_nb(ind2,ind),idim)+v_star_add(ind2,ind,idim)
                         end do
                      end if
                   end if
@@ -4732,10 +4732,10 @@ subroutine cic_star(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel)
 !$omp atomic update
                rho_star(indp_nb(ind2,ind))=rho_star(indp_nb(ind2,ind))+rho_star_add(ind2,ind)
                if (stellar_velocity_seed) then
-                  ! Store stellar velocity field in temporal array f
+                  ! Store stellar velocity field
                   do idim=1,ndim
 !$omp atomic update
-                     f(indp_nb(ind2,ind),idim)=f(indp_nb(ind2,ind),idim)+v_star_add(ind2,ind,idim)
+                     v_star(indp_nb(ind2,ind),idim)=v_star(indp_nb(ind2,ind),idim)+v_star_add(ind2,ind,idim)
                   end do
                end if
             end if
@@ -6870,7 +6870,7 @@ subroutine get_drag_part(ilevel)
            end do
         end do
      end do
-!$omp end do nowait
+!$omp end do
   end do
 !$omp end parallel
 
