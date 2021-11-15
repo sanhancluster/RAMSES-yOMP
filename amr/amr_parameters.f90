@@ -159,6 +159,7 @@ module amr_parameters
   real(dp)::texp   =0.0D0     ! Current proper time
   real(dp)::n_sink = -1.d0    ! Sink particle density threshold in H/cc
   real(dp)::ns_sink = -1.d0   ! Sink particle stellar density threshold in H/cc
+  real(dp)::ns2_sink = -1.d0  ! Sink particle stellar density threshold in H/cc (overrides r_gal)
   real(dp)::rho_sink = -1.D0  ! Sink particle density threshold in g/cc
   real(dp)::sig_sink = -1.    ! Sink particle stellar 3D velocity dispersion threshold in km/s
   real(dp)::d_sink = -1.D0    ! Sink particle density threshold in user units
@@ -211,7 +212,7 @@ module amr_parameters
   real(dp)::boost_acc=2.0d0   ! Boost power factor for the accretion rate
   real(dp)::boost_drag=2.0d0  ! Boost power factor for drag force
   real(dp)::boost_drag_part=0.0d0  ! Boost power factor for particle drag force
-  real(dp)::r_gal  =1.0d2     ! SMBH sphere radius of influence in kpc (for active sinks)
+  real(dp)::r_gal  =1.0d2     ! SMBH sphere radius of influence in kpc
   real(dp)::r_bhr  =1.0d2     ! SMBH minimum sphere radius of influence in kpc
   real(dp)::n_gal =0.1d0      ! Minimum required background density (gas, H/cc) to activate r_gal
   real(dp)::sigmav_max=10d15  ! Maximum relative velocity in the Bondi accretion rate in kpc
@@ -276,6 +277,7 @@ module amr_parameters
   logical :: drag_part = .false. !activate the friction from stars/DM (HP)
   logical :: holdback = .true. ! Activate strict hold-back method to preserve max physical resolution
   logical :: stellar_velocity_seed = .false. ! Set initial smbh seed to follow local stellar velocity
+  logical :: ns_sink_scaled = .false. ! set ns_sink to scale with (physical grid size)**3. To prevent the effect from shot noises when the grid size is small.
 
   ! Stellar winds for yOMP
   logical::stellar_winds=.false.

@@ -116,10 +116,10 @@ subroutine make_sink(ilevel)
   logical ::ok_free
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_m
   real(dp)::d,x,y,z,u,v,w,e,temp
-  real(dp)::d_jeans,d_thres,dd_sink,ds_sink
+  real(dp)::d_jeans,d_thres,dd_sink,ds_sink,ds2_sink
   real(dp)::birth_epoch,rmax_sink2,x_half,y_half,z_half,x_box,y_box,z_box
   real(dp),dimension(1:3)::xbound,skip_loc
-  real(dp)::dx,dx_loc,scale,dxx,dyy,dzz,dr_sink,rmax_sink,rmin_sink,d_gal
+  real(dp)::dx,dx_loc,scale,dxx,dyy,dzz,dr_sink,rmax_sink,rmin_sink,d_gal,dx_eff
   real(dp)::factG,pi,d_star,star_ratio
 #ifdef SOLVERmhd
   real(dp)::bx1,bx2,by1,by2,bz1,bz2
@@ -173,6 +173,11 @@ subroutine make_sink(ilevel)
   else
      ds_sink=dd_sink
   end if
+
+  if(ns2_sink>0)then
+     ds2_sink=ns_sink/scale_nH
+  end if
+
   d_star=0d0
   d_gal=0d0
   if (star)d_star=n_star/scale_nH
@@ -188,11 +193,16 @@ subroutine make_sink(ilevel)
   if(ndim>2)skip_loc(3)=dble(kcoarse_min)
   scale=boxlen/dble(nx_loc)
   dx_loc=dx*scale
+  ! fixed physical minimum resoltuion
+  dx_min=scale*0.5d0**(nlevelmax-nlevelsheld)/aexp
 
   if(drag_part) then
-     dx_min=scale*0.5d0**(nlevelmax-nlevelsheld)/aexp
      vol_cloud = 4d0/3d0*pi*(DF_ncells*dx_min)**3
   end if
+
+   if(ns_sink_scaled)then
+      ds_sink = ds_sink * (dx_loc / dx_min)**3
+   end if
 
   x_half=scale*xbound(1)/2.0; y_half=scale*xbound(2)/2.0; z_half=scale*xbound(3)/2.0
   x_box =scale*xbound(1); y_box =scale*xbound(2); z_box =scale*xbound(3)
@@ -354,8 +364,7 @@ subroutine make_sink(ilevel)
               y=(xg(ind_grid(i),2)+xc(ind,2)-skip_loc(2))*scale
               z=(xg(ind_grid(i),3)+xc(ind,3)-skip_loc(3))*scale
               do isink=1,nsink
-                 if(.not. drag_part .or. (d_avgptr(isink) > 0d0 .and. d_avgptr(isink) > d_gal) &
-                       & .or. (m_background(isink,1) > 0d0 .and. m_background(isink,1)/vol_cloud > d_star)) then
+                 if(rho_star(ind_cell(i)) < ds2_sink) then
                     rmax_sink2 = rmax_sink**2
                  else
                     rmax_sink2 = rmin_sink**2
@@ -4372,11 +4381,12 @@ subroutine rhostar_from_current_level(ilevel)
               end if
 
               ! Use stars below minimum initial mass only
-              if(use_initial_mass) then
-                 ok_star = ok_star .and. mp0(ipart) < mstar * 1.1
-              else
-                 ok_star = ok_star .and. mp(ipart) < mstar * 1.1
-              end if
+              ! No longer used: to equally resolve high SFR region
+              !if(use_initial_mass) then
+              !   ok_star = ok_star .and. mp0(ipart) < mstar * 1.1
+              !else
+              !   ok_star = ok_star .and. mp(ipart) < mstar * 1.1
+              !end if
 
               if (ok_star) then
                  local_count = local_count + 1
