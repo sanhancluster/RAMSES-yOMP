@@ -201,7 +201,7 @@ subroutine make_sink(ilevel)
   end if
 
    if(ns_sink_scaled)then
-      ds_sink = ds_sink * (dx_loc / dx_min)**3
+      ds_sink = ds_sink * (dx_min / dx_loc)**3
    end if
 
   x_half=scale*xbound(1)/2.0; y_half=scale*xbound(2)/2.0; z_half=scale*xbound(3)/2.0
