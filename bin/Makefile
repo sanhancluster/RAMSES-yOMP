@@ -9,9 +9,10 @@ NENER = 0
 NGROUPS = 0
 NIONS = 0
 METALS = 1
-NCHEM = 0
+NCHEM = 9
+NDUST = 4
 #Extra variables beyond those required by dimensions, or listed above
-NVAR_EXTRA = 1
+NVAR_EXTRA = 0
 SOLVER = hydro
 #############################################################################
 # Options
@@ -33,7 +34,7 @@ OPENMP = 1
 #PATCH = ../patch/debug
 #############################################################################
 # Compute the right value for NVAR
-NVAR := $(shell echo $$(($(NDIM) + 2 + $(NVAR_EXTRA) + $(NIONS) + $(NENER) + $(REFMASK)+ $(METALS) + $(NCHEM) )) )
+NVAR := $(shell echo $$(($(NDIM) + 2 + $(NVAR_EXTRA) + $(NIONS) + $(NENER) + $(REFMASK)+ $(METALS) + $(NCHEM) + $(NDUST) )) )
 #############################################################################
 GITBRANCH = $(shell git rev-parse --abbrev-ref HEAD)
 GITHASH = $(shell git log --pretty=format:'%H' -n 1)
@@ -41,7 +42,7 @@ GITREMOTE = $(shell git config --get branch.$(GITBRANCH).remote)
 GITREPO = $(shell git config --get remote.$(GITREMOTE).url)
 BUILDDATE = $(shell date +"%D-%T")
 DEFINES = -DNVECTOR=$(NVECTOR) -DNDIM=$(NDIM) -DNPRE=$(NPRE) -DNENER=$(NENER) -DNVAR=$(NVAR) \
-          -DSOLVER$(SOLVER) -DNCHEM=$(NCHEM)
+          -DSOLVER$(SOLVER) -DNCHEM=$(NCHEM) -DNDUST=$(NDUST)
 ifeq ($(USE_OLD_MPI_INCLUDE),1)
 DEFINES += -DMPI_OLD
 endif
@@ -116,8 +117,8 @@ PATCH := $(subst $(SPACE),:,$(PATCH))
 #FFLAGS = -cpp $(DEFINES) -DWITHOUTMPI
 
 # --- MPI, gfortran syntax ------------------------------
-#F90 = mpif90 -frecord-marker=4 -O3 -ffree-line-length-none -g -fbacktrace $(OMPFLAG)
-#FFLAGS = -x f95-cpp-input $(DEFINES)
+F90 = mpif90 -frecord-marker=4 -O3 -ffree-line-length-none -g -fbacktrace $(OMPFLAG)
+FFLAGS = -x f95-cpp-input $(DEFINES)
 
 # --- MPI, gfortran DEBUG syntax ------------------------------
 #F90 = mpif90 -frecord-marker=4 -ffree-line-length-none -fbacktrace -g -O0 -fbounds-check -Wuninitialized -Wall $(OMPFLAG)
@@ -128,8 +129,8 @@ PATCH := $(subst $(SPACE),:,$(PATCH))
 #FFLAGS = -Mpreprocess $(DEFINES)
 
 # --- MPI, ifort syntax ------------------------------
-F90 = mpiifort $(OMPFLAG)
-FFLAGS = -cpp -O3 -fpp -xAVX $(DEFINES) -DNOSYSTEM
+#F90 = mpiifort $(OMPFLAG)
+#FFLAGS = -cpp -O3 -fpp -xAVX $(DEFINES) -DNOSYSTEM
 
 # --- MPI, ifort syntax, additional checks -----------
 #F90 = mpiifort $(OMPFLAG)
@@ -150,6 +151,14 @@ FFLAGS = -cpp -O3 -fpp -xAVX $(DEFINES) -DNOSYSTEM
 # --- MPI, ifort syntax, additional checks -----------
 #F90 = ftn
 #FFLAGS = -O3 -g -traceback -fpe0 -ftrapuv -cpp $(DEFINES) -DNOSYSTEM #-DRT
+
+# --- MPI, ifort syntax for NURION ------------------------------
+#F90 = mpiifort -Wl,-z,noexecstack $(OMPFLAG)
+F90 = mpiifort
+#FFLAGS = -cpp $(DEFINES) -fast -free -xMIC-AVX512 -align array64byte -DNOSYSTEM
+#FFLAGS = -cpp $(DEFINES) -O3 -free -align array64byte -DNOSYSTEM
+#FFLAGS = -cpp $(DEFINES) -O0 -traceback -check bounds -DNOSYSTEM -fpe0
+FFLAGS = -cpp $(DEFINES) -O3 -DNOSYSTEM
 
 #############################################################################
 MOD = mod

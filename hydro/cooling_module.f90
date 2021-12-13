@@ -483,30 +483,153 @@ subroutine compute_J0min(h,omegab,omega0,omegaL,J0min_in)
   if (verbose_cooling)  write(*,*) 'J0min found ',J0min_in
 end subroutine compute_J0min
 !=======================================================================
-subroutine solve_cooling(nH,T2,zsolar,fdust,boost,dt,deltaT2,ncell)
+#if NCHEM>0
+subroutine solve_cooling(nH,T2,zsolar,zchem,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
+#else
+subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
+#endif
 !=======================================================================
+!!$ fdust is the dust-to-gas ratio for the key element:
+!!$ - for carbon dust, this is C alone
+!!$ - for silicate dust, this is the D_SiTG ratio, and it needs to be
+!!$ rescaled by 1/SioverSil to get the silicate DTG ratio
+!=======================================================================
+  use amr_commons, only:ndust,nvector !!$dust_dev (hydro_commons)
   implicit none
   integer::ncell
   real(kind=8)::dt
-  real(kind=8),dimension(1:ncell)::nH,T2,deltaT2,zsolar,boost
-  real(kind=8),dimension(1:ncell)::fdust                    ! Dust (YD)
+  real(kind=8),dimension(1:nvector)::nH,T2,deltaT2,zsolar,boost
+  real(kind=8),dimension(1:nvector,1:nchem)::zchem
+  real(kind=8),dimension(1:nvector,1:ndust)::fdust          ! Dust (YD) !!$dust_dev
+  real(kind=8),dimension(1:nvector)::sigma,mach,boost_acc   ! Dust (YD) !!$dust_dev
+!!$  real(kind=8),dimension(1:nvector,1:ndust)::fdustkey       ! Dust (YD) !!$dust_dev
+  real(kind=8),dimension(1:ndust)::key2real,Zsunchem        ! Dust (YD) !!$dust_dev
   real(kind=8)::cool_dust,cool_dust_prime                   ! Dust (YD)
   real(kind=8)::xx                                          ! Dust (YD)
   real(kind=8)::mu_h=0.62d0                                 ! Dust (YD)
   real(kind=8)::m_e =9.109d-28                              ! Dust (YD)
-
+  real(dp)::year,T6,renorm                                  ! Dust (YD)
+  real(dp),dimension(1:ndust)::t0_dest,t0_acc,t_acc,t_des   ! Dust (YD) !!$dust_dev
+  real(dp),dimension(1:ndust,1:4)::t0                       !!$dust_dev
+  real(dp),dimension(1:ndust)::t0_coa,t0_sha,t_coa,t_sha    ! Dust (YD) !!$dust_dev
+  real(dp)::error_rel,error_rel1,error_rel2,den0,den        ! Dust (YD)
+  real(dp)::rhoG0,rhoDT0,rhoDT,dustloc,sigs,sigs2,smax      ! Dust (YD)
+  real(dp),dimension(1:ndust)::rhoGZ0,rhoZ0                 ! Dust (YD)
+  real(dp)::rhoGZ00,halfdtloc,dtloc,dtremain,dd,Gvar        ! Dust (YD)
+  real(dp),dimension(1:ndust)::rhoD00                       ! Dust (YD) !!$dust_dev
+  real(dp),dimension(1:ndust)::oneovertdes,oneovertacc      ! Dust (YD) !!$dust_dev
+  real(dp),dimension(1:ndust)::oneovertsha,oneovertcoa      ! Dust (YD) !!$dust_dev
+  real(dp),dimension(1:ndust)::dtloc_bin                    ! Dust (YD)
+  integer ::countmax=10000                                  ! Dust (YD)
+  integer,dimension(1:ndust)::icount                        ! Dust (YD) !!$dust_dev
+  logical ::okdust                                          ! Dust (YD)
+  logical ::okinfocell                                      ! Dust (YD)
+  logical ,dimension(1:ndust)::okdt_bin                     !!$dust_dev
+  real(dp),dimension(1:ndust)::drhoD,rhoD,rhoD0             !!$dust_dev
+  real(dp),dimension(1:ndust)::drhoD_acc,d_acc              !!$dust_dev
+  real(dp),dimension(1:ndust)::drhoD_spu,d_spu              !!$dust_dev
+  real(dp),dimension(1:ndust)::drhoD_coa,d_coa              !!$dust_dev
+  real(dp),dimension(1:ndust)::drhoD_sha,d_sha              !!$dust_dev
+  real(dp),dimension(1:ndust)::k1,k2,k3,k4                  !!$dust_dev
+  real(dp),dimension(1:ndust)::rhoD0k1,rhoD0k2,rhoD0k3      !!$dust_dev
+  real(dp),dimension(1:ndust)::rhoGZ0k1,rhoGZ0k2,rhoGZ0k3   !!$dust_dev
+  real(dp),dimension(1:ndust)::asizetwothird,asizeminusopointfiftynine,asizeminusone ! Dust (YD) !!$dust_dev
+  real(dp)::deltaDC,deltaDsi                                ! Dust (YD)
+  integer::ich,ilow,ihigh                                   ! Dust (YD)
+!!$  integer::ich,ichC,ichMg,ichFe,ichSi,ichO                  ! Dust (YD)
+!!$  integer::dndsize                                          ! Dust (YD)
+  integer :: nx_loc,ilevel                                      !!$dust_dev
+  real(dp)::scale,dx,dx_loc,vol_loc                             !!$dust_dev
+  real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v   !!$dust_dev
   real(kind=8)::facT,dlog_nH,dlog_T2,precoeff,h,h2,h3
   real(kind=8)::metal,cool,heat,cool_com,heat_com,yy,yy2,yy3
   real(kind=8)::metal_prime,cool_prime,heat_prime,cool_com_prime,heat_com_prime,wcool
   real(kind=8)::lambda,lambda_prime,logT2max
   real(kind=8)::fa,fb,fprimea,fprimeb,alpha,beta,gamma
+  real(kind=8)::lambda_jeans
   real(kind=8),dimension(1:ncell)::tau,tau_old
   real(kind=8),dimension(1:ncell)::time,time_old,facH,zzz,tau_ini
   real(kind=8),dimension(1:ncell)::w1H,w2H,wmax,time_max
   real(kind=8)::varmax=4d0
-  integer::i,i_T2,iter,n,n_active
+  integer::i,i_T2,iter,n,n_active,ii,jj,jj1,jj2
   integer,dimension(1:ncell)::ind,i_nH
   logical::tau_negative
+
+  call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
+  year=3600_dp*24_dp*365_dp
+  do ii=1,ndust  !!$dust_dev
+     t0_dest(ii)=t_sputter_ref*year*asize(ii)/0.1d0
+     t0_acc (ii)=t_growth_ref *year*asize(ii)/0.005d0*sgrain(ii)
+     asizetwothird(ii)=(asize(ii)/0.1d0)**(2./3.)
+     asizeminusopointfiftynine(ii)=(asize(ii)/0.1d0)**(-0.59)
+     asizeminusone(ii)=0.1d0/asize(ii)
+  enddo
+!!$work only for 2 dust bins
+  ! YD WARNING: coag and shat reference time can be made a function of the dust chemical properties, such
+  ! as e.g. dust material density...
+  if(dust_chem)then
+#if NDUST==4
+     t0_sha(1:2) = t_sha_ref*year*(asize(2)/0.1d0)*sgrain(2)
+     t0_sha(3:4) = t_sha_ref*year*(asize(4)/0.1d0)*sgrain(4)
+     t0_coa(1:2) = t_coa_ref*year*(0.1d0/0.1d0)*(asize(1)/0.005d0)*sgrain(1)  !! (velocity dispersion/0.1 km/s )^-1
+     t0_coa(3:4) = t_coa_ref*year*(0.1d0/0.1d0)*(asize(3)/0.005d0)*sgrain(3)  !! (velocity dispersion/0.1 km/s )^-1
+#endif
+  else
+     t0_sha = t_sha_ref*year*(asize(2)/0.1d0) !!for v=10km/s and density_grain=3g.cm-3
+     t0_coa = t_coa_ref*year*(0.1d0/0.1d0)*(asize(1)/0.005d0)  !! (velocity dispersion/0.1 km/s )^-1
+  endif
+
+  nx_loc=(icoarse_max-icoarse_min+1)
+  scale=boxlen/dble(nx_loc)
+  dx=0.5D0**ilevel
+  dx_loc=dx*scale
+  vol_loc=dx_loc**ndim
+
+  if(dust_chem)then
+#if NDUST==2
+!!$     fdustkey(:,1)=fdust(:,1)
+!!$     fdustkey(:,2)=fdust(:,2)
+!!$     fdust(:,2)=fdust(:,2)/SiOverSil ! silicate needs to be renormalised to account for Mg, Fe and O
+     key2real(1)=1.0d0
+     key2real(2)=1.0d0/SiOverSil
+#endif
+#if NDUST==4
+!!$     fdustkey(:,1:2)=fdust(:,1:2)
+!!$     fdustkey(:,3:4)=fdust(:,3:4)
+!!$     fdust(:,3)=fdust(:,3)/SiOverSil ! silicate needs to be renormalised to account for Mg, Fe and O
+!!$     fdust(:,4)=fdust(:,4)/SiOverSil ! silicate needs to be renormalised to account for Mg, Fe and O
+     key2real(1:2)=1.0d0
+     key2real(3:4)=1.0d0/SiOverSil
+#endif
+!!$     do ich=1,nchem
+!!$        if(TRIM(chem_list(ich))=='C' )ichC =ich
+!!$        if(TRIM(chem_list(ich))=='Mg')ichMg=ich
+!!$        if(TRIM(chem_list(ich))=='Fe')ichFe=ich
+!!$        if(TRIM(chem_list(ich))=='Si')ichSi=ich
+!!$        if(TRIM(chem_list(ich))=='O' )ichO =ich
+!!$     enddo
+  else
+     key2real=1.0d0
+  endif
+  ! YD WARNING:These should be global variables to be used elsewhere...
+  if(dust_chem)then
+!!$     ndchemtype=2
+!!$     if(ndust==2)dndsize=0
+!!$     if(ndust==4)dndsize=1
+     do jj=1,ndchemtype !Loop over chemical dust species
+        jj1=1+(jj-1)*(dndsize+1)
+        jj2=jj1+dndsize
+        if(jj==         1)Zsunchem(jj1:jj2)=0.01345d0*0.182d0 ! C
+        if(jj==ndchemtype)Zsunchem(jj1:jj2)=0.01345d0*0.051d0 ! Si
+     enddo
+!!$     Zsunchem(1           :ndchemtype)=0.01345d0*0.182d0 ! C
+!!$     Zsunchem(ndchemtype+1:ndust     )=0.01345d0*0.051d0 ! Si
+  else
+!!$     ndchemtype=1
+!!$     if(ndust==1)dndsize=0
+!!$     if(ndust==2)dndsize=1
+     Zsunchem(1:ndust)=0.01345d0 ! Zsun
+  endif
 
   ! Initializations
   logT2max=log10(T2_max_fix)
@@ -517,13 +640,18 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,boost,dt,deltaT2,ncell)
   h3=h2*h
   precoeff=2d0*X/(3d0*kB)
   do i=1,ncell
-     zzz(i)=zsolar(i)
+     zzz(i)=zsolar(i) ! YD WARNING: zzz should be updated during each time step because of dust evol.
      facH(i)=MIN(MAX(log10(nH(i)/boost(i)),table%nH(1)),table%nH(table%n1))
      i_nH(i)=MIN(MAX(int((facH(i)-table%nH(1))*dlog_nH)+1,1),table%n1-1)
      w1H(i)=(table%nH(i_nH(i)+1)-facH(i))*dlog_nH
      w2H(i)=(facH(i)-table%nH(i_nH(i)  ))*dlog_nH
      tau(i)=T2(i)
      tau_ini(i)=T2(i)
+     mach(i)=MAX(1d-5,sigma(i)/sqrt(1.666667d0*kB*T2(i)/mH))
+     sigs=log(1d0+(0.4d0*mach(i))**2)
+     sigs2=sigs*sigs
+     smax=log(1d4/nh(i))
+     boost_acc(i)=0.5d0*exp(sigs2)*erfc((1.5d0*sigs2-smax)/(dsqrt(2d0)*sigs))
      time_max(i)=dt*precoeff*nH(i)
      time(i)=0d0
      wmax(i)=1d0/time_max(i)
@@ -625,23 +753,6 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,boost,dt,deltaT2,ncell)
            lambda=cool+zzz(ind(i))*metal-heat+(cool_com-heat_com)/nH(ind(i))
            lambda_prime=cool_prime+zzz(ind(i))*metal_prime-heat_prime+(cool_com_prime-heat_com_prime)/nH(ind(i))
 
-           ! Add dust cooling if needed
-           if(dust_cooling)then
-              xx=9.73d7/tau(ind(i)) ! The prefactor assumes mu=0.6 and a=0.1 micron (taken from Vogelsberger+18)
-              if(xx.lt.1.5)then
-                 cool_dust      =6.48d-9
-                 cool_dust_prime=0.0d0
-              else if(xx.lt.4.5)then
-                 cool_dust      =8.36d-16*tau(ind(i))**0.88
-                 cool_dust_prime=7.36d-16*tau(ind(i))**(-0.12)
-              else
-                 cool_dust      =2.50d-20*tau(ind(i))**1.5
-                 cool_dust_prime=3.75d-20*sqrt(tau(ind(i)))
-              endif
-              lambda      =lambda      +fdust(ind(i))*2.01d-10*cool_dust       ! m_p/(m_grain*X)*(ne/nH)=2.01d-10
-              lambda_prime=lambda_prime+fdust(ind(i))*2.01d-10*cool_dust_prime ! (ne/nH=1+Y/(2X),rho_grain=3g/cm3)
-           endif
-
         else
 
            lambda=1.42*1d-27*sqrt(tau(ind(i)))*1.1
@@ -649,12 +760,759 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,boost,dt,deltaT2,ncell)
 
         endif
 
+!!$        if(ind(i)==114.and.nh(ind(i))>1.24000E+01.and.nh(ind(i))< 1.24004E+01)then
+        if(ind(i)==47.and.nh(ind(i))>7.84279E+00.and.nh(ind(i))<7.84283E+00)then
+!!$           if(ind(i)==1)then
+           okinfocell=.true.
+        else
+           okinfocell=.false.
+        end if
+        if(dustdebug.and.okinfocell)write(*,'(A,6es13.5)')'lambdas (before dust)',cool,zzz(ind(i))*metal,heat,cool_com/nh(ind(i)),heat_com/nh(ind(i)),zzz(ind(i))
+
+           ! Add dust cooling if needed
+           if(dust_cooling)then
+           do ii=1,ndust !!$dust_dev
+              ! The prefactor assumes mu=0.6 and a=0.1 micron (taken from Vogelsberger+18 (Dwek & Werner81))
+              xx=9.73d7/tau(ind(i))*asizetwothird(ii)
+              if(xx.lt.1.5)then
+                 cool_dust      =6.48d-9
+                 cool_dust_prime=0.0d0
+              else if(xx.lt.4.5)then
+                 cool_dust      =8.36d-16*tau(ind(i))**0.88   *asizeminusopointfiftynine(ii)
+                 cool_dust_prime=7.36d-16*tau(ind(i))**(-0.12)*asizeminusopointfiftynine(ii)
+!!$              else if(xx.lt.5000.0)then
+              else if(xx.lt.5000.0*asizetwothird(ii))then
+                 cool_dust      =2.50d-20*tau(ind(i))**1.5 *asizeminusone(ii)
+                 cool_dust_prime=3.75d-20*sqrt(tau(ind(i)))*asizeminusone(ii)
+              else ! cut down cooling from dust when gas becomes neutral (2e4K):  Dwek & Werner 81 applies for ionised gas
+                 cool_dust      =0.0d0
+                 cool_dust_prime=0.0d0
+              endif
+              lambda      =lambda      +fdust(ind(i),ii)*key2real(ii)*2.01d-10*cool_dust*sgrain(ii)       ! m_p/(m_grain*X)*(ne/nH)=2.01d-10
+              lambda_prime=lambda_prime+fdust(ind(i),ii)*key2real(ii)*2.01d-10*cool_dust_prime*sgrain(ii) ! (ne/nH=1+Y/(2X),rho_grain=3g/cm3)
+           enddo
+        endif
+
+!!$        lambda=0.0d0; lambda_prime=0.0d0 ! YD WARNING: this just to keep the temperature the same (no cooling)
         wcool=MAX(abs(lambda)/tau(ind(i))*varmax,wmax(ind(i)),-lambda_prime*varmax)
+
+        if(dust_dest_within_cool)then
+           T6=tau(ind(i))/1d6
+           if(metal_gasonly)then
+!!$              rhoGZ00=Zsolar(ind(i))*0.02*nH(ind(i))
+              rhoGZ00=zzz(ind(i))*0.02*nH(ind(i))
+              if(dust_chem)then
+                 do jj=1,ndchemtype !Loop over chemical dust species
+                    jj1=1+(jj-1)*(dndsize+1)
+                    jj2=jj1+dndsize
+                    if(jj==         1)rhoZ0(jj1:jj2)=Zchem(ind(i),ichC)*0.02*nH(ind(i))       ! Carbon dust
+                    if(jj==ndchemtype)rhoZ0(jj1:jj2)=MIN(Zchem(ind(i),ichMg)/(nsilMg*muMg) &  ! This is the metallicity of
+                                                 &      ,Zchem(ind(i),ichFe)/(nsilFe*muFe) &  ! the available elements
+                                                 &      ,Zchem(ind(i),ichSi)/(nsilSi*muSi) &  ! in the chemical composition
+                                                 &      ,Zchem(ind(i),ichO )/(nsilO *muO ))&  ! of silicates,which is turned
+                                                 & * 0.02*nH(ind(i))*nsilSi*muSi              ! into the key element Si
+                 enddo
+
+!!$                 rhoZ0(1           :ndchemtype)=Zchem(ind(i),ichC)*0.02*nH(ind(i))         ! Carbon dust
+!!$                 rhoZ0(ndchemtype+1:ndust     )=MIN( Zchem(ind(i),ichMg)/(nsilMg*muMg)  &  ! This is the metallicity of
+!!$                                              &     ,Zchem(ind(i),ichFe)/(nsilFe*muFe)  &  ! the available elements
+!!$                                              &     ,Zchem(ind(i),ichSi)/(nsilSi*muSi)  &  ! in the chemical composition
+!!$                                              &     ,Zchem(ind(i),ichO )/(nsilO *muO ) )&  ! of silicates,which is turned
+!!$                                              & * 0.02*nH(ind(i))*nsilSi*muSi              ! into the key element Si
+                 do jj=1,ndchemtype
+                    jj1=1+(jj-1)*(dndsize+1)
+                    jj2=jj1+dndsize
+                    dustloc=0.0d0
+                    do ii=jj1,jj2
+                       dustloc=dustloc+fdust(ind(i),ii)*nH(ind(i))
+                    enddo
+                    do ii=jj1,jj2
+                       rhoZ0(ii)  =rhoZ0(ii)+dustloc
+                    enddo
+                    if(dustdebug.and.okinfocell)write(*,'(A,3es13.5)')'Z2(tot,gas,dust)=',rhoZ0(1)/(0.02*nH(ind(i))),(rhoZ0(1)-dustloc)/(0.02*nH(ind(i))),dustloc/(0.02*nH(ind(i)))
+                 enddo
+              else
+                 rhoZ0(1:ndust)=zzz(ind(i))*0.02*nH(ind(i))
+                 do jj=1,ndchemtype
+                    jj1=1+(jj-1)*(dndsize+1)
+                    jj2=jj1+dndsize
+                    dustloc=0.0d0
+                    do ii=jj1,jj2
+                       dustloc=dustloc+fdust(ind(i),ii)*nH(ind(i))
+                    enddo
+                    do ii=jj1,jj2
+                       rhoZ0(ii)  =rhoZ0(ii)+dustloc
+                    enddo
+                    if(dustdebug.and.okinfocell)write(*,'(A,3es13.5)')'Z2(tot,gas,dust)=',rhoZ0(1)/(0.02*nH(ind(i))),(rhoZ0(1)-dustloc)/(0.02*nH(ind(i))),dustloc/(0.02*nH(ind(i)))
+                 enddo
+              endif
+           else
+              rhoGZ00=Zsolar(ind(i))*0.02*nH(ind(i))
+              do ii=1,ndust
+                 rhoGZ00=rhoGZ00-rhoD00(ii)
+              enddo
+              if(dust_chem)then
+                 do jj=1,ndchemtype !Loop over chemical dust species
+                    jj1=1+(jj-1)*(dndsize+1)
+                    jj2=jj1+dndsize
+                    if(jj==         1)rhoZ0(jj1:jj2)=Zchem(ind(i),ichC)*0.02*nH(ind(i))       ! Carbon dust
+                    if(jj==ndchemtype)rhoZ0(jj1:jj2)=MIN(Zchem(ind(i),ichMg)/(nsilMg*muMg) &  ! This is the metallicity of
+                                                 &      ,Zchem(ind(i),ichFe)/(nsilFe*muFe) &  ! the available elements
+                                                 &      ,Zchem(ind(i),ichSi)/(nsilSi*muSi) &  ! in the chemical composition
+                                                 &      ,Zchem(ind(i),ichO )/(nsilO *muO ))&  ! of silicates,which is turned
+                                                 & * 0.02*nH(ind(i))*nsilSi*muSi              ! into the key element Si
+                 enddo
+!!$                 rhoZ0(1           :ndchemtype)=Zchem(ind(i),ichC)*0.02*nH(ind(i))         ! Carbon dust
+!!$                 rhoZ0(ndchemtype+1:ndust     )=MIN( Zchem(ind(i),ichMg)/(nsilMg*muMg)  &  ! This is the metallicity of
+!!$                                              &     ,Zchem(ind(i),ichFe)/(nsilFe*muFe)  &  ! the available elements
+!!$                                              &     ,Zchem(ind(i),ichSi)/(nsilSi*muSi)  &  ! in the chemical composition
+!!$                                              &     ,Zchem(ind(i),ichO )/(nsilO *muO ) )&  ! of silicates,which is turned
+!!$                                              & * 0.02*nH(ind(i))*nsilSi*muSi              ! into the key element Si
+              else
+                 rhoZ0(1:ndust)=Zsolar(ind(i))*0.02*nH(ind(i))
+              endif
+           endif
+
+           rhoG0 =nH(ind(i))
+
+           select case (thermal_sputtering) !!$dust_dev
+           case('novak')
+              do ii=1,ndust
+              t_des(ii)=t0_dest(ii)/nH(ind(i))*(1d0+1d0/T6**3) ! Draine & Salpeter (1979) (see also Novak et al, 2012)
+              enddo
+           case('tsai')
+              do ii=1,ndust
+              t_des(ii)=1.65d0*t0_dest(ii)/nH(ind(i))*(1d0+(2d0/T6)**2.5) ! Tsai & Matthews (1998)
+              enddo
+           case default
+              do ii=1,ndust
+              t_des(ii)=1.65d0*t0_dest(ii)/nH(ind(i))*(1d0+(2d0/T6)**2.5) ! Tsai & Matthews (1998)
+              enddo
+           end select
+
+           select case (sticking_coef) !!$dust_dev
+           case('constant')
+              do ii=1,ndust
+                 t_acc(ii)=t0_acc(ii)* 1d3/nH(ind(i))*sqrt(50d0/tau(ind(i)))*(Zsunchem(ii)*rhoG0/rhoZ0(ii))*(1d0+10.0d0*T6) ! Bekki (2015)
+              enddo
+           case('step')
+              if(tau(ind(i)).gt.1d3.or.nH(ind(i)).lt.0.1d0) then
+                 t_acc=1d15*year
+              else
+                 do ii=1,ndust
+                    t_acc(ii)=t0_acc(ii)* 1d3/nH(ind(i)) *sqrt(50d0/tau(ind(i)))*(Zsunchem(ii)*rhoG0/rhoZ0(ii)) / Sconstant
+                 enddo
+              endif
+           case('step2')
+              if(tau(ind(i)).gt.1d3.or.nH(ind(i)).lt.nh_growth) then
+                 t_acc=1d15*year
+              else
+                 do ii=1,ndust
+                    t_acc(ii)=t0_acc(ii)*(Zsunchem(ii)*rhoG0/rhoZ0(ii)) / Sconstant !Assume the gas is at 10^3 /cc and 50 K...
+                 enddo
+              endif
+           case('step3')
+              if(tau(ind(i)).gt.1d3.or.nH(ind(i)).lt.nh_growth) then ! Assume LeBourlot2012
+                 do ii=1,ndust
+                    t_acc(ii)=t0_acc(ii)* 1d3/nH(ind(i)) *sqrt(50d0/tau(ind(i)))*(Zsunchem(ii)*rhoG0/rhoZ0(ii)) * (1d0+1d-4*tau(ind(i))**1.5)
+                 enddo
+              else
+                 do ii=1,ndust
+                    t_acc(ii)=t0_acc(ii)*(Zsunchem(ii)*rhoG0/rhoZ0(ii)) / Sconstant !Assume the gas is at 10^3 /cc and 50 K...
+                 enddo
+           endif
+           case('step4')
+              lambda_jeans=sqrt(kB*tau(ind(i))*3.14d0/(6.67d-8*mH**2*nH(ind(i))))
+              if(tau(ind(i)).gt.1d4.or.nh(ind(i)).lt.0.1d0 &
+                   & .or.lambda_jeans>4d0*dx_loc*scale_l) then ! Assume LeBourlot2012
+                 do ii=1,ndust
+                    t_acc(ii)=t0_acc(ii)* 1d3/nH(ind(i)) *sqrt(50d0/tau(ind(i)))*(Zsunchem(ii)*rhoG0/rhoZ0(ii)) * (1d0+1d-4*tau(ind(i))**1.5)
+                 enddo
+        else
+                 do ii=1,ndust
+                    t_acc(ii)=t0_acc(ii)*(Zsunchem(ii)*rhoG0/rhoZ0(ii)) / Sconstant !Assume the gas is at 10^3 /cc and 50 K...
+                 enddo
+        endif
+           case('subgrid')
+              lambda_jeans=sqrt(kB*tau(ind(i))*3.14d0/(6.67d-8*mH**2*nH(ind(i))))
+              if(tau(ind(i)).gt.1d4.or.nh(ind(i)).lt.0.1d0 &
+                   & .or.lambda_jeans>4d0*dx_loc*scale_l) then ! Assume LeBourlot2012
+                 do ii=1,ndust
+!!$                    write(*,*)'1d3/nH(ind(i))',1d3/nH(ind(i))
+!!$                    write(*,*)'sqrt(50d0/tau(ind(i)))',sqrt(50d0/tau(ind(i)))
+!!$                    write(*,*)'(Zsunchem(ii)*rhoG0/rhoZ0(ii))',(Zsunchem(ii)*rhoG0/rhoZ0(ii))
+!!$                    write(*,*)'(1d0+1d-4*tau(ind(i))**1.5)',(1d0+1d-4*tau(ind(i))**1.5)
+!!$                    if(rhoZ0(ii)==0.0)write(*,'(A,I3,3es13.2,9es10.2)')'rhoZ0(ii)=0:',ii,nh(ind(i)),tau(ind(i)),zzz(ind(i)),Zchem(ind(i),1:nchem)
+                    t_acc(ii)=t0_acc(ii)* 1d3/nH(ind(i)) *sqrt(50d0/tau(ind(i)))*(Zsunchem(ii)*rhoG0/rhoZ0(ii)) * (1d0+1d-4*tau(ind(i))**1.5)
+                 enddo
+              else
+                 do ii=1,ndust
+                    t_acc(ii)=t0_acc(ii)*(Zsunchem(ii)*rhoG0/rhoZ0(ii))* 1d3/nH(ind(i)) *sqrt(50d0/100d0)*(Zsunchem(ii)*rhoG0/rhoZ0(ii)) / Sconstant &
+                         & / boost_acc(ind(i))
+                 enddo
+              endif
+           case('chaabouni')
+              do ii=1,ndust
+                 t_acc(ii)=t0_acc(ii)* 1d3/nH(ind(i)) *sqrt(50d0/tau(ind(i)))*(Zsunchem(ii)*rhoG0/rhoZ0(ii)) / (0.95d0*(1d0+2.22d0*tau(ind(i))/56d0)/(1d0+tau(ind(i))/56d0)**2.22d0)
+              enddo
+           case('leitch') ! Krome version
+              do ii=1,ndust
+                 t_acc(ii)=t0_acc(ii)* 1d3/nH(ind(i)) *sqrt(50d0/tau(ind(i)))*(Zsunchem(ii)*rhoG0/rhoZ0(ii)) / (1.9d-2*tau(ind(i))*(1.7d-3*Tdust_growth(ii)+0.4d0)*exp(-7d-3*tau(ind(i))))
+              enddo
+           case('bourlot') ! Le Bourlot+ 2012
+              do ii=1,ndust
+                 t_acc(ii)=t0_acc(ii)* 1d3/nH(ind(i)) *sqrt(50d0/tau(ind(i)))*(Zsunchem(ii)*rhoG0/rhoZ0(ii)) * (1d0+1d-4*tau(ind(i))**1.5)
+              enddo
+           case('buch') ! Buch & Zhang 91
+              do ii=1,ndust
+                 t_acc(ii)=t0_acc(ii)* 1d3/nH(ind(i)) *sqrt(50d0/tau(ind(i)))*(Zsunchem(ii)*rhoG0/rhoZ0(ii)) * (1d0+tau(ind(i))/102.0d0)**2.0d0
+              enddo
+           case default
+              do ii=1,ndust
+                 t_acc(ii)=t0_acc(ii)* 1d3/nH(ind(i)) *sqrt(50d0/tau(ind(i)))*(Zsunchem(ii)*rhoG0/rhoZ0(ii)) / (0.95d0*(1d0+2.22d0*tau(ind(i))/56d0)/(1d0+tau(ind(i))/56d0)**2.22d0)
+              enddo
+           end select
+           if(boost_growth.gt.1.0d0)then
+              if(nh(ind(i)).gt.nhboost_growth)then
+                 do ii=1,ndust
+                    t_acc(ii)=t_acc(ii)/boost_growth
+                 enddo
+              endif
+           endif
+
+           if(nh_coa<0.0d0) then
+              lambda_jeans=sqrt(kB*tau(ind(i))*3.14d0/(6.67d-8*mH**2*nH(ind(i))))
+              if(tau(ind(i)).gt.1d4.or.nh(ind(i)).lt.0.1d0 &
+                   & .or.lambda_jeans>4d0*dx_loc*scale_l) then
+                 t_coa=1d15*year
+              else
+                 do ii=1,ndust
+                    t_coa(ii)=t0_coa(ii)*(0.01/key2real(ii))*(nH(ind(i))/nh_coa)**power_coa!*(tau(ind(i))/1d4)**power_coa_temp  !!take only dtg ratio of small bins
+                 enddo
+              endif
+           else
+              ! Dust Coagulation
+              if(nH(ind(i))>nh_coa) then !!between 1d2 and 1d3
+                 do ii=1,ndust
+!!$                 t_coa(ii)=t0_coa(ii)*(0.01/(fdust(ind(i),ii)*key2real(ii)))  !!take only dtg ratio of small bins
+                    t_coa(ii)=t0_coa(ii)*(0.01/key2real(ii))*(nH(ind(i))/nh_coa)**power_coa!*(tau(ind(i))/1d4)**power_coa_temp  !!take only dtg ratio of small bins
+                 enddo
+              else
+                 t_coa=1d15*year
+              endif
+           endif
+           ! Dust Shattering
+           if(nH(ind(i))<1.0d0) then
+              do ii=1,ndust
+!!$                 t_sha(ii)=(t0_sha(ii)/nH(ind(i)))*(0.01/(fdust(ind(i),ii)*key2real(ii))) !!only dtg ratio of large bins
+                 t_sha(ii)=(t0_sha(ii)/nH(ind(i)))*(0.01/key2real(ii)) !!only dtg ratio of large bins
+              enddo
+           elseif (nH(ind(i))<1d3) then
+              do ii=1,ndust
+!!$                 t_sha(ii)=(t0_sha(ii)/(nH(ind(i))**(1.0d0/3.0d0)))*(0.01/(fdust(ind(i),ii)*key2real(ii)))
+                 t_sha(ii)=(t0_sha(ii)/(nH(ind(i))**(1.0d0/3.0d0)))*(0.01/key2real(ii))
+              enddo
+           else
+              t_sha=1d15*year
+           endif
+
+           oneovertdes=1d0/t_des
+           oneovertacc=1d0/t_acc
+           oneovertsha=1d0/t_sha
+           oneovertcoa=1d0/t_coa
+
+           do ii=1,ndust
+              rhoD00(ii)=fdust(ind(i),ii)*nH(ind(i)) !!initial dust density in every bin
+           enddo
+
+           renorm=varmax/(precoeff*nH(ind(i)))
+!!$           do ii=1,ndust
+!!$               if(rhoZ0(ii).gt.0.0d0) wcool=MAX(wcool,oneovertdes(ii)*renorm,oneovertacc(ii)*(1d0-rhoD00(ii)/rhoZ0(ii))*renorm) !!$,oneovertsha*renorm,oneovertcoa*renorm)
+!!$           enddo
+           do jj=1,ndchemtype !Loop over chemical dust species
+           jj1=1+(jj-1)*(dndsize+1)
+           jj2=jj1+dndsize
+           do ii=jj1,jj2
+              if(rhoZ0(ii).gt.0.0d0)then
+                 wcool=MAX(wcool,oneovertdes(ii)*renorm &
+                      &    ,oneovertacc(ii)*(1d0-rhoD00(ii)/rhoZ0(ii))*renorm &
+                      &    ,oneovertsha(jj2)*fdust(ind(i),jj2)*renorm &
+                      &    ,oneovertcoa(jj1)*fdust(ind(i),jj1)*renorm)
+              endif
+           enddo
+           enddo
+
+        endif
 
         tau_old(ind(i))=tau(ind(i))
         tau(ind(i))=tau(ind(i))*(1d0+lambda_prime/wcool-lambda/tau(ind(i))/wcool)/(1d0+lambda_prime/wcool)
         time_old(ind(i))=time(ind(i))
         time(ind(i))=time(ind(i))+1d0/wcool
+        if(dustdebug.and.okinfocell)write(*,'(A,5es13.5)')'T2,lambda',tau_old(ind(i)),tau(ind(i)),lambda,lambda_prime,wcool
+
+        ! ==========================================
+        ! Add up here the thermal sputtering of dust
+        ! ==========================================
+        if(dust_dest_within_cool)then
+
+           t0=1d12*year
+           do ii=1,ndust
+              if(dust_accretion)   t0(ii,1)=0.1d0*t_acc(ii)
+              if(dust_sputtering)  t0(ii,2)=0.1d0*t_des(ii)
+              if(dust_shattering)  t0(ii,3)=0.1d0*t_sha(ii)
+              if(dust_coagulation) t0(ii,4)=0.1d0*t_coa(ii)
+           enddo
+           drhoD_acc=0.0d0;drhoD_spu=0.0d0;drhoD_coa=0.0d0;drhoD_sha=0.0d0
+
+           if(dustdebug.and.okinfocell)write(*,'(A)')'================================================================'
+           do jj=1,ndchemtype !Loop over chemical dust species
+           jj1=1+(jj-1)*(dndsize+1)
+           jj2=jj1+dndsize
+
+           if(dustdebug.and.okinfocell)write(*,'(A,I2,A)')'************************ ichemdust:',jj,' **************************'
+           if(dustdebug.and.okinfocell)write(*,'(A,4es13.5)')'checking fdust for all bins',fdust(ind(i),:)
+
+           if(time(ind(i))>time_max(ind(i)))then
+              dtremain=(time_max(ind(i))-time_old(ind(i)))/(precoeff*nH(ind(i)))
+           else
+              dtremain=1d0/wcool/(precoeff*nH(ind(i)))
+           endif
+           icount=0
+
+           if(rhoZ0(jj1).gt.0.0d0)then !!test if rhoZ not null in the cell
+              okdust=.false.
+           else
+              okdust=.true.
+           endif
+
+           do while (okdust .eqv. .false.)
+              rhoDT0=0.0d0 !!total dust density over all size bins
+              d_acc=0.0d0;d_spu=0.0d0;d_coa=0.0d0;d_sha=0.0d0
+
+              do ii=jj1,jj2
+                 rhoD0(ii)=fdust(ind(i),ii)*nH(ind(i)) ! YD: this value is for the key elements
+                 rhoDT0=rhoDT0+rhoD0(ii) !!$dust_dev   ! YD: this value is for the key elements
+                 if(icount(ii)==0) dtloc_bin(ii)=MINVAL(t0(ii,:)) !! first timestep -> 10% fastest processus
+              enddo
+              do ii=jj1,jj2
+                 ! rhoZ0 is for Si if silicate
+                 rhoGZ0(ii)=rhoZ0(ii)-rhoDT0           ! YD: this value is for the key ements
+                 if(dustdebug.and.okinfocell)write(*,'(5I7,5es13.5)')iter,ii,jj,icount(ii),ind(i),rhoGZ0(ii),rhoZ0(ii),rhoDT0,nh(ind(i)),tau(ind(i))
+                 if(rhoGZ0(ii)<0.0d0)then
+                    write(*,*)'Metal gas density smaller than zero, stopping'
+                    write(*,'(5I7,5es13.5)')iter,ii,jj,icount(ii),ind(i),rhoGZ0(ii),rhoZ0(ii),rhoDT0,nh(ind(i)),tau(ind(i))
+                    write(*,'(4es13.5)')t_acc(ii)/3.15d13,t_coa(ii)/3.15d13,t_sha(ii)/3.15d13,t_des(ii)/3.15d13
+                    if(dust_chem)then
+                       do ich=1,nchem
+                          write(*,'(A,I2,A,es13.5)')'Zchem(',ich,')',Zchem(ind(i),ich)
+                       enddo
+                    endif
+                    do ich=1,ndust
+                       write(*,'(A,I2,A,es13.5)')'Zdust(',ich,')',fdust(ind(i),ich)/0.02
+                    enddo
+                    stop
+                 endif
+              enddo
+              if(dustdebug.and.okinfocell)write(*,'(A,I1,A,4es15.3)')'(',jj1,')',t0(jj1,:)/0.1d0/3.15d13
+              if(dustdebug.and.okinfocell)write(*,'(A,I1,A,4es15.3)')'(',jj2,')',t0(jj2,:)/0.1d0/3.15d13
+!!$              write(*,'(A,3es15.3)')'(1)',dtloc/3.15d13,dtloc_bin(jj1:jj2)/3.15d13
+              dtloc=MINVAL(dtloc_bin(jj1:jj2))
+!!$              write(*,'(A,2es15.3)')'(2)',dtloc/3.15d13,dtremain/3.15d13
+              dtloc=MIN(dtloc,dtremain) !!min timestep
+              halfdtloc=0.5d0*dtloc !!timestep/2 for rk4
+
+              ! This step is for speed-up: avoid to have too much iterations when approaching total rhoD over all bins~rhoZ
+              if(zdmax.gt.0.0d0)then
+                 if(rhoDT0/rhoZ0(jj1).gt.zdmax)then
+                    okdust=.true.
+                    do ii=jj1,jj2
+                       fdust(ind(i),ii)=zdmax*rhoZ0(ii)/nH(ind(i))*(fdust(ind(i),ii)*nH(ind(i))/rhoDT0)
+                    enddo
+                 endif
+              endif
+
+              !RK4 for all processes
+              k1=0.0d0;Gvar=0.0d0
+              do ii=jj1,jj2
+                 if(dust_accretion)then
+                    if( .not. dust_acc_neglected_large_bin)then
+                       dd=(rhoGZ0(ii)/rhoZ0(ii))*rhoD0(ii)*oneovertacc(ii)
+                       k1   (ii)=k1   (ii) + dd
+                       d_acc(ii)=d_acc(ii) + dd
+                    elseif(ii<=ndust/2)then
+                       dd=(rhoGZ0(ii)/rhoZ0(ii))*rhoD0(ii)*oneovertacc(ii)
+                       k1   (ii)=k1   (ii) + dd
+                       d_acc(ii)=d_acc(ii) + dd
+                    endif
+                    Gvar=Gvar-dd
+                 endif
+                 if(dustdebug.and.okinfocell.and.ii==jj2)write(*,'(A,2I3,es13.5)')'RK1 (acc):',jj2,icount(jj2),k1(jj2)
+                 if(dust_sputtering)then
+                    dd=rhoD0(ii)*oneovertdes(ii)
+                    k1   (ii)=k1   (ii) - dd
+                    d_spu(ii)=d_spu(ii) - dd
+                    Gvar=Gvar+dd
+                 endif
+                 if(dustdebug.and.okinfocell.and.ii==jj2)write(*,'(A,2I3,es13.5)')'RK1 (spu):',jj2,icount(jj2),k1(jj2)
+                 if(dust_shattering)then
+                    dd=rhoD0(jj2)*oneovertsha(jj2)*fdust(ind(i),jj2)
+                    if(ii==jj1)then
+                       k1   (ii)=k1   (ii) + dd
+                       d_sha(ii)=d_sha(ii) + dd
+                    endif
+                    if(ii==jj2)then
+                       k1   (ii)= k1  (ii) - dd
+                       d_sha(ii)=d_sha(ii) - dd
+                    endif
+                 endif
+                 if(dustdebug.and.okinfocell.and.ii==jj2)write(*,'(A,2I3,es13.5)')'RK1 (sha):',jj2,icount(jj2),k1(jj2)
+                 if(dust_coagulation)then
+                    dd=rhoD0(jj1)*oneovertcoa(jj1)*fdust(ind(i),jj1)
+                    if(ii==jj1)then
+                       k1   (ii)= k1   (ii) - dd
+                       d_coa(ii)= d_coa(ii) - dd
+                    endif
+                    if(ii==jj2)then
+                       k1   (ii)= k1   (ii) + dd
+                       d_coa(ii)= d_coa(ii) + dd
+                    endif
+                 endif
+                 rhoD0k1 (ii)=rhoD0 (ii)+halfdtloc*k1(ii)
+                 if(dustdebug.and.okinfocell.and.ii==jj2)write(*,'(A,2I3,es13.5)')'RK1 (coa):',jj2,icount(jj2),k1(jj2)
+              enddo
+              rhoGZ0k1(jj1:jj2)=rhoGZ0(jj1:jj2)+halfdtloc*Gvar
+              if(dustdebug.and.okinfocell)write(*,'(A,3I7,6es13.5)')'RK1:',jj,icount(jj1:jj2),d_acc(jj1:jj2),rhoGZ0k1(jj1:jj2),rhoD0k1(jj1:jj2)
+
+              k2=0.0d0;Gvar=0.0d0
+              do ii=jj1,jj2
+                 if(dust_accretion)then
+                    if( .not. dust_acc_neglected_large_bin)then
+                       dd=(rhoGZ0k1(ii)/rhoZ0(ii))*rhoD0k1(ii) *oneovertacc(ii)
+                       k2   (ii)= k2  (ii) +     dd
+                       d_acc(ii)=d_acc(ii) + 2d0*dd
+                    elseif(ii<=ndust/2)then
+                       dd=(rhoGZ0k1(ii)/rhoZ0(ii))*rhoD0k1(ii) *oneovertacc(ii)
+                       k2   (ii)=k2   (ii) +     dd
+                       d_acc(ii)=d_acc(ii) + 2d0*dd
+                    endif
+                    Gvar=Gvar-dd
+                 endif
+                 if(dustdebug.and.okinfocell.and.ii==jj2)write(*,'(A,2I3,es13.5)')'RK2 (acc):',jj2,icount(jj2),k2(jj2)
+                 if(dust_sputtering)then
+                    dd=rhoD0k1(ii)*oneovertdes(ii)
+                    k2   (ii)=k2   (ii) -     dd
+                    d_spu(ii)=d_spu(ii) - 2d0*dd
+                    Gvar=Gvar+dd
+                 endif
+                 if(dustdebug.and.okinfocell.and.ii==jj2)write(*,'(A,2I3,es13.5)')'RK2 (spu):',jj2,icount(jj2),k2(jj2)
+                 if(dust_shattering) then
+                    dd=rhoD0k1(jj2)*oneovertsha(jj2)*fdust(ind(i),jj2) !New
+                    if(ii==jj1)then
+                       k2   (ii)=k2   (ii) +     dd
+                       d_sha(ii)=d_sha(ii) + 2d0*dd
+                    endif
+                    if(ii==jj2)then
+                       k2   (ii)=k2   (ii) -     dd
+                       d_sha(ii)=d_sha(ii) - 2d0*dd
+                    endif
+                 endif
+                 if(dustdebug.and.okinfocell.and.ii==jj2)write(*,'(A,2I3,es13.5)')'RK2 (sha):',jj2,icount(jj2),k2(jj2)
+                 if(dust_coagulation)then
+                    dd=rhoD0k1(jj1)*oneovertcoa(jj1)*fdust(ind(i),jj1) !New
+                    if(ii==jj1)then
+                       k2   (ii)=k2   (ii) -     dd
+                       d_coa(ii)=d_coa(ii) - 2d0*dd
+                    endif
+                    if(ii==jj2)then
+                       k2   (ii)=k2   (ii) +     dd
+                       d_coa(ii)=d_coa(ii) + 2d0*dd
+                    endif
+                 endif
+                 if(dustdebug.and.okinfocell.and.ii==jj2)write(*,'(A,2I3,es13.5)')'RK2 (coa):',jj2,icount(jj2),k2(jj2)
+                 rhoD0k2 (ii)=rhoD0 (ii)+halfdtloc*k2(ii)
+              enddo
+              rhoGZ0k2(jj1:jj2)=rhoGZ0(jj1:jj2)+halfdtloc*Gvar
+              if(dustdebug.and.okinfocell)write(*,'(A,3I7,6es13.5)')'RK2:',jj,icount(jj1:jj2),d_acc(jj1:jj2),rhoGZ0k2(jj1:jj2),rhoD0k2(jj1:jj2)
+
+              k3=0.0d0;Gvar=0.0d0
+              do ii=jj1,jj2
+                 if(dust_accretion)  then
+                    if( .not. dust_acc_neglected_large_bin)then
+                       dd=(rhoGZ0k2(ii)/rhoZ0(ii))*rhoD0k2(ii)*oneovertacc(ii)
+                       k3   (ii)=k3   (ii) +     dd
+                       d_acc(ii)=d_acc(ii) + 2d0*dd
+                    elseif(ii<=ndust/2)then
+                       dd=(rhoGZ0k2(ii)/rhoZ0(ii))*rhoD0k2(ii)*oneovertacc(ii)
+                       k3   (ii)=k3   (ii) +     dd
+                       d_acc(ii)=d_acc(ii) + 2d0*dd
+                    endif
+                    Gvar=Gvar-dd
+                 endif
+                 if(dust_sputtering)then
+                    dd=rhoD0k2(ii)*oneovertdes(ii)
+                    k3   (ii)=k3   (ii) -     dd
+                    d_spu(ii)=d_spu(ii) - 2d0*dd
+                    Gvar=Gvar+dd
+                 endif
+                 if(dust_shattering)then
+                    dd=rhoD0k2(jj2)*oneovertsha(jj2)*fdust(ind(i),jj2)
+                    if(ii==jj1)then
+                       k3   (ii)=k3   (ii) +     dd
+                       d_sha(ii)=d_sha(ii) + 2d0*dd
+                    endif
+                    if(ii==jj2)then
+                       k3   (ii)=k3   (ii) -     dd
+                       d_sha(ii)=d_sha(ii) - 2d0*dd
+                    endif
+                 endif
+                 if(dust_coagulation)then
+                    dd=rhoD0k2(jj1)*oneovertcoa(jj1)*fdust(ind(i),jj1)
+                    if(ii==jj1)then
+                       k3   (ii)=k3   (ii) -     dd
+                       d_coa(ii)=d_coa(ii) - 2d0*dd
+                    endif
+                    if(ii==jj2)then
+                       k3   (ii)=k3   (ii) +     dd
+                       d_coa(ii)=d_coa(ii) + 2d0*dd
+                    endif
+                 endif
+                 rhoD0k3 (ii)=rhoD0 (ii)+dtloc*k3(ii)
+              enddo
+              rhoGZ0k3(jj1:jj2)=rhoGZ0(jj1:jj2)+dtloc*Gvar
+              if(dustdebug.and.okinfocell)write(*,'(A,3I7,6es13.5)')'RK3:',jj,icount(jj1:jj2),d_acc(jj1:jj2),rhoGZ0k3(jj1:jj2),rhoD0k3(jj1:jj2)
+
+              k4=0.0d0
+              do ii=jj1,jj2
+                 if(dust_accretion)then
+                    if( .not. dust_acc_neglected_large_bin)then
+                       dd=(rhoGZ0k3(ii)/rhoZ0(ii))*rhoD0k3(ii)*oneovertacc(ii)
+                       k4   (ii)=k4   (ii) + dd
+                       d_acc(ii)=d_acc(ii) + dd
+                    elseif(ii<=ndust/2)then
+                       dd=(rhoGZ0k3(ii)/rhoZ0(ii))*rhoD0k3(ii)*oneovertacc(ii)
+                       k4   (ii)=k4   (ii) + dd
+                       d_acc(ii)=d_acc(ii) + dd
+                    endif
+                 endif
+                 if(dust_sputtering)then
+                    dd=rhoD0k3(ii)*oneovertdes(ii)
+                    k4   (ii)=k4   (ii) - dd
+                    d_spu(ii)=d_spu(ii) - dd
+                 endif
+                 if(dust_shattering)then
+                    dd=rhoD0k3(jj2)*oneovertsha(jj2)*fdust(ind(i),jj2)
+                    if(ii==jj1)then
+                       k4   (ii)=k4   (ii) + dd
+                       d_sha(ii)=d_sha(ii) + dd
+                    endif
+                    if(ii==jj2)then
+                       k4   (ii)=k4   (ii) - dd
+                       d_sha(ii)=d_sha(ii) - dd
+                    endif
+                 endif
+                 if(dust_coagulation)then
+                    dd=rhoD0k3(jj1)*oneovertcoa(jj1)*fdust(ind(i),jj1)
+                    if(ii==jj1)then
+                       k4   (ii)=k4   (ii) - dd
+                       d_coa(ii)=d_coa(ii) - dd
+                    endif
+                    if(ii==jj2)then
+                       k4   (ii)=k4   (ii) + dd
+                       d_coa(ii)=d_coa(ii) + dd
+                    endif
+                 endif
+                 drhoD(ii)=dtloc/6d0*(k1(ii)+2d0*k2(ii)+2d0*k3(ii)+k4(ii))
+                 d_acc(ii)=dtloc/6d0*d_acc(ii)
+                 d_spu(ii)=dtloc/6d0*d_spu(ii)
+                 d_sha(ii)=dtloc/6d0*d_sha(ii)
+                 d_coa(ii)=dtloc/6d0*d_coa(ii)
+                 if(dustdebug.and.okinfocell)write(*,'(A,3I7,2es13.5)')'RK4:',jj,icount(jj1:jj2),d_acc(jj1:jj2)
+                 if(dustdebug.and.okinfocell)write(*,'(3I7,4es13.5,a)')ii,icount(jj1:jj2),dtloc/3.15d13,dtloc_bin(ii)/3.15d13,dt/3.15d13,dtremain/3.15d13,' Myr'
+                 if(dustdebug.and.okinfocell)write(*,'(3I7,7es13.5)'  )ii,icount(jj1:jj2),rhoD0(ii),rhoD0(ii)+drhoD(ii),drhoD(ii),d_acc(ii),d_spu(ii),d_sha(ii),d_coa(ii)
+                 rhoD(ii)=rhoD0(ii)+drhoD(ii) !!new dust density
+              enddo
+
+!!$              ! forward Euler
+!!$              k1=0.0d0
+!!$              do ii=jj1,jj2
+!!$                 if(dust_accretion)then
+!!$                    if( .not. dust_acc_neglected_large_bin)then
+!!$                       dd=(rhoGZ0(ii)/rhoZ0(ii))*rhoD0(ii)*oneovertacc(ii)
+!!$                       k1   (ii)=k1   (ii) + dd
+!!$                       d_acc(ii)=d_acc(ii) + dd
+!!$                    elseif(ii<=ndust/2)then
+!!$                       dd=(rhoGZ0(ii)/rhoZ0(ii))*rhoD0(ii)*oneovertacc(ii)
+!!$                       k1   (ii)=k1   (ii) + dd
+!!$                       d_acc(ii)=d_acc(ii) + dd
+!!$                    endif
+!!$                 endif
+!!$                 if(dust_sputtering)then
+!!$                    dd=rhoD0(ii)*oneovertdes(ii)
+!!$                    k1   (ii)=k1   (ii) - dd
+!!$                    d_spu(ii)=d_spu(ii) - dd
+!!$                 endif
+!!$                 if(dust_shattering)then
+!!$                    dd=rhoD0(jj2)*oneovertsha(jj2)*fdust(ind(i),jj2)
+!!$                    if(ii==jj1)then
+!!$                       k1   (ii)=k1   (ii) + dd
+!!$                       d_sha(ii)=d_sha(ii) + dd
+!!$                    endif
+!!$                    if(ii==jj2)then
+!!$                       k1   (ii)=k1   (ii) - dd
+!!$                       d_sha(ii)=d_sha(ii) - dd
+!!$                    endif
+!!$                 endif
+!!$                 if(dust_coagulation)then
+!!$                    dd=rhoD0(jj1)*oneovertcoa(jj1)*fdust(ind(i),jj1)
+!!$                    if(ii==jj1)then
+!!$                       k1   (ii)=k1   (ii) - dd
+!!$                       d_coa(ii)=d_coa(ii) - dd
+!!$                    endif
+!!$                    if(ii==jj2)then
+!!$                       k1   (ii)=k1   (ii) + dd
+!!$                       d_coa(ii)=d_coa(ii) + dd
+!!$                    endif
+!!$                 endif
+!!$                 drhoD(ii)=dtloc*k1(ii)
+!!$                 d_acc(ii)=dtloc*d_acc(ii)
+!!$                 d_spu(ii)=dtloc*d_spu(ii)
+!!$                 d_sha(ii)=dtloc*d_sha(ii)
+!!$                 d_coa(ii)=dtloc*d_coa(ii)
+!!$                 if(dustdebug.and.okinfocell)write(*,'(A,3I7,2es13.5)')'RK1:',jj,icount(jj1:jj2),d_acc(jj1:jj2)
+!!$                 if(dustdebug.and.okinfocell)write(*,'(3I7,4es13.5,a)')ii,icount(jj1:jj2),dtloc/3.15d13,dtloc_bin(ii)/3.15d13,dt/3.15d13,dtremain/3.15d13,' Myr'
+!!$                 if(dustdebug.and.okinfocell)write(*,'(3I7,7es13.5)'  )ii,icount(jj1:jj2),rhoD0(ii),rhoD0(ii)+drhoD(ii),drhoD(ii),d_acc(ii),d_spu(ii),d_sha(ii),d_coa(ii)
+!!$                 rhoD(ii)=rhoD0(ii)+drhoD(ii) !!new dust density
+!!$              enddo
+
+              okdt_bin=.false.
+              do ii=jj1,jj2
+                 if(rhoD0(ii)>0.)then
+                    error_rel1=abs(drhoD(ii))/MIN(rhoD0(ii),rhoD(ii))
+!!$                    write(*,'(A,2I7,2es13.5)')'error_rel (1)',ii,icount(ii),rhoD0(ii),error_rel1
+                    den0=(1d0-rhoD0(ii)/rhoZ0(ii))*rhoD0(ii)
+                    den =(1d0-rhoD (ii)/rhoZ0(ii))*rhoD (ii)
+                    if(MIN(den0,den)<1d-10) then
+                       error_rel=error_rel1
+                    else
+                       error_rel2=abs(drhoD(ii))/MIN(den0,den)
+                       error_rel=MAX(error_rel1,error_rel2)
+                    endif
+                 else
+                    okdust=.true. !!else stop rk4
+                 endif
+
+                 if(.not.okdust)then !!if still in the do while (rk4)
+!!$                    write(*,'(A,2I7,2es13.5)')'error_rel (2)',ii,icount(ii),error_rel,errmax
+                    if(error_rel.le.errmax.and.error_rel.ge.0.0d0) then
+                       okdt_bin(ii)=.true.
+                       if(error_rel.le.0.5d0*errmax)dtloc_bin(ii)=dtloc*2.0d0 !!new timestep
+                    endif
+                    if(error_rel.gt.errmax.or.error_rel.lt.0.0d0)dtloc_bin(ii)=0.5d0*dtloc
+                    icount(ii)=icount(ii)+1
+                 endif !! still in rk4
+
+                 if(icount(ii)>countmax)then
+                    write(*,*)'stopping in dust processing icount>',countmax
+                    write(*,*) 'bin :', ii
+                    write(*,*)'rhog      rhoz     rhogz      rhod      temperature'
+                    write(*,'(5es10.2)')rhoG0,rhoZ0(ii),rhoGZ0 (ii),rhoD0 (ii),t6*1d6
+                    write(*,'(5es10.2)')rhoG0,rhoZ0(ii),rhoGZ00    ,rhoD00(ii),t6*1d6
+                    write(*,*)'dtloc     dtstep     dtremain'
+                    write(*,'(3es10.3,a)')dtloc_bin(ii)/3.15d13,dt/3.15d13,dtremain/3.15d13,' Myr'
+                    write(*,*)'t_acc     t_des     t_sha     t_coa'
+                    write(*,'(4es10.3,A)')t_acc(ii)/3.15d13,t_des(ii)/3.15d13,t_sha(ii)/3.15d13,t_coa(ii)/3.15d13,' Myr'
+                    write(*,'(es10.3,3i10)')error_rel,i,ind(i),n
+                    if(sticking_coef=='subgrid')write(*,'(A,6es10.3)')'boost_acc=',boost_acc(ind(i)),sigma(ind(i))/1d5,sqrt(1.666667d0*kB*T2(ind(i))/mH)/1d5,mach(ind(i)),nh(ind(i)),tau(ind(i))
+                    stop
+                 endif
+                 if(fdust(ind(i),ii)<0.)then
+                    write(*,'(a,es10.2,i10)')'stopping in dust processing rhod<0',rhod(ii),icount(ii)
+                    write(*,*) 'bin :', ii
+                    write(*,*)'rhog      rhoz     rhogz      rhod      temperature'
+                    write(*,'(5es10.2)')rhoG0,rhoZ0(ii)/rhoG0/0.02,rhoGZ0 (ii)/rhoG0/0.02,rhoD0 (ii)/rhoG0/0.02,t6*1d6
+                    write(*,'(5es10.2)')rhoG0,rhoZ0(ii)/rhoG0/0.02,rhoGZ00    /rhoG0/0.02,rhoD00(ii)/rhoG0/0.02,t6*1d6
+                    write(*,*)'dtloc     dtstep     dtremain'
+                    write(*,'(3es10.3,a)')dtloc_bin(ii)/3.15d13,dt/3.15d13,dtremain/3.15d13,' Myr'
+                    write(*,*)'t_acc     t_des     t_sha     t_coa'
+                    write(*,'(4es10.3,A)')t_acc(ii)/3.15d13,t_des(ii)/3.15d13,t_sha(ii)/3.15d13,t_coa(ii)/3.15d13,' Myr'
+                    write(*,'(es10.3,2i10)')error_rel,i,n
+                    stop
+                 endif
+
+              enddo !!on bins
+              if(.not.okdust)then !!if still in the do while (rk4)
+!!$                 write(*,*)'check',okdt_bin(jj1:jj2),ALL(okdt_bin(jj1:jj2))
+                 if(ALL(okdt_bin(jj1:jj2)).eqv..true.) then
+!!$                    write(*,*)'dtremain before',dtremain
+                    dtremain=dtremain-dtloc
+!!$                    write(*,*)'dtremain after ',dtremain
+                    do ii=jj1,jj2
+                       fdust(ind(i),ii)=rhoD(ii)/nh(ind(i)) !!save dust density in bin
+                       !!sum on rk4 variation
+                       drhoD_acc(ii)=drhoD_acc(ii)+d_acc(ii)
+                       drhoD_spu(ii)=drhoD_spu(ii)+d_spu(ii)
+                       drhoD_coa(ii)=drhoD_coa(ii)+d_coa(ii)
+                       drhoD_sha(ii)=drhoD_sha(ii)+d_sha(ii)
+                    enddo
+                 endif
+!!$                 write(*,*)'okdust before ',okdust
+                 if(dtremain.le.0.0d0)okdust=.true.
+!!$                 write(*,*)'okdust after  ',okdust
+              endif
+           enddo !!do while(okdust .eqv. .false.)
+           enddo !!do jj=1,ndchemtype
+
+           if(dust_chem)then
+              ilow=1;ihigh=ilow+dndsize
+              deltaDC =SUM(fdust(ind(i),ilow:ihigh))*nh(ind(i))-SUM(rhoD00(ilow:ihigh))
+              ilow=ihigh+1;ihigh=ilow+dndsize
+              deltaDSi=SUM(fdust(ind(i),ilow:ihigh))*nh(ind(i))-SUM(rhoD00(ilow:ihigh))
+
+!!$              deltaDC=SUM(fdust(ind(i),1:ndchemtype       ))*nh(ind(i)) - SUM(rhoD00(1:ndchemtype))
+              Zchem(ind(i),ichC )=Zchem(ind(i),ichC ) - deltaDC /nh(ind(i))/0.02
+              if(dustdebug.and.okinfocell)write(*,'(A,2i6,es13.5)')'checkout final dust0',ndchemtype+1,ndust,fdust(ind(i),ndchemtype+1)*nh(ind(i))
+!!$              deltaDSi=SUM(fdust(ind(i),ndchemtype+1:ndust))*nh(ind(i)) - SUM(rhoD00(ndchemtype+1:ndust))
+              Zchem(ind(i),ichMg)=Zchem(ind(i),ichMg) - deltaDSi/nh(ind(i))/0.02* multMgoverSi
+              Zchem(ind(i),ichFe)=Zchem(ind(i),ichFe) - deltaDSi/nh(ind(i))/0.02* multFeoverSi
+              Zchem(ind(i),ichSi)=Zchem(ind(i),ichSi) - deltaDSi/nh(ind(i))/0.02
+              Zchem(ind(i),ichO )=Zchem(ind(i),ichO ) - deltaDSi/nh(ind(i))/0.02* multOoverSi
+              zzz(ind(i))=zzz(ind(i))-(deltaDC+deltaDSi/SioverSil)/nh(ind(i))/0.02
+              do ich=1,nchem
+                 if(Zchem(ind(i),ich)<0.0d0)then
+                    write(*,*)'Negative gas chem metallicity at the end of the cool step'
+                    if(TRIM(chem_list(ich))=='C' )write(*,'(A,I2,A,2I7,3es13.5)')'Zchem(',ich,')<0 at the end of the cool iter step (iter,ind(i),Zg before, after, dZDust)',iter,ind(i),Zchem(ind(i),ich),Zchem(ind(i),ich)+deltaDC /nh(ind(i))/0.02,deltaDC /nh(ind(i))/0.02
+                    if(TRIM(chem_list(ich))=='Mg')write(*,'(A,I2,A,2I7,3es13.5)')'Zchem(',ich,')<0 at the end of the cool iter step (iter,ind(i),Zg before, after, dZDust)',iter,ind(i),Zchem(ind(i),ich),Zchem(ind(i),ich)+deltaDSi/nh(ind(i))/0.02*multMgoverSi,deltaDSi/nh(ind(i))/0.02*multMgoverSi
+                    if(TRIM(chem_list(ich))=='Fe')write(*,'(A,I2,A,2I7,3es13.5)')'Zchem(',ich,')<0 at the end of the cool iter step (iter,ind(i),Zg before, after, dZDust)',iter,ind(i),Zchem(ind(i),ich),Zchem(ind(i),ich)+deltaDSi/nh(ind(i))/0.02*multFeoverSi,deltaDSi/nh(ind(i))/0.02*multFeoverSi
+                    if(TRIM(chem_list(ich))=='Si')write(*,'(A,I2,A,2I7,3es13.5)')'Zchem(',ich,')<0 at the end of the cool iter step (iter,ind(i),Zg before, after, dZDust)',iter,ind(i),Zchem(ind(i),ich),Zchem(ind(i),ich)+deltaDSi/nh(ind(i))/0.02,deltaDSi/nh(ind(i))/0.02
+                    if(TRIM(chem_list(ich))=='O' )write(*,'(A,I2,A,2I7,3es13.5)')'Zchem(',ich,')<0 at the end of the cool iter step (iter,ind(i),Zg before, after, dZDust)',iter,ind(i),Zchem(ind(i),ich),Zchem(ind(i),ich)+deltaDSi/nh(ind(i))/0.02*multOoverSi,deltaDSi/nh(ind(i))/0.02*multOoverSi
+                 endif
+              enddo
+           else
+              if(dustdebug.and.okinfocell)write(*,'(A,7es13.5)')'zzz,SUM(Delta_fdust)/0.02,zzz-SUM(Delta_fdust)/0.02,fdust(1:ndust)',zzz(ind(i)),(SUM(fdust(ind(i),1:ndust))-SUM(rhoD00(1:ndust))/nh(ind(i)))/0.02,zzz(ind(i))-(SUM(fdust(ind(i),1:ndust))-SUM(rhoD00(1:ndust))/nh(ind(i)))/0.02,fdust(ind(i),1:ndust)
+              zzz(ind(i))=zzz(ind(i))-(SUM(fdust(ind(i),1:ndust))-SUM(rhoD00(1:ndust))/nh(ind(i)))/0.02
+              if(zzz(ind(i))<0.0d0)then
+                 write(*,*)'Negative gas metallicity at the end of the cool step'
+                 stop
+              endif
+           endif
+
+           rhoDT=0.0d0
+           do ii=1,ndust
+              !!sum on every cell
+              dM_acc(ii)=dM_acc(ii)+drhoD_acc(ii)/scale_nH*vol_loc !code units
+              dM_spu(ii)=dM_spu(ii)+drhoD_spu(ii)/scale_nH*vol_loc !code units
+              dM_coa(ii)=dM_coa(ii)+drhoD_coa(ii)/scale_nH*vol_loc !code units
+              dM_sha(ii)=dM_sha(ii)+drhoD_sha(ii)/scale_nH*vol_loc !code units
+              rhoDT=rhoDT+ fdust(ind(i),ii)*key2real(ii)*nh(ind(i)) ! Total DTG over all elements and sizes (not used anywhere...)
+           enddo
+           if(metal_gasonly) then
+              ! YD WARNING: do something here for the chemical composition of dust...
+              do ii=1,ndust
+                 Zsolar(ind(i))=rhoZ0(ii)-(fdust(ind(i),ii)*nH(ind(i)))
+              enddo
+              Zsolar(ind(i))=Zsolar(ind(i))/(0.02*nH(ind(i)))
+           endif
+        endif
 
 !!$        if(i==1)then
 !!$           write(10,'(I5,10(1PE10.3,1X))')iter,tau_old(ind(i)),cool+zzz(ind(i))*metal,heat,lambda
@@ -690,6 +1548,17 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,boost,dt,deltaT2,ncell)
   do i=1,ncell
      deltaT2(i)=tau(i)-tau_ini(i)
   end do
+
+!!$  if(dust_chem)then
+!!$#if NDUST==2
+!!$     fdust(:,2)=fdust(:,2)*SiOverSil ! silicate needs to be renormalised to account for Mg, Fe and O
+!!$#endif
+!!$#if NDUST==4
+!!$     fdust(:,3)=fdust(:,3)*SiOverSil ! silicate needs to be renormalised to account for Mg, Fe and O
+!!$     fdust(:,4)=fdust(:,4)*SiOverSil ! silicate needs to be renormalised to account for Mg, Fe and O
+!!$#endif
+!!$  endif
+
 
 end subroutine solve_cooling
 !=======================================================================

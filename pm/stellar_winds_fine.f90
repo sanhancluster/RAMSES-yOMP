@@ -11,7 +11,9 @@ module stellar_commons
    real(dp),allocatable,dimension(:,:):: log_cmSW  ! cumulative mass fraction 
    real(dp),allocatable,dimension(:,:):: log_ceSW  ! cumulative energy per 1Msun SSP     
    real(dp),allocatable,dimension(:,:):: log_cmzSW  ! cumulative metal mass fraction
+   real(dp),allocatable,dimension(:,:):: log_cmdSW ! cumulative dust mass fraction
    real(dp),allocatable:: log_cmSW_spec(:,:,:)      ! cumulative mass fraction for several species
+   real(dp),allocatable:: log_cmdSW_spec(:,:,:)     ! cumulative dust mass fraction for several species
 end module
 !################################################################
 !################################################################
@@ -30,6 +32,8 @@ subroutine init_stellar_winds
    real(dp),allocatable,dimension(:,:):: log_cmSiSW ! cumulative Si mass fraction 
    real(dp),allocatable,dimension(:,:):: log_cmSSW  ! cumulative S mass fraction 
    real(dp),allocatable,dimension(:,:):: log_cmFeSW ! cumulative Fe mass fraction
+   real(dp),allocatable,dimension(:,:):: log_cmdCSW  ! cumulative C  dust mass fraction
+   real(dp),allocatable,dimension(:,:):: log_cmdSiSW ! cumulative Si dust mass fraction
    real(kind=8),allocatable:: dum1d(:)
    logical::ok
    if(.not.use_initial_mass)then
@@ -68,7 +72,13 @@ subroutine init_stellar_winds
      
       allocate(log_cmSW_spec(1:nchem,1:nt_SW,1:nz_SW))
    endif
-   
+   if(dust)then
+      allocate(log_cmdSW  (1:nt_SW,1:nz_SW))
+      allocate(log_cmdCSW (1:nt_SW,1:nz_SW))
+      allocate(log_cmdSiSW(1:nt_SW,1:nz_SW))
+      allocate(log_cmdSW_spec(1:2,1:nt_SW,1:nz_SW))
+   endif
+
    allocate(dum1d (1:nt_SW))
    read(10) dum1d
    log_tSW(:) = dum1d(:)
@@ -95,53 +105,72 @@ subroutine init_stellar_winds
       log_cmzSW(:,iz) = dum1d(:)
    enddo
 
-   if(nchem>0)then
-      ! cumulative H mass from winds
-      do iz=1,nz_SW
-         read(10) dum1d
-         log_cmHSW(:,iz) = dum1d(:)
-      enddo
-      ! cumulative He mass from winds
-      do iz=1,nz_SW
-         read(10) dum1d
-         !log_cmHeSW(:,iz) = dum1d(:)
-      enddo
-      ! cumulative C mass from winds
-      do iz=1,nz_SW
-         read(10) dum1d
-         log_cmCSW(:,iz) = dum1d(:)
-      enddo
-      ! cumulative N mass from winds
-      do iz=1,nz_SW
-         read(10) dum1d
-         log_cmNSW(:,iz) = dum1d(:)
-      enddo
-      ! cumulative O mass from winds
-      do iz=1,nz_SW
-         read(10) dum1d
-         log_cmOSW(:,iz) = dum1d(:)
-      enddo
-      ! cumulative Mg mass from winds
-      do iz=1,nz_SW
-         read(10) dum1d
-         log_cmMgSW(:,iz) = dum1d(:)
-      enddo
-      ! cumulative Si mass from winds
-      do iz=1,nz_SW
-         read(10) dum1d
-         log_cmSiSW(:,iz) = dum1d(:)
-      enddo
-      ! cumulative S mass from winds
-      do iz=1,nz_SW
-         read(10) dum1d
-         log_cmSSW(:,iz) = dum1d(:)
-      enddo
-      ! cumulative Fe mass from winds
-      do iz=1,nz_SW
-         read(10) dum1d
-         log_cmFeSW(:,iz) = dum1d(:)
-      enddo
+   ! cumulative H mass from winds
+   do iz=1,nz_SW
+      read(10) dum1d
+      if(nchem>0)log_cmHSW(:,iz) = dum1d(:)
+   enddo
+   ! cumulative He mass from winds
+   do iz=1,nz_SW
+      read(10) dum1d
+      !log_cmHeSW(:,iz) = dum1d(:)
+   enddo
+   ! cumulative C mass from winds
+   do iz=1,nz_SW
+      read(10) dum1d
+      if(nchem>0)log_cmCSW(:,iz) = dum1d(:)
+   enddo
+   ! cumulative N mass from winds
+   do iz=1,nz_SW
+      read(10) dum1d
+      if(nchem>0)log_cmNSW(:,iz) = dum1d(:)
+   enddo
+   ! cumulative O mass from winds
+   do iz=1,nz_SW
+      read(10) dum1d
+      if(nchem>0)log_cmOSW(:,iz) = dum1d(:)
+   enddo
+   ! cumulative Mg mass from winds
+   do iz=1,nz_SW
+      read(10) dum1d
+      if(nchem>0)log_cmMgSW(:,iz) = dum1d(:)
+   enddo
+   ! cumulative Si mass from winds
+   do iz=1,nz_SW
+      read(10) dum1d
+      if(nchem>0)log_cmSiSW(:,iz) = dum1d(:)
+   enddo
+   ! cumulative S mass from winds
+   do iz=1,nz_SW
+      read(10) dum1d
+      if(nchem>0)log_cmSSW(:,iz) = dum1d(:)
+   enddo
+   ! cumulative Fe mass from winds
+   do iz=1,nz_SW
+      read(10) dum1d
+      if(nchem>0)log_cmFeSW(:,iz) = dum1d(:)
+   enddo
 
+   if(dust)then
+      ! cumulative Dust mass from winds
+      do iz=1,nz_SW
+         read(10) dum1d
+         log_cmdSW(:,iz) = dum1d(:)
+      enddo
+      ! cumulative C Dust mass from winds
+      do iz=1,nz_SW
+         read(10) dum1d
+         log_cmdCSW(:,iz) = dum1d(:)
+      enddo
+      ! cumulative Si Dust mass from winds
+      do iz=1,nz_SW
+         read(10) dum1d
+         log_cmdSiSW(:,iz) = dum1d(:)
+      enddo
+   endif
+
+
+   if(nchem>0)then
       ich=0
       do i=1,nchem
           ich=ich+1
@@ -160,7 +189,13 @@ subroutine init_stellar_winds
       deallocate(log_cmHSW,log_cmCSW,log_cmNSW,log_cmOSW)
       deallocate(log_cmMgSW,log_cmSiSW,log_cmSSW,log_cmFeSW)
    endif
-
+   if(nchem>2.and.dust)then
+      log_cmdSW_spec(1,:,:)=log_cmdCSW
+      log_cmdSW_spec(2,:,:)=log_cmdSiSW
+   endif
+   if(dust)then
+      deallocate(log_cmdCSW,log_cmdSiSW)
+   endif
 
    deallocate(dum1d)
 
@@ -190,7 +225,7 @@ subroutine stellar_winds_fine(ilevel)
   integer::ig,ip,npart1,npart2,icpu
   integer,dimension(1:nvector)::ind_grid,ind_part,ind_grid_part,ind_cell
   logical::ok_star
-
+  real(dp)::zz,dd1,dd2,zzg ! YD Debug WARNING
   real(dp)::rand
   integer,dimension(1:IRandNumSize),save :: ompseed
 !$omp threadprivate(ompseed)
@@ -229,8 +264,9 @@ subroutine stellar_winds_fine(ilevel)
   end if
   ! End MC Tracer
 
-  ! Update the rest of the passive scales so that the fractional quantities are not changed
-  ipvar=ichem+nchem
+  ! Update the rest of the passive scalars so that the fractional quantities are not changed
+!!$  ipvar=ichem+nchem
+  ipvar=ichem+nchem+ndust
   ncache=active(ilevel)%ngrid
 !$omp parallel do private(ngrid,ind_grid,iskip,ind_cell)
   do igrid=1,ncache,nvector
@@ -252,7 +288,7 @@ subroutine stellar_winds_fine(ilevel)
   end do
 
 !$omp parallel private(igrid,ig,ip,npart1,npart2,ipart,next_part,ok_star,ind_grid,ind_part,ind_grid_part) &
-!$omp & default(none) shared(active,ilevel,numbp,headp,nextp,typep)
+!$omp & default(none) shared(active,ilevel,numbp,headp,nextp,typep,nchunk) reduction(+:dM_prod_SW)
   ig=0
   ip=0
 !$omp do schedule(dynamic,nchunk)
@@ -298,7 +334,7 @@ subroutine stellar_winds_fine(ilevel)
               ind_grid_part(ip)=ig
            endif
            if(ip==nvector)then
-              call stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+              call stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,dM_prod_SW)
               ip=0
               ig=0
            end if
@@ -307,7 +343,7 @@ subroutine stellar_winds_fine(ilevel)
         ! End loop over particles
      end if
   end do
-  if(ip>0)call stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
+  if(ip>0)call stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,dM_prod_SW)
 !$omp end parallel
 
 
@@ -363,7 +399,7 @@ end subroutine stellar_winds_fine
 !################################################################
 !################################################################
 !################################################################
-subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
+subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,dM_prod_SW_local)
   use amr_commons
   use pm_commons
   use hydro_commons
@@ -376,7 +412,7 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   ! dumps mass, momentum and energy in the nearest grid cell using array
   ! unew.
   !-----------------------------------------------------------------------
-  integer::i,j,idim,nx_loc,ich,ivar
+  integer::i,ii,j,idim,nx_loc,ich,ivar
   real(dp)::dx_min,vol_min
   real(dp)::dx,dx_loc,scale,birth_time
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
@@ -387,7 +423,7 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   integer ,dimension(1:nvector,1:twotondim)::nbors_father_grids
   ! Particle based arrays
   logical,dimension(1:nvector)::ok
-  real(dp),dimension(1:nvector)::mloss,mzloss,ethermal,ekinetic,dteff
+  real(dp),dimension(1:nvector)::mloss,mzloss,mdloss,ethermal,ekinetic,dteff
   real(dp),dimension(1:nvector)::vol_loc
   real(dp),dimension(1:nvector,1:ndim)::x
   integer ,dimension(1:nvector,1:ndim)::id,igd,icd
@@ -395,13 +431,17 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   real(dp),dimension(1:3)::skip_loc
   real(dp)::msun2g
   ! stellar library
-  real(dp)::mejecta,dfmloss,dfmzloss,log_deloss_erg
+  real(dp)::mejecta,dfmloss,dfmzloss,dfmdloss,log_deloss_erg
   real(dp)::mstar_ini,mstar_ini_msun,zstar
   real(dp)::unit_e_code
   real(dp)::dfmloss_spec(1:nchem)
+  real(dp)::dfmdloss_spec(1:2)
   real(dp),dimension(1:nchem,1:nvector)::mloss_spec
+  real(dp),dimension(1:2,1:nvector)::mdloss_spec
   real(dp),dimension(1:nvar)::uadd
   integer::indp_now
+  real(dp)::zz,dd1,dd2,zzg ! YD Debug WARNING
+  real(dp),dimension(1:ndust)::dM_prod_SW_local
 
   msun2g=2d33
   ! starting index for passive variables except for imetal and chem
@@ -517,8 +557,10 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   do j=1,np
      mloss(j)=0d0
      mzloss(j)=0d0
+     mdloss(j)=0d0
      ethermal(j)=0d0
      mloss_spec(:,j)=0d0
+     mdloss_spec(:,j)=0d0
   end do
 
   ! Compute stellar mass loss and thermal feedback due to stellar winds
@@ -530,24 +572,36 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
      mstar_ini = mp0(ind_part(j)) ! use_initial_mass=.true. 
      mstar_ini_msun = mstar_ini*(scale_l**3*scale_d/msun2g)
 
-     call cmp_stellar_wind_props (birth_time,dteff(j),zstar,dfmloss,log_deloss_erg,dfmzloss,dfmloss_spec)
+!!$     call cmp_stellar_wind_props (birth_time,dteff(j),zstar,dfmloss,log_deloss_erg,dfmzloss,dfmdloss,dfmloss_spec,dfmdloss_spec)
+!!$     call cmp_stellar_wind_props (birth_time,dteff(j),zstar,dfmloss,log_deloss_erg,dfmzloss,dfmdloss,dfmloss_spec,dfmdloss_spec,j)
+     call cmp_stellar_wind_props_linearinterpol (birth_time,dteff(j),zstar,dfmloss,log_deloss_erg,dfmzloss,dfmdloss,dfmloss_spec,dfmdloss_spec,j)
 
      ! Stellar mass loss
-     mejecta= mstar_ini*dfmloss  ! dfmloss: mass loss fraction during dteff(j)
+     mejecta= mstar_ini*MAX(dfmloss,0.0d0)  ! dfmloss: mass loss fraction during dteff(j)
      mloss(j)=mloss(j)+mejecta/vol_loc(j)
      if(.not. no_wind_energy)then
         ! Thermal energy
         unit_e_code = mstar_ini_msun*(10d0**dble(log_deloss_erg)/dble(msun2g)/scale_v**2)
-        ethermal(j)=ethermal(j)+unit_e_code*(mejecta/vol_loc(j))
+        ethermal(j)=ethermal(j)+MAX(unit_e_code*(mejecta/vol_loc(j)),0.0d0)
      end if
      ! Metallicity
      if(metal)then
-        mzloss(j)=mzloss(j)+mstar_ini*dfmzloss/vol_loc(j)
+        mzloss(j)=mzloss(j)+mstar_ini*MAX(dfmzloss,0.0d0)/vol_loc(j)
+     endif
+     ! Dust
+     if(dust)then
+        mdloss(j)=mdloss(j)+mstar_ini*MAX(dfmdloss,0.0d0)/vol_loc(j)
+        ! Dust chemical species
+        if(dust_chem)then
+           do ich=1,2
+              mdloss_spec(ich,j)=mdloss_spec(ich,j)+mstar_ini*MAX(dfmdloss_spec(ich),0.0d0)/vol_loc(j)
+           end do
+        endif
      endif
      ! Chemical species
      if(nchem>0)then
         do ich=1,nchem
-           mloss_spec(ich,j)=mloss_spec(ich,j)+mstar_ini*dfmloss_spec(ich)/vol_loc(j)
+           mloss_spec(ich,j)=mloss_spec(ich,j)+mstar_ini*MAX(dfmloss_spec(ich),0.0d0)/vol_loc(j)
         end do
      endif
 
@@ -562,7 +616,7 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   do j=1,np
      if(indp(j)/=indp_now) then
         if(indp_now > 0) then
-           do ivar=1,ichem+nchem-1
+           do ivar=1,ichem+nchem+ndust-1
 !$omp atomic update
               unew(indp_now,ivar)=unew(indp_now,ivar)+uadd(ivar)
            end do
@@ -586,6 +640,40 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
         uadd(imetal)=uadd(imetal)+mzloss(j)
      endif
 
+     ! Add Dust
+     if(dust)then
+        if(dust_chem)then
+#if NDUST==2
+           uadd(idust  )=uadd(idust  )+mdloss_spec(1,j) ! carbon   (one size)
+           uadd(idust+1)=uadd(idust+1)+mdloss_spec(2,j) ! silicate (one size)
+           dM_prod_SW_local(1)=dM_prod_SW_local(1)+mdloss_spec(1,j)*vol_loc(j)
+           dM_prod_SW_local(2)=dM_prod_SW_local(2)+mdloss_spec(2,j)*vol_loc(j)
+#endif
+#if NDUST==4
+           uadd(idust  )=uadd(idust  )+fsmall_ej*mdloss_spec(1,j) ! carbon   (small size)
+           uadd(idust+1)=uadd(idust+1)+flarge_ej*mdloss_spec(1,j) ! carbon   (large size)
+           uadd(idust+2)=uadd(idust+2)+fsmall_ej*mdloss_spec(2,j) ! silicate (small size)
+           uadd(idust+3)=uadd(idust+3)+flarge_ej*mdloss_spec(2,j) ! silicate (large size)
+           dM_prod_SW_local(1)=dM_prod_SW_local(1)+fsmall_ej*mdloss_spec(1,j)*vol_loc(j)
+           dM_prod_SW_local(2)=dM_prod_SW_local(2)+flarge_ej*mdloss_spec(1,j)*vol_loc(j)
+           dM_prod_SW_local(3)=dM_prod_SW_local(3)+fsmall_ej*mdloss_spec(2,j)*vol_loc(j)
+           dM_prod_SW_local(4)=dM_prod_SW_local(4)+flarge_ej*mdloss_spec(2,j)*vol_loc(j)
+#endif
+        else
+#if NDUST==1
+           uadd(idust  )=uadd(idust  )+mdloss(j) ! one size
+           dM_prod_SW_local(1)=dM_prod_SW_local(1)+mdloss(j)*vol_loc(j)
+#endif
+#if NDUST==2
+           uadd(idust  )=uadd(idust  )+fsmall_ej*mdloss(j) ! small size
+           uadd(idust+1)=uadd(idust+1)+flarge_ej*mdloss(j) ! large size
+           dM_prod_SW_local(1)=dM_prod_SW_local(1)+fsmall_ej*mdloss(j)*vol_loc(j)
+           dM_prod_SW_local(2)=dM_prod_SW_local(2)+flarge_ej*mdloss(j)*vol_loc(j)
+#endif
+!!$        write(*,*)j,mdloss(j),mdloss(j)*vol_loc(j)*scale_d*scale_l**3/2d33
+        endif
+     endif
+
      ! Add individual species
      if(nchem>0)then
         do ich=1,nchem
@@ -594,7 +682,7 @@ subroutine stellar_winds_dump(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
      endif
   end do
   if(indp_now > 0) then
-     do ivar=1,ichem+nchem-1
+     do ivar=1,ichem+nchem+ndust-1
 !$omp atomic update
         unew(indp_now,ivar)=unew(indp_now,ivar)+uadd(ivar)
      end do

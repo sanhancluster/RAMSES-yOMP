@@ -130,8 +130,8 @@
   xp=0.0; vp=0.0; mp=0.0; levelp=0; idp=0;
   typep(1:npartmax)%family=FAM_UNDEF; typep(1:npartmax)%tag=0
   if(star.or.sink)then
-     allocate(tp(npartmax))
-     tp=0.0
+     allocate(tp(npartmax),tpl(npartmax))
+     tp=0.0;tpl=0.0
      if(write_stellar_densities) then
         allocate(st_n_tp(npartmax))
         st_n_tp=0.0

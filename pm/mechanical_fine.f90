@@ -22,16 +22,18 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   ! and inject momentum and energy to the surroundings of the young stars.
   ! This routine is called every fine time step.
   ! ind_pos_cell: position of the cell within an oct
-  ! m8,mz8,nph8: temporary variable necessary for an oct to add up 
+  ! m8,mz8,mzd8,nph8: temporary variable necessary for an oct to add up
   !              the mass, metal, etc. on a cell by cell basis
   ! mejecta: mass of the ejecta from SNe
   ! Zejecta: metallicity of the ejecta (not yield)
+  ! Dejecta: Dust mass fraction of the ejecta (not yield)
   ! mZSNe : total metal mass from SNe in each cell
+  ! mZdSNe: total dust mass from SNe in each cell
   ! mchSNe: total mass of each chemical element in each cell
   ! nphSNe: total production rate of ionising radiation in each cell.
   !         This is necessary to estimate the Stromgren sphere
   !------------------------------------------------------------------------
-  integer::igrid,jgrid,ipart,jpart,next_part
+  integer::igrid,jgrid,ipart,jpart,next_part,ii
   integer::npart1,npart2,icpu,icount,idim,ip,ich
   integer::ind,ind_son,ind_cell,ilevel,iskip,info
   integer::nSNc,nSNc_mpi
@@ -41,18 +43,21 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   real(dp)::skip_loc(1:3),scale,dx,dx_loc,vol_loc,x0(1:3)
   real(dp),dimension(1:twotondim,1:ndim)::xc
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_msun
-  real(dp),dimension(1:twotondim)::m8, mz8, n8, nph8 ! SNe
+  real(dp),dimension(1:twotondim)::m8, mz8, mzd8, n8, nph8 ! SNe
   real(dp),dimension(1:twotondim,1:3):: p8  ! SNe
-  real(dp),dimension(1:nvector)::nSNe, mSNe, mZSNe, nphSNe
+  real(dp),dimension(1:nvector)::nSNe, mSNe, mZSNe, mZdSNe, nphSNe
   real(dp),dimension(1:nvector,1:3)::pSNe
   real(dp),dimension(1:nvector,1:nchem)::mchSNe
   real(dp),dimension(1:twotondim,1:nchem)::mch8 ! SNe
-  real(dp)::mejecta,Zejecta,mfrac_snII
+  real(dp),dimension(1:nvector,1:2)::mdchSNe
+  real(dp),dimension(1:twotondim,1:2)::mdch8 ! SNe
+  real(dp)::mejecta,Zejecta,Dejecta,mfrac_snII
   real(dp)::snII_freq_noboost, M_SNII_var=0.0
   real(dp),parameter::msun2g=1.989d33
   real(dp),parameter::myr2s=3.1536000d+13
   real(dp)::ttsta,ttend
   real(dp),dimension(1:nchem)::Zejecta_chem_II_local
+  real(dp),dimension(1:2)::ZDejecta_chem_II_local
   logical::ok,done_star
 #ifdef RT
   real(dp),allocatable,dimension(:)::L_star
@@ -109,7 +114,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   ncomm_SN=0  ! important to initialize; number of communications (not SNe)
 #ifndef WITHOUTMPI
   xSN_comm=0d0;ploadSN_comm=0d0;mSN_comm=0d0
-  mloadSN_comm=0d0;mZloadSN_comm=0d0;iSN_comm=0
+  mloadSN_comm=0d0;mZloadSN_comm=0d0;mZdloadSN_comm=0d0;iSN_comm=0
   floadSN_comm=0d0;eloadSN_comm=0d0
 #endif
 
@@ -155,12 +160,12 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   endif
 
   ! Loop over cpus
-!$omp parallel private(ip,ind_grid,ind_pos_cell,nSNe,mSNe,pSNe,nphSNe,mchSNe,mZSNe,igrid,npart1,npart2,ipart,next_part, &
-!$omp & x0,m8,mz8,p8,n8,nph8,mch8,ok,ind_son,ind,iskip,ind_cell,mejecta,nsnII_star,mass0,mass_t,mfrac_snII, &
-!$omp & Zejecta,Zejecta_chem_II_local) firstprivate(M_SNII_var) reduction(+:nSNc,nsnII_tot) default(none) &
+!$omp parallel private(ip,ind_grid,ind_pos_cell,nSNe,mSNe,pSNe,nphSNe,mchSNe,mdchSNe,mZSNe,mZdSNe,igrid,npart1,npart2,ipart,next_part, &
+!$omp & x0,m8,mz8,mzd8,p8,n8,nph8,mch8,mdch8,ok,ind_son,ind,iskip,ind_cell,mejecta,nsnII_star,mass0,mass_t,mfrac_snII, &
+!$omp & Zejecta,Dejecta,Zejecta_chem_II_local,ZDejecta_chem_II_local) firstprivate(M_SNII_var) reduction(+:nSNc,nsnII_tot,dM_prod) default(none) &
 !$omp & shared(ncpu,numbl,ilevel,myid,active,reception,numbp,xg,dx,skip_loc,headp,nextp,typep,use_initial_mass,mp0, &
-!$omp & scale_msun,mp,sn2_real_delay,tp,tyoung,snII_Zdep_yield,zp,snII_freq,yield,dteff,idp,done_star,xp,scale, &
-!$omp & ncoarse,ngridmax,son,vp,metal,MC_tracer,tmpp,Zejecta_chem_II)
+!$omp & scale_msun,mp,sn2_real_delay,tp,tpl,texp,tyoung,current_time,snII_Zdep_yield,zp,snII_freq,yield,dteff,idp,done_star,xp,scale,scale_t, &
+!$omp & ncoarse,ngridmax,son,vp,metal,dust,dust_chem,MC_tracer,tmpp,Zejecta_chem_II,ZDejecta_chem_II,dust_cond_eff,fsmall_ej,flarge_ej,nchunk)
      ip=0
      ! Loop over grids
 !$omp do schedule(dynamic,nchunk)
@@ -178,7 +183,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
 
         ipart=headp(igrid)
 
-        m8=0d0;mz8=0d0;p8=0d0;n8=0d0;nph8=0d0;mch8=0d0
+        m8=0d0;mz8=0d0;mzd8=0d0;p8=0d0;n8=0d0;nph8=0d0;mch8=0d0;mdch8=0d0
 
         ! Loop over particles
         do jpart=1,npart1
@@ -208,18 +213,30 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                  if(sn2_real_delay)then
                     if(tp(ipart).ge.tyoung)then  ! if younger than t_sne
 
+                       call SNII_total_mass (zp(ipart), mfrac_snII)
+                       M_SNII_var = mfrac_snII / snII_freq
+                       ! WARNING: this is inconsistent:
+                       ! M_SNII_var is computed from the total amount of mass released
+                       ! (in SNII_yield_time) and used to compute the probability to explode
+                       ! new SNe...
+                       call get_number_of_sn2  (tp(ipart), dteff, zp(ipart), idp(ipart),&
+                             & mass0, mass_t, M_SNII_var, nsnII_star, done_star)
+                       if(nsnII_star>0)ok=.true.
+
+                       if(ok)then
+                          write(*,'(A,I9,8es17.5,I9)')'Eligible star',idp(ipart),tp(ipart)*scale_t/3.15d13,tpl(ipart)*scale_t/3.15d13,texp*scale_t/3.15d13,tyoung*scale_t/3.15d13,mass0,mass_t,mass0-mass_t,nsnII_star,myid
                        if(SNII_zdep_yield)then
-                          call SNII_yield (zp(ipart), mfrac_snII, Zejecta, Zejecta_chem_II_local)
+                             call SNII_yield_time (zp(ipart), tp(ipart), tpl(ipart), mfrac_snII, Zejecta, Dejecta, Zejecta_chem_II_local, ZDejecta_chem_II_local)
                           ! Adjust M_SNII mass not to double-count the mass loss from massive stars
                           M_SNII_var = mfrac_snII / snII_freq ! ex) 0.1 / 0.01 = 10 Msun
                        else
                           Zejecta = zp(ipart)+(1d0-zp(ipart))*yield
+                             Dejecta = (zp(ipart)+(1d0-zp(ipart))*yield)*dust_cond_eff
                           Zejecta_chem_II_local(:) = Zejecta_chem_II(:)
+                             ZDejecta_chem_II_local(:) = ZDejecta_chem_II(:)
                        endif
-
-                       call get_number_of_sn2  (tp(ipart), dteff, zp(ipart), idp(ipart),&
-                             & mass0, mass_t, M_SNII_var, nsnII_star, done_star)
-                       if(nsnII_star>0)ok=.true.
+                          tpl(ipart)=current_time
+                       endif
 
                     endif
 
@@ -228,12 +245,14 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                        ok=.true.
 
                        if(SNII_zdep_yield)then
-                          call SNII_yield (zp(ipart), mfrac_snII, Zejecta, Zejecta_chem_II_local)
+                          call SNII_yield (zp(ipart), mfrac_snII, Zejecta, Dejecta, Zejecta_chem_II_local, ZDejecta_chem_II_local)
                           ! Adjust M_SNII mass not to double-count the mass loss from massive stars
                           M_SNII_var = mfrac_snII / snII_freq ! ex) 0.1 / 0.05 = 2 Msun
                        else
                           Zejecta = zp(ipart)+(1d0-zp(ipart))*yield
+                          Dejecta = (zp(ipart)+(1d0-zp(ipart))*yield)*dust_cond_eff
                           Zejecta_chem_II_local(:) = Zejecta_chem_II(:)
+                          ZDejecta_chem_II_local(:) = ZDejecta_chem_II(:)
                        endif
 
                        ! number of sn doesn't have to be an integer
@@ -275,9 +294,17 @@ subroutine mechanical_feedback_fine(ilevel,icount)
                  if(metal)then
                     mz8(ind_son) = mz8(ind_son) + mejecta*Zejecta
                  endif
+                 if(dust)then
+                    mzd8(ind_son) = mzd8(ind_son) + mejecta*Dejecta
+                 endif
                  do ich=1,nchem
                     mch8(ind_son,ich) = mch8(ind_son,ich) + mejecta*Zejecta_chem_II_local(ich)
                  end do
+                 if(dust)then
+                    do ich=1,2
+                       mdch8(ind_son,ich) = mdch8(ind_son,ich) + mejecta*ZDejecta_chem_II_local(ich)
+                    end do
+                 endif
 
                  ! subtract the mass return
                  if (MC_tracer) tmpp(ipart) = mejecta / mp(ipart)
@@ -328,6 +355,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
               nSNe(ip)=n8(ind)
               mSNe(ip)=m8(ind)
               mZSNe(ip)=mz8(ind)
+              mZdSNe(ip)=mzd8(ind)
               pSNe(ip,1)=p8(ind,1)
               pSNe(ip,2)=p8(ind,2)
               pSNe(ip,3)=p8(ind,3)
@@ -335,13 +363,36 @@ subroutine mechanical_feedback_fine(ilevel,icount)
               do ich=1,nchem
                  mchSNe(ip,ich)=mch8(ind,ich)
               end do
+              do ich=1,2
+                 mdchSNe(ip,ich)=mdch8(ind,ich)
+              end do
+              if(dust_chem)then
+#if NDUST==2
+                 dM_prod(1)=dM_prod(1)+mdchSNe(ip,1) ! carbon   (one size)
+                 dM_prod(2)=dM_prod(2)+mdchSNe(ip,2) ! silicate (one size)
+#endif
+#if NDUST==4
+                 dM_prod(1)=dM_prod(1)+fsmall_ej*mdchSNe(ip,1) ! carbon   (small size)
+                 dM_prod(2)=dM_prod(2)+flarge_ej*mdchSNe(ip,1) ! carbon   (large size)
+                 dM_prod(3)=dM_prod(3)+fsmall_ej*mdchSNe(ip,2) ! silicate (small size)
+                 dM_prod(4)=dM_prod(4)+flarge_ej*mdchSNe(ip,2) ! silicate (large size)
+#endif
+              else
+#if NDUST==1
+                 dM_prod(1)=dM_prod(1)+mZdSNe(ip) ! one size
+#endif
+#if NDUST==2
+                 dM_prod(1)=dM_prod(1)+fsmall_ej*mZdSNe(ip) ! small size
+                 dM_prod(2)=dM_prod(2)+flarge_ej*mZdSNe(ip) ! large size
+#endif
+              endif
 
               ! statistics
               nSNc=nSNc+1
               nsnII_tot = nsnII_tot + nsnII_star
               if(ip==nvector)then
 !$omp critical(omp_sn)
-                 call mech_fine(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
+                 call mech_fine(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,mZdSNe,nphSNe,mchSNe,mdchSNe)
 !$omp end critical(omp_sn)
                  ip=0
               endif
@@ -352,7 +403,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
 !$omp end do nowait
   if (ip>0) then
 !$omp critical(omp_sn)
-     call mech_fine(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,nphSNe,mchSNe)
+     call mech_fine(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,mZdSNe,nphSNe,mchSNe,mdchSNe)
 !$omp end critical(omp_sn)
      ip=0
   endif
@@ -427,7 +478,7 @@ end subroutine mechanical_feedback_fine
 !################################################################
 !################################################################
 !################################################################
-subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphSN,mchSN)
+subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,mZdSN,nphSN,mchSN,mdchSN)
   use amr_commons
   use pm_commons
   use hydro_commons
@@ -435,10 +486,12 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
   implicit none
   integer::np,ilevel ! actually the number of cells
   integer,dimension(1:nvector)::ind_grid,ind_pos_cell,icellvec
-  real(dp),dimension(1:nvector)::nSN,mSN,mZSN,floadSN,nphSN
+  real(dp),dimension(1:nvector)::nSN,mSN,mZSN,mZdSN,floadSN,nphSN
   real(dp),dimension(1:nvector)::mloadSN,mZloadSN,eloadSN
+  real(dp),dimension(1:nvector,1:ndust)::mZdloadSN !!dust ejected !!$dust_dev
   real(dp),dimension(1:nvector,1:3)::pSN,ploadSN
   real(dp),dimension(1:nvector,1:nchem)::mchSN,mchloadSN
+  real(dp),dimension(1:nvector,1:2)::mdchSN,mcdhloadSN
   !-----------------------------------------------------------------------
   ! This routine is called by subroutine mechanical_feedback_fine 
   !-----------------------------------------------------------------------
@@ -453,7 +506,7 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
   ! Grid based arrays
   real(dp),dimension(1:ndim,1:nvector)::xc2
   real(dp),dimension(1:nvector,1:nSNnei)::p_solid,ek_solid
-  real(dp)::d_nei,Z_nei,Z_neisol,dm_ejecta,vol_nei
+  real(dp)::d_nei,Z_nei,Z_neisol,dm_ejecta,vol_nei,sum_udust !!Z_nei :part of dust in gas !!$dust_dev
   real(dp)::mload,vload,Zload=0d0,f_esn2
   real(dp)::num_sn,nH_nei,f_w_cell,f_w_crit
   real(dp)::t_rad,r_rad,r_shell,m_cen,ekk_ej
@@ -469,14 +522,28 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
   real(dp)::km2cm=1d5,M_SNII_var,boost_geen_ad=0d0,p_hydro,vload_rad,f_wrt_snow
   ! chemical abundance
   real(dp),dimension(1:nchem)::chload,z_ch
+  real(dp)::MS100,Mgas,dble_NSN  ! Dust (YD)
+  real(dp),dimension(1:ndust)::zd,Mdust,dMdust,newMdust !!$dust_dev
   ! fractional abundances ; for ionisation fraction and ref, etc
   real(dp),dimension(1:NVAR)::fractions ! not compatible with delayed cooling
   integer::i_fractions
   real(dp)::emag
   real(dp),dimension(1:3)::fpos
+  integer::ilow,ihigh
+  real(dp),dimension(1:ndust)::mmet
+
+!!$  integer::ndchemtype
+  real(dp)::mmdust,mmdustC,mmdustSil,ZZd
+  real(dp),dimension(1:nchem)::Zchem
+
+  real(dp)::zz,dd1,dd2,zzg ! YD Debug WARNING
 
   ! starting index for passive variables except for imetal and chem
   i_fractions = ichem+nchem
+  if (dust) then
+     ! Maybe redundant, sinc idust == imetal if .not. dust
+     i_fractions = idust + ndust !!$dust_dev, ndust:#of bins, fractions begin after all bins
+  end if
 
   ! Conversion factor from user units to cgs units
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
@@ -639,10 +706,30 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
            Z_nei = z_ave*0.02 ! For metal=.false. 
            if(ilevel>ilevel2)then ! touching level-1 cells
               d_nei     = max(unew(icell,1), smallr)
-              if(metal) Z_nei = unew(icell,imetal)/d_nei
+              ! YD WARNING: the removal of dust from the total metal phase needs to take into account
+              ! the Mg, Fe and O mass contribution tracked by Si for the silicate bin
+              if(dust .and. metal_gasonly)then
+                 sum_udust=0
+                 do ii=1,ndust !!$dust_dev
+                    sum_udust=sum_udust+unew(icell,idust-1+ii) !!sum on all bin the part of dust
+                 enddo
+                 Z_nei = (unew(icell,imetal)-sum_udust)/d_nei
+              else
+                 Z_nei = unew(icell,imetal)/d_nei
+              endif
            else
               d_nei     = max(uold(icell,1), smallr)
-              if(metal) Z_nei = uold(icell,imetal)/d_nei
+              if(metal) then
+                 if(dust .and. metal_gasonly)then
+                    sum_udust=0
+                    do ii=1,ndust !!$dust_dev
+                      sum_udust=sum_udust+uold(icell,idust-1+ii) !!sum on all bin the part of dust
+                    enddo
+                    Z_nei = (uold(icell,imetal)-sum_udust)/d_nei
+                 else
+                    Z_nei = uold(icell,imetal)/d_nei
+                 endif
+              endif
            endif
 
            f_w_cell  = (mload/dble(nSNnei) + d_nei*vol_loc/8d0)/dm_ejecta - 1d0
@@ -720,6 +807,9 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
   ! Redistribute mass from the SN cell
   !-----------------------------------------
   do i=1,np
+     num_sn    = nSN(i) ! doesn't have to be an integer
+     M_SNII_var = mSN(i)*scale_msun / num_sn
+
      icell = ncoarse+ind_grid(i)+(ind_pos_cell(i)-1)*ngridmax
      d     = max(uold(icell,1), smallr)
      u     = uold(icell,2)/d
@@ -750,6 +840,65 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
      if(metal)then
         z = uold(icell,imetal)/d
         mZloadSN(i) = mZSN(i)*f_LOAD + d*z*vol_loc*floadSN(i)
+        if(dust)then
+           ! First destroy the corresponding amount of dust in the cell
+           if(dust_SNdest)then
+!!$              dble_NSN=mSN(i)*scale_msun/M_SNII
+!!$              MS100=6800d0/M_SNII*mSN(i)/vol_loc*f_LEFT/dble_NSN ! Compute the amount of shocked gas
+              dble_NSN=mSN(i)*scale_msun/M_SNII_var
+              MS100=6800d0/M_SNII_var*mSN(i)/vol_loc*f_LEFT/dble_NSN ! Compute the amount of shocked gas
+              Mgas =uold(icell,1)
+              if(dust_chem)then
+                 ilow=1;ihigh=ilow+dndsize
+                 mmet(ilow:ihigh)=uold(icell,ichem+ichC-1)
+                 ilow=ihigh+1;ihigh=ilow+dndsize
+                 mmet(ilow:ihigh)=MIN(uold(icell,ichem-1+ichMg)/(nsilMg*muMg) & ! This is the metallicity of
+                                 &   ,uold(icell,ichem-1+ichFe)/(nsilFe*muFe) & ! the available elements
+                                 &   ,uold(icell,ichem-1+ichSi)/(nsilSi*muSi) & ! in the chemical composition
+                                 &   ,uold(icell,ichem-1+ichO )/(nsilO *muO ))& ! of silicates,which is turned
+                                 &   *nsilSi*muSi                               ! into the key element Si
+              else
+                 mmet(1:ndust)=uold(icell,imetal)
+              endif
+              do ii=1,ndust  !!$dust_dev
+                 Mdust (ii)=uold(icell,idust-1+ii)
+                 dMdust(ii)=-(1d0-(1d0-MIN(1-exp(-dust_SNdest_eff*0.1/asize(ii)),1.0d0)*MIN(MS100/Mgas,1.0d0))**dble_NSN)*Mdust(ii) !!(eqn 13 Granato,2021)+size dependance like thermal sputtering
+                 if(log_mfb) write(*,'(A,i3,A,5e15.8,I9)')'(1) for bin : Mshock,Mgas,Mdust,dMdust,nSN' &
+                      &, ii, ':',MS100*scale_msun*vol_loc,Mgas*scale_msun*vol_loc,Mdust(ii)*scale_msun*vol_loc &
+                      &, -dMdust(ii)*scale_msun*vol_loc,dble_NSN,icell
+                 newMdust(ii)=MAX(Mdust(ii)+dMdust(ii),1d-5*mmet(ii)) !!new dust mass after dest
+                 if(log_mfb) write(*,'(a,3e15.8)') 'Md+dMd, 1d-5*Z, newMd =',Mdust(ii)+dMdust(ii)&
+                      &, 1d-5*mmet(ii),newMdust(ii)
+                 uold(icell,idust-1+ii)=newMdust(ii)
+                 dM_SNd(ii)=dM_SNd(ii)+ dMdust(ii)*vol_loc
+              enddo !!on bin
+           endif
+           do ii=1,ndust
+              zd(ii)=uold(icell,idust-1+ii)/d !!DTG ratio
+              mZdloadSN(i,ii)=d*zd(ii)*vol_loc*floadSN(i)
+           enddo
+           if(dust_chem)then
+#if NDUST==2
+              do ii=1,ndust
+                 mZdloadSN(i,ii)=mZdloadSN(i,ii)+mdchSN(i,ii)*f_LOAD  !!dust creation from metals for all bins
+              enddo
+#endif
+#if NDUST==4
+              mZdloadSN(i,1)=mZdloadSN(i,1)+fsmall_ej*mdchSN(i,1)*f_LOAD ! carbon   (small size)
+              mZdloadSN(i,2)=mZdloadSN(i,2)+flarge_ej*mdchSN(i,1)*f_LOAD ! carbon   (large size)
+              mZdloadSN(i,3)=mZdloadSN(i,3)+fsmall_ej*mdchSN(i,2)*f_LOAD ! silicate (small size)
+              mZdloadSN(i,4)=mZdloadSN(i,4)+flarge_ej*mdchSN(i,2)*f_LOAD ! silicate (large size)
+#endif
+           else
+#if NDUST==1
+              mZdloadSN(i,1)=mZdloadSN(i,1)+mZdSN(i)*f_LOAD  !!dust creation from metals for all bins
+#endif
+#if NDUST==2
+              mZdloadSN(i,1)=mZdloadSN(i,1)+fsmall_ej*mZdSN(i)*f_LOAD ! small size
+              mZdloadSN(i,2)=mZdloadSN(i,2)+flarge_ej*mZdSN(i)*f_LOAD ! large size
+#endif
+           endif
+        endif
      endif
 
      do ich=1,nchem
@@ -771,6 +920,32 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
 
      if(metal)then
         uold(icell,imetal) = mZSN(i)/vol_loc*f_LEFT + d*z*fleftSN
+     endif
+     if(dust)then
+        do ii=1,ndust
+           uold(icell,idust-1+ii)=d*zd(ii)*fleftSN
+        enddo
+        if(dust_chem)then
+#if NDUST==2
+           do ii=1,ndust
+              uold(icell,idust-1+ii)=uold(icell,idust-1+ii)+mdchSN(i,ii)/vol_loc*f_LEFT
+           enddo
+#endif
+#if NDUST==4
+           uold(icell,idust  )=uold(icell,idust  )+fsmall_ej*mdchSN(i,1)/vol_loc*f_LEFT ! carbon   (small size)
+           uold(icell,idust+1)=uold(icell,idust+1)+flarge_ej*mdchSN(i,1)/vol_loc*f_LEFT ! carbon   (large size)
+           uold(icell,idust+2)=uold(icell,idust+2)+fsmall_ej*mdchSN(i,2)/vol_loc*f_LEFT ! silicate (small size)
+           uold(icell,idust+3)=uold(icell,idust+3)+flarge_ej*mdchSN(i,2)/vol_loc*f_LEFT ! silicate (large size)
+#endif
+        else
+#if NDUST==1
+           uold(icell,idust  )=uold(icell,idust  )+mZdSN(i)/vol_loc*f_LEFT
+#endif
+#if NDUST==2
+           uold(icell,idust  )=uold(icell,idust  )+fsmall_ej*mZdSN(i)/vol_loc*f_LEFT ! small size
+           uold(icell,idust+1)=uold(icell,idust+1)+flarge_ej*mZdSN(i)/vol_loc*f_LEFT ! large size
+#endif
+        endif
      endif
      do ich=1,nchem
         uold(icell,ichem+ich-1) = mchSN(i,ich)/vol_loc*f_LEFT + d*z_ch(ich)*fleftSN
@@ -802,6 +977,40 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
      ! update ek_solid     
      ek_solid(i,:) = ek_solid(i,:) + eloadSN(i)/dble(nSNnei)
 
+     !-------------------------------------------------------------
+     !--------------- WARNING: YD DEBUG ---------------------------
+!!$     do ich=1,nchem
+!!$        Zchem(ich)=uold(icell,ichem+ich-1)/uold(icell,1)/0.02
+!!$     enddo
+!!$     ndchemtype=ndust/2
+!!$     mmdustC=0.0d0;mmdustSil=0.0d0
+!!$     do ii=1,ndchemtype
+!!$        mmdustC  =mmdustC  +uold(icell,idust-1+ii)
+!!$     enddo
+!!$     do ii=ndchemtype+1,ndust
+!!$        mmdustSil=mmdustSil+uold(icell,idust-1+ii)/SioverSil
+!!$     enddo
+!!$     mmdust=mmdustC+mmdustSil
+!!$     do ich=1,nchem
+!!$        if(TRIM(chem_list(ich))=='C' )Zchem(ich)=Zchem(ich)-mmdustC/uold(icell,1)/0.02
+!!$        if(TRIM(chem_list(ich))=='Mg')Zchem(ich)=Zchem(ich)-mmdustSil*MgoverSil/uold(icell,1)/0.02
+!!$        if(TRIM(chem_list(ich))=='Fe')Zchem(ich)=Zchem(ich)-mmdustSil*FeoverSil/uold(icell,1)/0.02
+!!$        if(TRIM(chem_list(ich))=='Si')Zchem(ich)=Zchem(ich)-mmdustSil*SioverSil/uold(icell,1)/0.02
+!!$        if(TRIM(chem_list(ich))=='O' )Zchem(ich)=Zchem(ich)-mmdustSil* OoverSil/uold(icell,1)/0.02
+!!$     enddo
+!!$     do ich=1,nchem
+!!$        if(Zchem(ich)<0.0d0)then
+!!$           if(TRIM(chem_list(ich))=='C' )ZZd=mmdustC/uold(icell,1)/0.02
+!!$           if(TRIM(chem_list(ich))=='Mg')ZZd=mmdustSil*MgoverSil/uold(icell,1)/0.02
+!!$           if(TRIM(chem_list(ich))=='Fe')ZZd=mmdustSil*FeoverSil/uold(icell,1)/0.02
+!!$           if(TRIM(chem_list(ich))=='Si')ZZd=mmdustSil*SioverSil/uold(icell,1)/0.02
+!!$           if(TRIM(chem_list(ich))=='O' )ZZd=mmdustSil* OoverSil/uold(icell,1)/0.02
+!!$           write(*,'(A,I2,A,I9,2es13.5)')'in mechanical_fine Zgaschem(',ich,'):',icell,Zchem(ich),ZZd
+!!$        endif
+!!$     enddo
+     !--------------- WARNING: YD DEBUG ---------------------------
+     !-------------------------------------------------------------
+
   enddo  ! loop over SN cell
 
 
@@ -809,6 +1018,8 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
   ! Find and save stars affecting across the boundary of a cpu
   !-------------------------------------------------------------
   do i=1,np
+     num_sn    = nSN(i) ! doesn't have to be an integer
+     M_SNII_var = mSN(i)*scale_msun / num_sn
 
      ind_cell = ncoarse+ind_grid(i)+(ind_pos_cell(i)-1)*ngridmax
 
@@ -833,6 +1044,40 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
            do ii=i_fractions,nvar ! fractional quantities that we don't want to change
               fractions(ii) = pvar(ii)/pvar(1)
            end do
+           if(dust)then
+              ! First destroy the corresponding amount of dust in the cell
+              if(dust_SNdest)then
+!!$                 dble_NSN=mSN(i)*scale_msun/M_SNII
+!!$                 MS100=6800d0/M_SNII*mSN(i)/vol_nei*f_LOAD/dble(nSNnei)/dble_NSN ! Compute the amount of shocked gas
+                 dble_NSN=mSN(i)*scale_msun/M_SNII_var
+                 MS100=6800d0/M_SNII_var*mSN(i)/vol_nei*f_LOAD/dble(nSNnei)/dble_NSN ! Compute the amount of shocked gas
+                 Mgas=pvar(1)
+                 if(dust_chem)then
+                    ilow=1;ihigh=ilow+dndsize
+                    mmet(ilow:ihigh)=pvar(ichem+ichC-1)
+                    ilow=ihigh+1;ihigh=ilow+dndsize
+                    mmet(ilow:ihigh)=MIN(pvar(ichem-1+ichMg)/(nsilMg*muMg) & ! This is the metallicity of
+                                    &   ,pvar(ichem-1+ichFe)/(nsilFe*muFe) & ! the available elements
+                                    &   ,pvar(ichem-1+ichSi)/(nsilSi*muSi) & ! in the chemical composition
+                                    &   ,pvar(ichem-1+ichO )/(nsilO *muO ))& ! of silicates,which is turned
+                                    &   *nsilSi*muSi                         ! into the key element Si
+                 else
+                    mmet(1:ndust)=pvar(imetal)
+                 endif
+                 do ii=1,ndust  !!$dust_dev
+                    Mdust (ii)=pvar(idust-1+ii)
+                    dMdust(ii)=-(1d0-(1d0-MIN(1-exp(-dust_SNdest_eff*0.1/asize(ii)),1.0d0)*MIN(MS100/Mgas,1.0d0))**dble_NSN)*Mdust(ii)
+                    if(log_mfb) write(*,'(A,i3,a,5e15.8,I9)')'(1) for bin : Mshock,Mgas,Mdust,dMdust,nSN=' &
+                         & ,ii, ':',MS100*scale_msun*vol_loc,Mgas*scale_msun*vol_loc,Mdust(ii)*scale_msun*vol_loc &
+                         & ,-dMdust(ii)*scale_msun*vol_loc,dble_NSN,icell
+                    newMdust(ii)=MAX(Mdust(ii)+dMdust(ii),1d-5*mmet(ii))
+                    if(log_mfb) write(*,'(a,3e15.8)') 'Md+dMd, 1d-5*Z, newMd =',Mdust(ii)+dMdust(ii) &
+                         & ,1d-5*mmet(ii),newMdust(ii)
+                    pvar(idust-1+ii)=newMdust(ii)
+                    dM_SNd(ii)=dM_SNd(ii)+ dMdust(ii)*vol_loc
+                 enddo
+              endif
+           endif
 
            emag=0.0d0
 #ifdef SOLVERmhd
@@ -900,6 +1145,11 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
            do ich=1,nchem
                pvar(ichem+ich-1)=pvar(ichem+ich-1)+mchloadSN(i,ich)/dble(nSNnei)/vol_nei
            end do
+           if(dust)then
+              do ii=1,ndust!!$dust_dev
+                 pvar(idust-1+ii)=pvar(idust-1+ii)+mZdloadSN(i,ii)/dble(nSNnei)/vol_nei
+              enddo
+           endif
            do ii=i_fractions,nvar
                pvar(ii)=fractions(ii)*pvar(1)
            end do
@@ -909,7 +1159,7 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
               unew(icell,1:nvarMHD) = pvar(1:nvarMHD)
            else
               uold(icell,1:nvarMHD) = pvar(1:nvarMHD)
-           endif 
+           endif
 
         end if
      end do ! loop over 48 neighbors
@@ -945,6 +1195,11 @@ subroutine mech_fine(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN,nphS
         do ich=1,nchem
             mchloadSN_comm(ista:iend,ich)=mchloadSN(i,ich)
         end do
+        if(dust)then
+          do ii=1,ndust
+             mZdloadSN_comm(ista:iend,ii)=mZdloadSN(i,ii)!!$dust_dev
+          enddo
+        endif
         if(mechanical_geen.and.rt) rSt_comm (ista:iend)=rStrom(i)
         ncomm_SN=ncomm_SN+nwco
      endif
@@ -974,11 +1229,14 @@ subroutine mech_fine_mpi(ilevel)
   ! SN variables
   real(dp)::dx,dx_loc,scale,vol_loc
   real(dp)::mloadSN_i,zloadSN_i,ploadSN_i(1:3),mSN_i,xSN_i(1:3),fload_i
-  real(dp)::f_esn2,d_nei,Z_nei,Z_neisol,f_w_cell,f_w_crit,nH_nei,dratio
+  real(dp)::f_esn2,d_nei,Z_nei,Z_neisol,sum_udust,f_w_cell,f_w_crit,nH_nei,dratio !!$dust_dev
   real(dp)::num_sn,vload,Tk,vol_nei,dm_ejecta
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_kms
   real(dp)::scale_msun,msun2g=1.989d33, pvar(1:nvarMHD),etot0
   real(dp)::skip_loc(1:3),d,u,v,w,ekk,eth,d0,u0,v0,w0,eth0,ekk0,Tk0,ekk_ej,T2min
+  real(dp)::MS100,Mgas,dble_NSN                           ! Dust (YD)
+  real(dp),dimension(1:ndust)::ZdloadSN_i                 !!$dust_dev
+  real(dp),dimension(1:ndust),save::Mdust,dMdust,newMdust !!$dust_dev
   integer::igrid,icell,ilevel,ilevel2,irad,ii,ich
   real(dp),dimension(1:twotondim,1:ndim),save::xc
   logical,allocatable,dimension(:,:)::snowplough
@@ -990,11 +1248,19 @@ subroutine mech_fine_mpi(ilevel)
   integer::i_fractions,idim
   real(dp)::emag
   real(dp),dimension(1:3)::fpos
+  integer::ilow,ihigh
+  real(dp),dimension(1:ndust)::mmet
+
+  real(dp)::zz,dd1,dd2,zzg ! YD Debug WARNING
 
   if(ndim.ne.3) return
 
   ! starting index for passive variables except for imetal and chem
   i_fractions = ichem+nchem
+  if(dust)then
+     ! Maybe redundant, sinc idust == imetal if .not. dust
+     i_fractions = idust + ndust !!$dust_dev
+  end if
 
   !============================================================
   ! For MPI communication
@@ -1099,6 +1365,11 @@ subroutine mech_fine_mpi(ilevel)
               do ich=1,nchem
                  SNsend(13+ich,ncc)=mchloadSN_comm(i,ich)
               end do
+              if(dust) then
+                do ii=1,ndust
+                  SNsend(13+nchem+ii,ncc)=mZdloadSN_comm(i,ii)!!$dust_dev
+                enddo
+              endif
            endif
         end do ! i
 
@@ -1264,6 +1535,14 @@ subroutine mech_fine_mpi(ilevel)
      do ich=1,nchem
         chloadSN_i(ich) = SNrecv(13+ich,i)/mloadSN_i
      end do
+     if(dust)then
+        do ii=1,ndust
+           ZdloadSN_i(ii) = SNrecv(13+nchem+ii,i)/mloadSN_i !!$dust_dev
+        enddo
+     endif
+
+     num_sn     = SNrecv(11,i)
+     M_SNII_var = mSN_i*scale_msun/num_sn
 
      do j=1,nSNnei
  
@@ -1280,7 +1559,54 @@ subroutine mech_fine_mpi(ilevel)
            do ii=i_fractions,nvar
               fractions(ii)=pvar(ii)/pvar(1)
            enddo
-     
+!!$           if(icell==2002791.and.myid==70)then
+!!$              zz=pvar(ichem+5-1)/pvar(1)/0.02
+!!$              dd1=pvar(idust+1-1)/pvar(1)/0.02
+!!$              dd2=pvar(idust+2-1)/pvar(1)/0.02
+!!$              zzg=zz-dd1-dd2
+!!$              write(*,'(A,4es15.7)')'X1 ',zz,dd1,dd2,zzg
+!!$           endif
+           if(dust)then
+              ! First destroy the corresponding amount of dust in the cell
+              if(dust_SNdest)then
+!!$                 dble_NSN=mSN_i*scale_msun/M_SNII
+!!$                 MS100=6800d0/M_SNII*mSN_i/vol_nei*f_LOAD/dble(nSNnei)/dble_NSN ! Compute the amount of shocked gas
+                 dble_NSN=mSN_i*scale_msun/M_SNII_var
+                 MS100=6800d0/M_SNII_var*mSN_i/vol_nei*f_LOAD/dble(nSNnei)/dble_NSN ! Compute the amount of shocked gas
+                 Mgas =pvar(1)
+                 if(dust_chem)then
+                    ilow=1;ihigh=ilow+dndsize
+                    mmet(ilow:ihigh)=pvar(ichem+ichC-1)
+                    ilow=ihigh+1;ihigh=ilow+dndsize
+                    mmet(ilow:ihigh)=MIN(pvar(ichem-1+ichMg)/(nsilMg*muMg) & ! This is the metallicity of
+                                    &   ,pvar(ichem-1+ichFe)/(nsilFe*muFe) & ! the available elements
+                                    &   ,pvar(ichem-1+ichSi)/(nsilSi*muSi) & ! in the chemical composition
+                                    &   ,pvar(ichem-1+ichO )/(nsilO *muO ))& ! of silicates,which is turned
+                                    &   *nsilSi*muSi                         ! into the key element Si
+!!$                    mmet(1           :ndchemtype)=pvar(ichem+ichC-1)
+!!$                    mmet(ndchemtype+1:ndust     )=MIN(pvar(ichem-1+ichMg)/(nsilMg*muMg) & ! This is the metallicity of
+!!$                                                 &   ,pvar(ichem-1+ichFe)/(nsilFe*muFe) & ! the available elements
+!!$                                                 &   ,pvar(ichem-1+ichSi)/(nsilSi*muSi) & ! in the chemical composition
+!!$                                                 &   ,pvar(ichem-1+ichO )/(nsilO *muO ))& ! of silicates,which is turned
+!!$                                                 &   *nsilSi*muSi                         ! into the key element Si
+                 else
+                    mmet(1:ndust)=pvar(imetal)
+                 endif
+                 do ii=1,ndust!!$dust_dev
+                    Mdust(ii)=pvar(idust-1+ii)
+                    dMdust(ii)=-(1d0-(1d0-MIN(1-exp(-dust_SNdest_eff*0.1/asize(ii)),1.0d0)*MIN(MS100/Mgas,1.0d0))**dble_NSN)*Mdust(ii)
+                    if(log_mfb) write(*,'(A,i3,a,5e15.8,I9)')'(1) for bin : Mshock,Mgas,Mdust,dMdust,nSN=' &
+                         &, ii, ':',MS100*scale_msun*vol_loc,Mgas*scale_msun*vol_loc,Mdust(ii)*scale_msun*vol_loc &
+                         &, -dMdust(ii)*scale_msun*vol_loc,dble_NSN,icell
+!!$                    newMdust(ii)=MAX(Mdust(ii)+dMdust(ii),1d-5*pvar(imetal))
+                    newMdust(ii)=MAX(Mdust(ii)+dMdust(ii),1d-5*mmet(ii))
+                    if(log_mfb) write(*,'(a,3e15.8)') 'Md+dMd, 1d-5*Z, newMd =',Mdust(ii)+dMdust(ii),1d-5*mmet(ii),newMdust(ii)
+                    pvar(idust-1+ii)=newMdust(ii)
+                    dM_SNd(ii)=dM_SNd(ii)+dMdust(ii)*vol_loc
+                 enddo
+              endif !(dust_SNdest)
+           endif !(dust)
+
            emag=0.0d0
 #ifdef SOLVERmhd
            do idim=1,ndim
@@ -1337,6 +1663,11 @@ subroutine mech_fine_mpi(ilevel)
            do ich=1,nchem
               pvar(ichem+ich-1)=pvar(ichem+ich-1)+mloadSN_i/dble(nSNnei)*chloadSN_i(ich)/vol_nei
            end do
+           if(dust)then
+              do ii=1,ndust!!$dust_dev
+                 pvar(idust-1+ii)=pvar(idust-1+ii)+mloadSN_i/dble(nSNnei)*ZdloadSN_i(ii)/vol_nei
+              enddo
+           endif
            do ii=i_fractions,nvar
               pvar(ii)=fractions(ii)*pvar(1)
            end do
@@ -1367,7 +1698,7 @@ end subroutine mech_fine_mpi
 !################################################################
 !################################################################
 subroutine get_number_of_sn2(birth_time,dteff,zp_star,id_star,mass0,mass_t,M_SNII_var,nsn,done_star)
-  use amr_commons, ONLY:dp,snII_freq,eta_sn,sn2_real_delay
+  use amr_commons, ONLY:dp,snII_freq,eta_sn,sn2_real_delay,myid
   use random
   implicit none
   real(kind=dp)::birth_time,zp_star,mass0,mass_t,dteff ! birth_time in code, mass in Msun
@@ -1398,15 +1729,16 @@ subroutine get_number_of_sn2(birth_time,dteff,zp_star,id_star,mass0,mass_t,M_SNI
   ! RateCum = co0+sqrt(co1*Myr+co2)
 
   ! get stellar age
-  call getStarAgeGyr(birth_time+dteff, age1)
+!!$  call getStarAgeGyr(birth_time+dteff, age1)
   call getStarAgeGyr(birth_time      , age2)
 
   ! convert Gyr -> Myr
-  age1 = age1*1d3
+!!$  age1 = age1*1d3
   age2 = age2*1d3
 
   nsn=0d0; done_star=.false.
   if(age2.le.(-co2/co1))then
+!!$     write(*,'(A,3es17.5,I9)')'Compute # of SNe -> age2<-co2/co1',age2,co1,co2,myid
      return
   endif
 
@@ -1421,6 +1753,7 @@ subroutine get_number_of_sn2(birth_time,dteff,zp_star,id_star,mass0,mass_t,M_SNI
   nsn_sofar = NINT((mass0-mass_t)/M_SNII_var,kind=4)
   if(nsn_sofar.ge.nsn_tot)then
      done_star=.true.
+     write(*,'(A,3I9)')'# of SNe nsn_sofar>nsn_tot',nsn_sofar,nsn_tot,myid
      return
   endif
 
@@ -1440,6 +1773,8 @@ subroutine get_number_of_sn2(birth_time,dteff,zp_star,id_star,mass0,mass_t,M_SNI
   nsn = max(nsn_age2 - nsn_sofar, 0) 
 
   if(nsn_age2.ge.nsn_tot) done_star=.true.
+
+  write(*,'(A,es17.5,4I9)')'# of SNe (completed)',nsn,nsn_age2,nsn_sofar,nsn_tot,myid
 
 end subroutine get_number_of_sn2
 !################################################################
@@ -1668,27 +2003,40 @@ end subroutine get_icell_from_pos
 !################################################################
 !################################################################
 !################################################################
-subroutine SNII_yield (zp_star, ej_m, ej_Z, ej_chem)
-  use amr_commons, ONLY:dp,nchem,chem_list
+subroutine SNII_yield (zp_star, ej_m, ej_Z, ej_D, ej_chem, ej_chemD)
+  use amr_commons, ONLY:dp,nchem,chem_list,dust,snyield_model
   use hydro_parameters, ONLY:ichem 
   implicit none
-  real(dp)::zp_star,ej_m,ej_Z
+  real(dp)::zp_star,ej_m,ej_Z,ej_D
   real(dp),dimension(1:nchem)::ej_chem
+  real(dp),dimension(1:2)::ej_chemD ! C, and Fe (for silicate)
 !-----------------------------------------------------------------
 ! Notice that even if the name is 'yield', 
 ! the return value is actually a metallicity fraction for simplicity
 ! These numbers are based on the outputs from Starburst99 
 !                   (i.e. essentially Woosley & Weaver 95)
 !-----------------------------------------------------------------
-  real(dp),dimension(1:5)::log_SNII_m, log_Zgrid, log_SNII_Z
-  real(dp),dimension(1:5)::log_SNII_H,log_SNII_He,log_SNII_C,log_SNII_N,log_SNII_O
-  real(dp),dimension(1:5)::log_SNII_Mg,log_SNII_Si,log_SNII_S,log_SNII_Fe, dum1d
+!!$  real(dp),dimension(1:5)::log_SNII_m, log_Zgrid, log_SNII_Z
+!!$  real(dp),dimension(1:5)::log_SNII_H,log_SNII_He,log_SNII_C,log_SNII_N,log_SNII_O
+!!$  real(dp),dimension(1:5)::log_SNII_Mg,log_SNII_Si,log_SNII_S,log_SNII_Fe, dum1d
+!!$  real(dp),dimension(1:5)::log_SNII_Dust,log_SNII_C_Dust,log_SNII_Si_Dust
+  real(dp),dimension(:),allocatable::log_SNII_m, log_Zgrid, log_SNII_Z
+  real(dp),dimension(:),allocatable::log_SNII_H,log_SNII_He,log_SNII_C,log_SNII_N,log_SNII_O
+  real(dp),dimension(:),allocatable::log_SNII_Mg,log_SNII_Si,log_SNII_S,log_SNII_Fe, dum1d
+  real(dp),dimension(:),allocatable::log_SNII_Dust,log_SNII_C_Dust,log_SNII_Si_Dust
   real(dp)::log_Zstar,fz
   integer::nz_SN, izg, ich
   character(len=2)::element_name
 
-  nz_sn=5
+  if(snyield_model == 0)nz_sn=5
+  if(snyield_model == 1)nz_sn=7
 
+  allocate(log_SNII_m(1:nz_sn),log_Zgrid(1:nz_sn),log_SNII_Z(1:nz_sn))
+  allocate(log_SNII_H(1:nz_sn),log_SNII_He(1:nz_sn),log_SNII_C(1:nz_sn),log_SNII_N(1:nz_sn),log_SNII_O(1:nz_sn))
+  allocate(log_SNII_Mg(1:nz_sn),log_SNII_Si(1:nz_sn),log_SNII_S(1:nz_sn),log_SNII_Fe(1:nz_sn),dum1d(1:nz_sn))
+  allocate(log_SNII_Dust(1:nz_sn),log_SNII_C_Dust(1:nz_sn),log_SNII_Si_Dust(1:nz_sn))
+
+  if(snyield_model == 0)then
   ! These are the numbers calculated from Starburst99 (Chabrier+05 with 50Msun cut-off)
   ! Woosley & Weaver 95 and Kobayashi+06 tables are combined
   ! (generating code: https://github.com/JinsuRhee/RAMSES-yomp_FB)
@@ -1711,6 +2059,38 @@ subroutine SNII_yield (zp_star, ej_m, ej_Z, ej_chem)
   log_SNII_Si=(/-2.12155986,-2.13799171,-2.18471670,-2.38103539,-2.38103538/)
   log_SNII_S =(/-2.47962835,-2.51751957,-2.56050127,-2.73642309,-2.73642306/)
   log_SNII_Fe=(/-2.36627148,-2.34970084,-2.32108920,-2.24041648,-2.24041646/)
+  endif
+  if(snyield_model == 1)then
+  ! These are the numbers calculated from YD Stellar Yields for the SNII+pre-SNII phase
+  ! Charbier IMF [0.01,100]Msun, failed SNII>30 Msun, low-high mass@8Msun
+  ! Limongi&Chieffi18 yields with Prantzos IDROV + Karakas10
+  ! Mg SNII yields are artificially doubled to match with observations (Mg~Si)
+  ! Dust is made of C and olivine MgFeSiO4 with Dwek98 efficiencies
+  ! dubois@iap.fr
+  ! * all are represented in log-scale
+  ! log_SNII_m : ejecta mass from SNII
+  ! log_Zgrid : metallicity grid (assuming Zsun = 0.02 in Starburst99)
+  ! log_SNII_Z : metallicity fraction of the ejecta mass
+  ! log_SNII_H - log_SNII_Fe : chemical species fraction of the ejecta mass
+  log_SNII_m  = (/ -0.7924548, -0.8074643, -0.8019797, -0.7655265, -0.7467570, -0.7115963, -0.7115963 /)
+  log_Zgrid   = (/ -4.8712778, -3.8712778, -2.8712778, -2.4712777, -2.1712778, -1.8712777, -1.5712777 /)
+  log_SNII_Z  = (/ -0.6844908, -0.7483578, -0.8593962, -0.8857285, -0.8968211, -0.9166155, -0.9166155 /)
+  log_SNII_H  = (/ -0.3277039, -0.3191567, -0.3096159, -0.3124228, -0.3207183, -0.3358532, -0.3358532 /)
+  log_SNII_C  = (/ -1.5881386, -1.6078650, -1.6516007, -1.6722994, -1.6542335, -1.6240436, -1.6240436 /)
+  log_SNII_N  = (/ -2.6409895, -2.7115228, -2.7793872, -2.6722993, -2.5734515, -2.4407074, -2.4407074 /)
+  log_SNII_O  = (/ -0.8350012, -0.9241915, -1.0807487, -1.1138993, -1.1443396, -1.2034699, -1.2034699 /)
+  log_SNII_Mg = (/ -2.2677263, -2.2441224, -2.2427171, -2.2612530, -2.2412496, -2.2056181, -2.2056181 /)
+  log_SNII_Si = (/ -2.1071744, -2.1371570, -2.1839197, -2.1879781, -2.1967190, -2.2117630, -2.2117630 /)
+  log_SNII_S  = (/ -2.4515177, -2.4882990, -2.5484904, -2.5082352, -2.5408455, -2.6046361, -2.6046361 /)
+  log_SNII_Fe = (/ -2.3678155, -2.3513636, -2.3487234, -2.3716861, -2.3260777, -2.2553820, -2.2553820 /)
+!!$  log_SNII_Ne = (/ -1.9420196, -1.9163034, -1.9334383, -1.9806508, -1.9763216, -1.9676342, -1.9676342 /)
+  if(dust)then
+     log_SNII_Dust   = (/ -1.6299268, -1.6323417, -1.6535799, -1.6753090, -1.6434030, -1.5918899, -1.5918899 /)
+     log_SNII_C_Dust = (/ -1.8892729, -1.9090080, -1.9527542, -1.9732104, -1.9552635, -1.9249796, -1.9249796 /)
+     log_SNII_Si_Dust= (/ -2.7647518, -2.7467755, -2.7440904, -2.7671612, -2.7215084, -2.6507137, -2.6507137 /)
+!!$     log_SNII_Fe_Dust= (/ -2.4661570, -2.4483207, -2.4455874, -2.4685813, -2.4229749, -2.3521914, -2.3521914 /)
+  endif
+  endif
 
   ! search for the metallicity index
   log_Zstar = log10(zp_star)
@@ -1728,6 +2108,11 @@ subroutine SNII_yield (zp_star, ej_m, ej_Z, ej_chem)
   ej_Z = log_SNII_Z(izg)*fz + log_SNII_Z(izg+1)*(1d0-fz)
   ej_Z = 10d0**ej_Z
  
+  if(dust)then
+     ej_D = log_SNII_Dust(izg)*fz + log_SNII_Dust(izg+1)*(1d0-fz)
+     ej_D = 10d0**ej_D
+  endif
+
   do ich=1,nchem
       element_name=chem_list(ich)
       select case (element_name)
@@ -1759,7 +2144,200 @@ subroutine SNII_yield (zp_star, ej_m, ej_Z, ej_chem)
      ej_chem(ich) = 10d0**ej_chem(ich)
   end do
 
+  if(dust)then
+     dum1d = log_SNII_C_Dust
+     ej_chemD(1) = dum1d(izg)*fz + dum1d(izg+1)*(1d0-fz)
+     ej_chemD(1) = 10d0**ej_chemD(1)
+     dum1d = log_SNII_Si_Dust
+     ej_chemD(2) = dum1d(izg)*fz + dum1d(izg+1)*(1d0-fz)
+     ej_chemD(2) = 10d0**ej_chemD(2)
+  endif
+
+  deallocate(log_SNII_m,log_Zgrid,log_SNII_Z)
+  deallocate(log_SNII_H,log_SNII_He,log_SNII_C,log_SNII_N,log_SNII_O)
+  deallocate(log_SNII_Mg,log_SNII_Si,log_SNII_S,log_SNII_Fe,dum1d)
+  deallocate(log_SNII_Dust,log_SNII_C_Dust,log_SNII_Si_Dust)
+
 end subroutine SNII_yield
+!################################################################
+!################################################################
+!################################################################
+!################################################################
+module snII_commons
+   use amr_commons, ONLY:dp
+   integer(kind=4):: nt_SNII, nz_SNII  ! number of grids for time and metallicities
+   real(dp),allocatable,dimension(:):: log_tSNII ! log10 yr
+   real(dp),allocatable,dimension(:):: log_zSNII ! log10 z
+   ! Notice that the values below should be normalised to 1Msun
+   real(dp),allocatable,dimension(:,:):: log_cmSNII   ! cumulative mass fraction
+   real(dp),allocatable,dimension(:,:):: log_ceSNII   ! cumulative energy per 1Msun SSP
+   real(dp),allocatable,dimension(:,:):: log_cmzSNII  ! cumulative metal mass fraction
+   real(dp),allocatable,dimension(:,:):: log_cmdSNII  ! cumulative dust mass fraction
+   real(dp),allocatable:: log_cmSNII_spec(:,:,:)      ! cumulative mass fraction for several species
+   real(dp),allocatable:: log_cmdSNII_spec(:,:,:)     ! cumulative dust mass fraction for several species
+end module
+!################################################################
+!################################################################
+!################################################################
+subroutine SNII_yield_time (zp_star, tp_star, tp_last, ej_m, ej_Z, ej_D, ej_chem, ej_chemD)
+  use amr_commons, ONLY:dp,nchem,chem_list,dust,dust_chem,z_ave,texp
+  use hydro_parameters, ONLY:ichem
+  use snII_commons
+  implicit none
+  real(dp)::zp_star,tp_star,tp_last,ej_m,ej_Z,ej_D
+  real(dp),dimension(1:nchem)::ej_chem
+  real(dp),dimension(1:2)::ej_chemD ! C, and Fe (for silicate)
+!-----------------------------------------------------------------
+! Notice that even if the name is 'yield',
+! the return value is actually a metallicity fraction for simplicity
+!-----------------------------------------------------------------
+  real(dp)::age1, age2, log_age1,log_age2,log_met
+  real(dp)::ft1, ft2, fz
+  real(dp)::cm1,cm2,cmz1,cmz2,cmd1,cmd2,ce1,ce2,dum1,dum2
+  integer:: itg1, itg2, izg, ich
+  character(len=2)::element_name
+
+  real(dp)::scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2
+
+  ! convert the time to physical units
+  call getStarAgeGyr(tp_star+(texp-tp_last), age1)
+  call getStarAgeGyr(tp_star               , age2) ! double-checked.
+
+  ! Conversion factor from user units to cgs units
+  call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
+  write(*,'(A,5es15.7)')'Ages',tp_star*scale_t/3.15d13,tp_last*scale_t/3.15d13,age1*scale_t/3.15d13,age2*scale_t/3.15d13,texp*scale_t/3.15d13
+
+  log_age1    = log10(max(age1*1d9,1.d0))
+  log_age2    = log10(max(age2*1d9,1.d0))
+  log_met     = log10(max(zp_star,z_ave*0.02))
+
+  ! search for the time index from stellar winds library
+  call binary_search(log_tSNII, log_age1, nt_SNII, itg1)
+  call binary_search(log_tSNII, log_age2, nt_SNII, itg2)
+
+  ! search for the metallicity index from stellar winds library
+  call binary_search(log_zSNII, log_met , nz_SNII, izg )
+
+  ! find where we are
+  ft1 = (10d0**log_tSNII(itg1+1) - 10d0**log_age1)/(10d0**log_tSNII(itg1+1)-10d0**log_tSNII(itg1))
+  ft2 = (10d0**log_tSNII(itg2+1) - 10d0**log_age2)/(10d0**log_tSNII(itg2+1)-10d0**log_tSNII(itg2))
+  fz  = (10d0**log_zSNII(izg +1) - 10d0**log_met )/(10d0**log_zSNII(izg +1)-10d0**log_zSNII(izg ))
+
+  ! no extrapolation
+  if (ft1 < 0.0) ft1 = 0.0
+  if (ft1 > 1.0) ft1 = 1.0
+  if (ft2 < 0.0) ft2 = 0.0
+  if (ft2 > 1.0) ft2 = 1.0
+  if (fz  < 0.0) fz  = 0.0
+  if (fz  > 1.0) fz  = 1.0
+
+  ! if a star particle is younger than log_tSNII(1), no mass loss
+  if(itg2.eq.1.and.ft2>0.999) return
+
+  ! mass loss fraction during [birth_time, birth_time+dteff]
+  dum1 = 10d0**log_cmSNII(itg1,izg  )*ft1 + 10d0**log_cmSNII(itg1+1,izg  )*(1d0-ft1)
+  dum2 = 10d0**log_cmSNII(itg1,izg+1)*ft1 + 10d0**log_cmSNII(itg1+1,izg+1)*(1d0-ft1)
+  cm1  = dum1*fz + dum2*(1d0-fz)
+  dum1 = 10d0**log_cmSNII(itg2,izg  )*ft2 + 10d0**log_cmSNII(itg2+1,izg  )*(1d0-ft2)
+  dum2 = 10d0**log_cmSNII(itg2,izg+1)*ft2 + 10d0**log_cmSNII(itg2+1,izg+1)*(1d0-ft2)
+  cm2  = dum1*fz + dum2*(1d0-fz)
+  ej_m  = cm2 - cm1
+
+  ! metal mass loss fraction during [birth_time, birth_time+dteff]
+  dum1 = 10d0**log_cmzSNII(itg1,izg  )*ft1 + 10d0**log_cmzSNII(itg1+1,izg  )*(1d0-ft1)
+  dum2 = 10d0**log_cmzSNII(itg1,izg+1)*ft1 + 10d0**log_cmzSNII(itg1+1,izg+1)*(1d0-ft1)
+  cmz1 = dum1*fz + dum2*(1d0-fz)
+  dum1 = 10d0**log_cmzSNII(itg2,izg  )*ft2 + 10d0**log_cmzSNII(itg2+1,izg  )*(1d0-ft2)
+  dum2 = 10d0**log_cmzSNII(itg2,izg+1)*ft2 + 10d0**log_cmzSNII(itg2+1,izg+1)*(1d0-ft2)
+  cmz2 = dum1*fz + dum2*(1d0-fz)
+  ej_Z = cmz2 - cmz1
+  ej_Z = ej_Z/ej_m
+
+!!$   ! energy during [birth_time, birth_time+dteff]
+!!$   dum1 = 10d0**log_ceSNII(itg1,izg  )*ft1 + 10d0**log_ceSNII(itg1+1,izg  )*(1d0-ft1)
+!!$   dum2 = 10d0**log_ceSNII(itg1,izg+1)*ft1 + 10d0**log_ceSNII(itg1+1,izg+1)*(1d0-ft1)
+!!$   ce1  = dum1*fz + dum2*(1d0-fz)
+!!$   dum1 = 10d0**log_ceSNII(itg2,izg  )*ft2 + 10d0**log_ceSNII(itg2+1,izg  )*(1d0-ft2)
+!!$   dum2 = 10d0**log_ceSNII(itg2,izg+1)*ft2 + 10d0**log_ceSNII(itg2+1,izg+1)*(1d0-ft2)
+!!$   ce2  = dum1*fz + dum2*(1d0-fz)
+!!$   if(ce1 < ce2) then
+!!$      log_deloss_erg = log10(dble(ce2) - dble(ce1) + 1d-50)
+!!$   end if
+
+  if(dust)then
+     ! Dust mass loss fraction during [birth_time, birth_time+dteff]
+     dum1 = 10d0**log_cmdSNII(itg1,izg  )*ft1 + 10d0**log_cmdSNII(itg1+1,izg  )*(1d0-ft1)
+     dum2 = 10d0**log_cmdSNII(itg1,izg+1)*ft1 + 10d0**log_cmdSNII(itg1+1,izg+1)*(1d0-ft1)
+     cmd1 = dum1*fz + dum2*(1d0-fz)
+     dum1 = 10d0**log_cmdSNII(itg2,izg  )*ft2 + 10d0**log_cmdSNII(itg2+1,izg  )*(1d0-ft2)
+     dum2 = 10d0**log_cmdSNII(itg2,izg+1)*ft2 + 10d0**log_cmdSNII(itg2+1,izg+1)*(1d0-ft2)
+     cmd2 = dum1*fz + dum2*(1d0-fz)
+     ej_D = cmd2 - cmd1
+     ej_D = ej_D/ej_m
+     if(dust_chem)then
+        ! carbon
+        dum1 = 10d0**log_cmdSNII_spec(1,itg1,izg  )*ft1 + 10d0**log_cmdSNII_spec(1,itg1+1,izg  )*(1d0-ft1)
+        dum2 = 10d0**log_cmdSNII_spec(1,itg1,izg+1)*ft1 + 10d0**log_cmdSNII_spec(1,itg1+1,izg+1)*(1d0-ft1)
+        cmd1 = dum1*fz + dum2*(1d0-fz)
+        dum1 = 10d0**log_cmdSNII_spec(1,itg2,izg  )*ft2 + 10d0**log_cmdSNII_spec(1,itg2+1,izg  )*(1d0-ft2)
+        dum2 = 10d0**log_cmdSNII_spec(1,itg2,izg+1)*ft2 + 10d0**log_cmdSNII_spec(1,itg2+1,izg+1)*(1d0-ft2)
+        cmd2 = dum1*fz + dum2*(1d0-fz)
+        ej_chemD(1) = cmd2 - cmd1
+        ej_chemD(1) = ej_chemD(1)/ej_m
+        ! silicate
+        dum1 = 10d0**log_cmdSNII_spec(2,itg1,izg  )*ft1 + 10d0**log_cmdSNII_spec(2,itg1+1,izg  )*(1d0-ft1)
+        dum2 = 10d0**log_cmdSNII_spec(2,itg1,izg+1)*ft1 + 10d0**log_cmdSNII_spec(2,itg1+1,izg+1)*(1d0-ft1)
+        cmd1 = dum1*fz + dum2*(1d0-fz)
+        dum1 = 10d0**log_cmdSNII_spec(2,itg2,izg  )*ft2 + 10d0**log_cmdSNII_spec(2,itg2+1,izg  )*(1d0-ft2)
+        dum2 = 10d0**log_cmdSNII_spec(2,itg2,izg+1)*ft2 + 10d0**log_cmdSNII_spec(2,itg2+1,izg+1)*(1d0-ft2)
+        cmd2 = dum1*fz + dum2*(1d0-fz)
+        ej_chemD(2) = cmd2 - cmd1
+        ej_chemD(2) = ej_chemD(2)/ej_m
+     endif
+  endif
+
+  do ich=1,nchem
+     ! mass loss fraction during [birth_time, birth_time+dteff]
+     dum1 = 10d0**log_cmSNII_spec(ich,itg1,izg  )*ft1 + 10d0**log_cmSNII_spec(ich,itg1+1,izg  )*(1d0-ft1)
+     dum2 = 10d0**log_cmSNII_spec(ich,itg1,izg+1)*ft1 + 10d0**log_cmSNII_spec(ich,itg1+1,izg+1)*(1d0-ft1)
+     cm1  = dum1*fz + dum2*(1d0-fz)
+     dum1 = 10d0**log_cmSNII_spec(ich,itg2,izg  )*ft2 + 10d0**log_cmSNII_spec(ich,itg2+1,izg  )*(1d0-ft2)
+     dum2 = 10d0**log_cmSNII_spec(ich,itg2,izg+1)*ft2 + 10d0**log_cmSNII_spec(ich,itg2+1,izg+1)*(1d0-ft2)
+     cm2  = dum1*fz + dum2*(1d0-fz)
+     ej_chem(ich) = cm2 - cm1
+     ej_chem(ich) = ej_chem(ich)/ej_m
+  end do
+
+end subroutine SNII_yield_time
+!################################################################
+!################################################################
+!################################################################
+subroutine SNII_total_mass (zp_star,ej_m)
+  use amr_commons, ONLY:dp,z_ave
+  use snII_commons
+  implicit none
+  real(dp)::zp_star,ej_m,log_met
+  real(dp)::fz,dum1,dum2
+  integer:: izg
+
+  log_met     = log10(max(zp_star,z_ave*0.02))
+
+  ! search for the metallicity index from stellar winds library
+  call binary_search(log_zSNII, log_met , nz_SNII, izg )
+
+  ! find where we are
+  fz  = (10d0**log_zSNII(izg +1) - 10d0**log_met )/(10d0**log_zSNII(izg +1)-10d0**log_zSNII(izg ))
+
+  ! no extrapolation
+  if (fz  < 0.0) fz  = 0.0
+  if (fz  > 1.0) fz  = 1.0
+
+  ! mass loss fraction during [birth_time, birth_time+dteff]
+  dum1 = 10d0**log_cmSNII(nt_SNII,izg  )
+  dum2 = 10d0**log_cmSNII(nt_SNII,izg+1)
+  ej_m  = dum1*fz + dum2*(1d0-fz)
+
+end subroutine SNII_total_mass
 !################################################################
 !################################################################
 !################################################################
@@ -1784,3 +2362,182 @@ subroutine binary_search(database,xtarget,ndata,i)
    end do
 
 end subroutine binary_search
+!################################################################
+!################################################################
+!################################################################
+!################################################################
+subroutine init_snII
+   use snII_commons
+   use amr_commons
+   implicit none
+   integer :: iz, ich, i
+   real(dp),allocatable,dimension(:,:):: log_cmHSNII  ! cumulative H mass fraction
+   real(dp),allocatable,dimension(:,:):: log_cmCSNII  ! cumulative C mass fraction
+   real(dp),allocatable,dimension(:,:):: log_cmNSNII  ! cumulative N mass fraction
+   real(dp),allocatable,dimension(:,:):: log_cmOSNII  ! cumulative O mass fraction
+   real(dp),allocatable,dimension(:,:):: log_cmMgSNII ! cumulative Mg mass fraction
+   real(dp),allocatable,dimension(:,:):: log_cmSiSNII ! cumulative Si mass fraction
+   real(dp),allocatable,dimension(:,:):: log_cmSSNII  ! cumulative S mass fraction
+   real(dp),allocatable,dimension(:,:):: log_cmFeSNII ! cumulative Fe mass fraction
+   real(dp),allocatable,dimension(:,:):: log_cmdCSNII  ! cumulative C  dust mass fraction
+   real(dp),allocatable,dimension(:,:):: log_cmdSiSNII ! cumulative Si dust mass fraction
+   real(kind=8),allocatable:: dum1d(:)
+   logical::ok
+
+   ! Read supernovae II table
+   inquire(FILE=TRIM(supernovae_II_file),exist=ok)
+   if(.not.ok)then
+      if(myid.eq.1)then
+         write(*,*)'Cannot access the file ', TRIM(supernovae_II_file)
+      endif
+      call clean_stop
+   endif
+
+   open(unit=10,file=TRIM(supernovae_II_file),status='old',form='unformatted')
+   read(10) nt_SNII, nz_SNII
+
+   allocate(log_tSNII  (1:nt_SNII))          ! log Gyr
+   allocate(log_zSNII  (1:nz_SNII))          ! log absolute Z
+   allocate(log_cmSNII (1:nt_SNII,1:nz_SNII))  ! log cumulative mass fraction per Msun
+   allocate(log_ceSNII (1:nt_SNII,1:nz_SNII))  ! log cumulative energy in erg per Msun
+   allocate(log_cmzSNII(1:nt_SNII,1:nz_SNII))  ! log cumulative mass fraction per Msun
+
+   if(nchem>0)then
+      allocate(log_cmHSNII(1:nt_SNII,1:nz_SNII))
+      allocate(log_cmCSNII(1:nt_SNII,1:nz_SNII))
+      allocate(log_cmNSNII(1:nt_SNII,1:nz_SNII))
+      allocate(log_cmOSNII(1:nt_SNII,1:nz_SNII))
+      allocate(log_cmMgSNII(1:nt_SNII,1:nz_SNII))
+      allocate(log_cmSiSNII(1:nt_SNII,1:nz_SNII))
+      allocate(log_cmSSNII(1:nt_SNII,1:nz_SNII))
+      allocate(log_cmFeSNII(1:nt_SNII,1:nz_SNII))
+
+      allocate(log_cmSNII_spec(1:nchem,1:nt_SNII,1:nz_SNII))
+   endif
+   if(dust)then
+      allocate(log_cmdSNII  (1:nt_SNII,1:nz_SNII))
+      allocate(log_cmdCSNII (1:nt_SNII,1:nz_SNII))
+      allocate(log_cmdSiSNII(1:nt_SNII,1:nz_SNII))
+      allocate(log_cmdSNII_spec(1:2,1:nt_SNII,1:nz_SNII))
+   endif
+
+   allocate(dum1d (1:nt_SNII))
+   read(10) dum1d
+   log_tSNII(:) = dum1d(:)
+   deallocate(dum1d)
+   allocate(dum1d (1:nz_SNII))
+   read(10) dum1d
+   log_zSNII(:) = dum1d(:)
+   deallocate(dum1d)
+
+   allocate(dum1d (1:nt_SNII))
+   !  cumulative stellar mass loss
+   do iz=1,nz_SNII
+      read(10) dum1d
+      log_cmSNII(:,iz) = dum1d(:)
+   enddo
+   ! cumulative mechanical energy from SNII
+   do iz=1,nz_SNII
+      read(10) dum1d
+      log_ceSNII(:,iz) = dum1d(:)
+   enddo
+   ! cumulative metal mass from SNII
+   do iz=1,nz_SNII
+      read(10) dum1d
+      log_cmzSNII(:,iz) = dum1d(:)
+   enddo
+
+   ! cumulative H mass from SNII
+   do iz=1,nz_SNII
+      read(10) dum1d
+      if(nchem>0)log_cmHSNII(:,iz) = dum1d(:)
+   enddo
+   ! cumulative He mass from SNII
+   do iz=1,nz_SNII
+      read(10) dum1d
+      !log_cmHeSNII(:,iz) = dum1d(:)
+   enddo
+   ! cumulative C mass from SNII
+   do iz=1,nz_SNII
+      read(10) dum1d
+      if(nchem>0)log_cmCSNII(:,iz) = dum1d(:)
+   enddo
+   ! cumulative N mass from SNII
+   do iz=1,nz_SNII
+      read(10) dum1d
+      if(nchem>0)log_cmNSNII(:,iz) = dum1d(:)
+   enddo
+   ! cumulative O mass from SNII
+   do iz=1,nz_SNII
+      read(10) dum1d
+      if(nchem>0)log_cmOSNII(:,iz) = dum1d(:)
+   enddo
+   ! cumulative Mg mass from SNII
+   do iz=1,nz_SNII
+      read(10) dum1d
+      if(nchem>0)log_cmMgSNII(:,iz) = dum1d(:)
+   enddo
+   ! cumulative Si mass from SNII
+   do iz=1,nz_SNII
+      read(10) dum1d
+      if(nchem>0)log_cmSiSNII(:,iz) = dum1d(:)
+   enddo
+   ! cumulative S mass from SNII
+   do iz=1,nz_SNII
+      read(10) dum1d
+      if(nchem>0)log_cmSSNII(:,iz) = dum1d(:)
+   enddo
+   ! cumulative Fe mass from SNII
+   do iz=1,nz_SNII
+      read(10) dum1d
+      if(nchem>0)log_cmFeSNII(:,iz) = dum1d(:)
+   enddo
+
+   if(dust)then
+      ! cumulative Dust mass from SNII
+      do iz=1,nz_SNII
+         read(10) dum1d
+         log_cmdSNII(:,iz) = dum1d(:)
+      enddo
+      ! cumulative C Dust mass from SNII
+      do iz=1,nz_SNII
+         read(10) dum1d
+         log_cmdCSNII(:,iz) = dum1d(:)
+      enddo
+      ! cumulative Si Dust mass from SNII
+      do iz=1,nz_SNII
+         read(10) dum1d
+         log_cmdSiSNII(:,iz) = dum1d(:)
+      enddo
+   endif
+
+   if(nchem>0)then
+      ich=0
+      do i=1,nchem
+          ich=ich+1
+          if(myid==1) print *, 'SNII CHEM(',int(i,kind=2),') = '//TRIM(chem_list(i))
+          if(TRIM(chem_list(i))=='H')  log_cmSNII_spec(ich,:,:)=log_cmHSNII
+          if(TRIM(chem_list(i))=='C')  log_cmSNII_spec(ich,:,:)=log_cmCSNII
+          if(TRIM(chem_list(i))=='N')  log_cmSNII_spec(ich,:,:)=log_cmNSNII
+          if(TRIM(chem_list(i))=='O')  log_cmSNII_spec(ich,:,:)=log_cmOSNII
+          if(TRIM(chem_list(i))=='Mg') log_cmSNII_spec(ich,:,:)=log_cmMgSNII
+          if(TRIM(chem_list(i))=='Si') log_cmSNII_spec(ich,:,:)=log_cmSiSNII
+          if(TRIM(chem_list(i))=='S')  log_cmSNII_spec(ich,:,:)=log_cmSSNII
+          if(TRIM(chem_list(i))=='Fe') log_cmSNII_spec(ich,:,:)=log_cmFeSNII
+          if(TRIM(chem_list(i))=='D') log_cmSNII_spec(ich,:,:)=0d0
+      end do
+
+      deallocate(log_cmHSNII,log_cmCSNII,log_cmNSNII,log_cmOSNII)
+      deallocate(log_cmMgSNII,log_cmSiSNII,log_cmSSNII,log_cmFeSNII)
+   endif
+   if(nchem>2.and.dust)then
+      log_cmdSNII_spec(1,:,:)=log_cmdCSNII
+      log_cmdSNII_spec(2,:,:)=log_cmdSiSNII
+   endif
+   if(dust)then
+      deallocate(log_cmdCSNII,log_cmdSiSNII)
+   endif
+
+   deallocate(dum1d)
+
+end subroutine init_snII

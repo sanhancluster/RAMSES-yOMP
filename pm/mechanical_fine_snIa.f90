@@ -131,7 +131,7 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
 !$omp & reduction(+:nSNc,nsnIa_tot) default(none) &
 !$omp & shared(ncpu,numbl,ilevel,myid,active,reception,numbp,xg,dx,skip_loc,headp,nextp,typep,use_initial_mass,mp0, &
 !$omp & scale_msun,mp,sn2_real_delay,tp,snII_Zdep_yield,zp,snII_freq,yield,dteff,idp,xp,scale, &
-!$omp & ncoarse,ngridmax,son,vp,metal,MC_tracer,tmpp,eta_sn,mejecta_Ia,Zejecta_chem_Ia)
+!$omp & ncoarse,ngridmax,son,vp,metal,MC_tracer,tmpp,eta_sn,mejecta_Ia,Zejecta_chem_Ia,nchunk)
      ! Loop over grids
   ip=0
 !$omp do schedule(dynamic,nchunk)
