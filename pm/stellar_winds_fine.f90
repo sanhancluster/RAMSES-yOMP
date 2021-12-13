@@ -693,17 +693,20 @@ end subroutine stellar_winds_dump
 !################################################################
 !################################################################
 !################################################################
-subroutine cmp_stellar_wind_props (birth_time,dteff, zstar,dfmloss, log_deloss_erg, dfmzloss, dfmloss_spec)
+!!$subroutine cmp_stellar_wind_props (birth_time,dteff, zstar,dfmloss, log_deloss_erg, dfmzloss, dfmdloss, dfmloss_spec, dfmdloss_spec)
+subroutine cmp_stellar_wind_props (birth_time,dteff, zstar,dfmloss, log_deloss_erg, dfmzloss, dfmdloss, dfmloss_spec, dfmdloss_spec,j)
    use amr_commons
    use stellar_commons
    implicit none
    real(dp),intent(in)::birth_time, dteff, zstar
-   real(dp)::dfmloss, dfmzloss, log_deloss_erg
+   real(dp)::dfmloss, dfmzloss, dfmdloss, log_deloss_erg
    real(dp),dimension(1:nchem)::dfmloss_spec
+   real(dp),dimension(1:2)::dfmdloss_spec
    real(dp)::age1, age2, log_age1,log_age2,log_met
    real(dp)::ft1, ft2, fz
-   real(dp)::cm1,cm2,cmz1,cmz2,ce1,ce2,dum1,dum2
+   real(dp)::cm1,cm2,cmz1,cmz2,cmd1,cmd2,ce1,ce2,dum1,dum2
    integer:: itg1, itg2, izg, ich
+   integer:: j ! YD Debug
 
    ! initialise
    dfmloss = 0d0
@@ -771,6 +774,42 @@ subroutine cmp_stellar_wind_props (birth_time,dteff, zstar,dfmloss, log_deloss_e
       log_deloss_erg = log10(10d0**dble(ce2) - 10d0**dble(ce1) + 1d-50)
    end if
 
+   if(dust)then
+      ! Dust mass loss fraction during [birth_time, birth_time+dteff]
+      dum1 = log_cmdSW(itg1,izg  )*ft1 + log_cmdSW(itg1+1,izg  )*(1d0-ft1)
+      dum2 = log_cmdSW(itg1,izg+1)*ft1 + log_cmdSW(itg1+1,izg+1)*(1d0-ft1)
+      cmd1 = dum1*fz + dum2*(1d0-fz)
+      dum1 = log_cmdSW(itg2,izg  )*ft2 + log_cmdSW(itg2+1,izg  )*(1d0-ft2)
+      dum2 = log_cmdSW(itg2,izg+1)*ft2 + log_cmdSW(itg2+1,izg+1)*(1d0-ft2)
+      cmd2 = dum1*fz + dum2*(1d0-fz)
+      dfmdloss = 10d0**cmd2 - 10d0**cmd1
+      if(dust_chem)then
+         ! carbon
+         dum1 = log_cmdSW_spec(1,itg1,izg  )*ft1 + log_cmdSW_spec(1,itg1+1,izg  )*(1d0-ft1)
+         dum2 = log_cmdSW_spec(1,itg1,izg+1)*ft1 + log_cmdSW_spec(1,itg1+1,izg+1)*(1d0-ft1)
+         cmd1 = dum1*fz + dum2*(1d0-fz)
+         dum1 = log_cmdSW_spec(1,itg2,izg  )*ft2 + log_cmdSW_spec(1,itg2+1,izg  )*(1d0-ft2)
+         dum2 = log_cmdSW_spec(1,itg2,izg+1)*ft2 + log_cmdSW_spec(1,itg2+1,izg+1)*(1d0-ft2)
+         cmd2 = dum1*fz + dum2*(1d0-fz)
+         dfmdloss_spec(1) = 10d0**cmd2 - 10d0**cmd1
+         ! silicate
+         dum1 = log_cmdSW_spec(2,itg1,izg  )*ft1 + log_cmdSW_spec(2,itg1+1,izg  )*(1d0-ft1)
+         dum2 = log_cmdSW_spec(2,itg1,izg+1)*ft1 + log_cmdSW_spec(2,itg1+1,izg+1)*(1d0-ft1)
+         cmd1 = dum1*fz + dum2*(1d0-fz)
+         dum1 = log_cmdSW_spec(2,itg2,izg  )*ft2 + log_cmdSW_spec(2,itg2+1,izg  )*(1d0-ft2)
+         dum2 = log_cmdSW_spec(2,itg2,izg+1)*ft2 + log_cmdSW_spec(2,itg2+1,izg+1)*(1d0-ft2)
+         cmd2 = dum1*fz + dum2*(1d0-fz)
+         dfmdloss_spec(2) = 10d0**cmd2 - 10d0**cmd1
+!!$         if(myid==71.and.j==90)then
+!!$            write(*,'(A,4es15.7,I9)')'age ',age1,age2,zstar,10d0**log_met,izg
+!!$            write(*,'(A,5es15.7)')'SWD ',dfmdloss_spec(2)*FeoverSil/SioverSil&
+!!$                 &,log10(10d0**cmd1*FeoverSil/SioverSil) &
+!!$                 &,log10(10d0**cmd2*FeoverSil/SioverSil) &
+!!$                 &,cmd1,cmd2
+!!$         endif
+      endif
+   endif
+
    do ich=1,nchem
       ! mass loss fraction during [birth_time, birth_time+dteff]
       dum1 = log_cmSW_spec(ich,itg1,izg  )*ft1 + log_cmSW_spec(ich,itg1+1,izg  )*(1d0-ft1)
@@ -786,3 +825,144 @@ subroutine cmp_stellar_wind_props (birth_time,dteff, zstar,dfmloss, log_deloss_e
 !   write(*,777) log_age1, log_age2, dfmloss, dfmzloss, log_deloss_erg,ce1,ce2
 
 end subroutine cmp_stellar_wind_props
+!################################################################
+!################################################################
+!################################################################
+!################################################################
+subroutine cmp_stellar_wind_props_linearinterpol (birth_time,dteff, zstar,dfmloss, log_deloss_erg, dfmzloss, dfmdloss, dfmloss_spec, dfmdloss_spec,j)
+   use amr_commons
+   use stellar_commons
+   implicit none
+   real(dp),intent(in)::birth_time, dteff, zstar
+   real(dp)::dfmloss, dfmzloss, dfmdloss, log_deloss_erg
+   real(dp),dimension(1:nchem)::dfmloss_spec
+   real(dp),dimension(1:2)::dfmdloss_spec
+   real(dp)::age1, age2, log_age1,log_age2,log_met
+   real(dp)::ft1, ft2, fz
+   real(dp)::cm1,cm2,cmz1,cmz2,cmd1,cmd2,ce1,ce2,dum1,dum2
+   integer:: itg1, itg2, izg, ich
+   integer:: j ! YD Debug
+
+   ! initialise
+   dfmloss = 0d0
+   dfmzloss = 0d0
+   dfmdloss = 0d0
+   dfmloss_spec = 0d0
+   dfmdloss_spec = 0d0
+   log_deloss_erg = -99.
+
+   ! convert the time to physical units
+   call getStarAgeGyr(birth_time+dteff, age1)
+   call getStarAgeGyr(birth_time      , age2) ! double-checked.
+
+   log_age1    = log10(max(age1*1d9,1.d0))
+   log_age2    = log10(max(age2*1d9,1.d0))
+   log_met     = log10(max(zstar,z_ave*0.02))
+
+   ! search for the time index from stellar winds library
+   call binary_search(log_tSW, log_age1, nt_SW, itg1)
+   call binary_search(log_tSW, log_age2, nt_SW, itg2)
+
+   ! search for the metallicity index from stellar winds library
+   call binary_search(log_zSW, log_met , nz_SW, izg )
+
+   ! find where we are
+   ft1 = (10d0**log_tSW(itg1+1) - 10d0**log_age1)/(10d0**log_tSW(itg1+1)-10d0**log_tSW(itg1))
+   ft2 = (10d0**log_tSW(itg2+1) - 10d0**log_age2)/(10d0**log_tSW(itg2+1)-10d0**log_tSW(itg2))
+   fz  = (10d0**log_zSW(izg +1) - 10d0**log_met )/(10d0**log_zSW(izg +1)-10d0**log_zSW(izg ))
+
+   ! no extrapolation
+   if (ft1 < 0.0) ft1 = 0.0
+   if (ft1 > 1.0) ft1 = 1.0
+   if (ft2 < 0.0) ft2 = 0.0
+   if (ft2 > 1.0) ft2 = 1.0
+   if (fz  < 0.0) fz  = 0.0
+   if (fz  > 1.0) fz  = 1.0
+
+   ! if a star particle is younger than log_tSW(1), no mass loss
+   if(itg2.eq.1.and.ft2>0.999) return
+
+   ! mass loss fraction during [birth_time, birth_time+dteff]
+   dum1 = 10d0**log_cmSW(itg1,izg  )*ft1 + 10d0**log_cmSW(itg1+1,izg  )*(1d0-ft1)
+   dum2 = 10d0**log_cmSW(itg1,izg+1)*ft1 + 10d0**log_cmSW(itg1+1,izg+1)*(1d0-ft1)
+   cm1  = dum1*fz + dum2*(1d0-fz)
+   dum1 = 10d0**log_cmSW(itg2,izg  )*ft2 + 10d0**log_cmSW(itg2+1,izg  )*(1d0-ft2)
+   dum2 = 10d0**log_cmSW(itg2,izg+1)*ft2 + 10d0**log_cmSW(itg2+1,izg+1)*(1d0-ft2)
+   cm2  = dum1*fz + dum2*(1d0-fz)
+   dfmloss  = cm2 - cm1
+
+   ! metal mass loss fraction during [birth_time, birth_time+dteff]
+   dum1 = 10d0**log_cmzSW(itg1,izg  )*ft1 + 10d0**log_cmzSW(itg1+1,izg  )*(1d0-ft1)
+   dum2 = 10d0**log_cmzSW(itg1,izg+1)*ft1 + 10d0**log_cmzSW(itg1+1,izg+1)*(1d0-ft1)
+   cmz1 = dum1*fz + dum2*(1d0-fz)
+   dum1 = 10d0**log_cmzSW(itg2,izg  )*ft2 + 10d0**log_cmzSW(itg2+1,izg  )*(1d0-ft2)
+   dum2 = 10d0**log_cmzSW(itg2,izg+1)*ft2 + 10d0**log_cmzSW(itg2+1,izg+1)*(1d0-ft2)
+   cmz2 = dum1*fz + dum2*(1d0-fz)
+   dfmzloss = cmz2 - cmz1
+
+   ! energy during [birth_time, birth_time+dteff]
+   dum1 = 10d0**log_ceSW(itg1,izg  )*ft1 + 10d0**log_ceSW(itg1+1,izg  )*(1d0-ft1)
+   dum2 = 10d0**log_ceSW(itg1,izg+1)*ft1 + 10d0**log_ceSW(itg1+1,izg+1)*(1d0-ft1)
+   ce1  = dum1*fz + dum2*(1d0-fz)
+   dum1 = 10d0**log_ceSW(itg2,izg  )*ft2 + 10d0**log_ceSW(itg2+1,izg  )*(1d0-ft2)
+   dum2 = 10d0**log_ceSW(itg2,izg+1)*ft2 + 10d0**log_ceSW(itg2+1,izg+1)*(1d0-ft2)
+   ce2  = dum1*fz + dum2*(1d0-fz)
+   if(ce1 < ce2) then
+      log_deloss_erg = log10(dble(ce2) - dble(ce1) + 1d-50)
+   end if
+
+   if(dust)then
+      ! Dust mass loss fraction during [birth_time, birth_time+dteff]
+      dum1 = 10d0**log_cmdSW(itg1,izg  )*ft1 + 10d0**log_cmdSW(itg1+1,izg  )*(1d0-ft1)
+      dum2 = 10d0**log_cmdSW(itg1,izg+1)*ft1 + 10d0**log_cmdSW(itg1+1,izg+1)*(1d0-ft1)
+      cmd1 = dum1*fz + dum2*(1d0-fz)
+      dum1 = 10d0**log_cmdSW(itg2,izg  )*ft2 + 10d0**log_cmdSW(itg2+1,izg  )*(1d0-ft2)
+      dum2 = 10d0**log_cmdSW(itg2,izg+1)*ft2 + 10d0**log_cmdSW(itg2+1,izg+1)*(1d0-ft2)
+      cmd2 = dum1*fz + dum2*(1d0-fz)
+      dfmdloss = cmd2 - cmd1
+      if(dust_chem)then
+         ! carbon
+         dum1 = 10d0**log_cmdSW_spec(1,itg1,izg  )*ft1 + 10d0**log_cmdSW_spec(1,itg1+1,izg  )*(1d0-ft1)
+         dum2 = 10d0**log_cmdSW_spec(1,itg1,izg+1)*ft1 + 10d0**log_cmdSW_spec(1,itg1+1,izg+1)*(1d0-ft1)
+         cmd1 = dum1*fz + dum2*(1d0-fz)
+         dum1 = 10d0**log_cmdSW_spec(1,itg2,izg  )*ft2 + 10d0**log_cmdSW_spec(1,itg2+1,izg  )*(1d0-ft2)
+         dum2 = 10d0**log_cmdSW_spec(1,itg2,izg+1)*ft2 + 10d0**log_cmdSW_spec(1,itg2+1,izg+1)*(1d0-ft2)
+         cmd2 = dum1*fz + dum2*(1d0-fz)
+         dfmdloss_spec(1) = cmd2 - cmd1
+         ! silicate
+         dum1 = 10d0**log_cmdSW_spec(2,itg1,izg  )*ft1 + 10d0**log_cmdSW_spec(2,itg1+1,izg  )*(1d0-ft1)
+         dum2 = 10d0**log_cmdSW_spec(2,itg1,izg+1)*ft1 + 10d0**log_cmdSW_spec(2,itg1+1,izg+1)*(1d0-ft1)
+         cmd1 = dum1*fz + dum2*(1d0-fz)
+         dum1 = 10d0**log_cmdSW_spec(2,itg2,izg  )*ft2 + 10d0**log_cmdSW_spec(2,itg2+1,izg  )*(1d0-ft2)
+         dum2 = 10d0**log_cmdSW_spec(2,itg2,izg+1)*ft2 + 10d0**log_cmdSW_spec(2,itg2+1,izg+1)*(1d0-ft2)
+         cmd2 = dum1*fz + dum2*(1d0-fz)
+         dfmdloss_spec(2) = cmd2 - cmd1
+!!$         if(myid==71.and.j==90)then
+!!$            write(*,'(A,4es15.7,I9)')'age ',age1,age2,zstar,10d0**log_met,izg
+!!$            write(*,'(A,5es15.7)')'SWD ',dfmdloss_spec(2)*FeoverSil/SioverSil&
+!!$                 &,cmd1*FeoverSil/SioverSil &
+!!$                 &,cmd2*FeoverSil/SioverSil &
+!!$                 &,cmd1,cmd2
+!!$         endif
+      endif
+   endif
+
+   do ich=1,nchem
+      ! mass loss fraction during [birth_time, birth_time+dteff]
+      dum1 = 10d0**log_cmSW_spec(ich,itg1,izg  )*ft1 + 10d0**log_cmSW_spec(ich,itg1+1,izg  )*(1d0-ft1)
+      dum2 = 10d0**log_cmSW_spec(ich,itg1,izg+1)*ft1 + 10d0**log_cmSW_spec(ich,itg1+1,izg+1)*(1d0-ft1)
+      cm1  = dum1*fz + dum2*(1d0-fz)
+      dum1 = 10d0**log_cmSW_spec(ich,itg2,izg  )*ft2 + 10d0**log_cmSW_spec(ich,itg2+1,izg  )*(1d0-ft2)
+      dum2 = 10d0**log_cmSW_spec(ich,itg2,izg+1)*ft2 + 10d0**log_cmSW_spec(ich,itg2+1,izg+1)*(1d0-ft2)
+      cm2  = dum1*fz + dum2*(1d0-fz)
+      dfmloss_spec(ich) = cm2 - cm1
+!!$      if(myid==71.and.j==90)then
+!!$         if(ich==3)write(*,'(A,3es15.7)')'SWM ',dfmloss_spec(ich),cm1,cm2
+!!$      endif
+   end do
+
+
+!777 format(f5.2,1x,f5.2,1x,5(e15.7,1x))
+!   write(*,777) log_age1, log_age2, dfmloss, dfmzloss, log_deloss_erg,ce1,ce2
+
+end subroutine cmp_stellar_wind_props_linearinterpol

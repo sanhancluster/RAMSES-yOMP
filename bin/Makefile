@@ -154,11 +154,11 @@ FFLAGS = -x f95-cpp-input $(DEFINES)
 
 # --- MPI, ifort syntax for NURION ------------------------------
 #F90 = mpiifort -Wl,-z,noexecstack $(OMPFLAG)
-F90 = mpiifort
+#F90 = mpiifort
 #FFLAGS = -cpp $(DEFINES) -fast -free -xMIC-AVX512 -align array64byte -DNOSYSTEM
 #FFLAGS = -cpp $(DEFINES) -O3 -free -align array64byte -DNOSYSTEM
 #FFLAGS = -cpp $(DEFINES) -O0 -traceback -check bounds -DNOSYSTEM -fpe0
-FFLAGS = -cpp $(DEFINES) -O3 -DNOSYSTEM
+#FFLAGS = -cpp $(DEFINES) -O3 -DNOSYSTEM
 
 #############################################################################
 MOD = mod
