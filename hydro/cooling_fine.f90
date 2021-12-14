@@ -11,8 +11,9 @@ subroutine cooling_fine(ilevel)
   !-------------------------------------------------------------------
   ! Compute cooling for fine levels
   !-------------------------------------------------------------------
-  integer::ncache,i,igrid,ngrid
+  integer::ncache,i,igrid,ngrid,ii
   integer,dimension(1:nvector),save::ind_grid
+  real(dp),dimension(1:ndust,1:4)::dM_dust_add
 
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
@@ -20,14 +21,23 @@ subroutine cooling_fine(ilevel)
   ! Operator splitting step for cooling source term
   ! by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(ngrid,ind_grid) schedule(static)
+  dM_dust_add=0d0
+!$omp parallel do private(ngrid,ind_grid) reduction(+:dM_dust_add) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
         ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
      end do
-     call coolfine1(ind_grid,ngrid,ilevel)
+     call coolfine1(ind_grid,ngrid,ilevel,dM_dust_add)
   end do
+
+  do ii=1,ndust
+     !!sum on every cell
+     dM_acc(ii)=dM_acc(ii)+dM_dust_add(ii,1)
+     dM_spu(ii)=dM_spu(ii)+dM_dust_add(ii,2)
+     dM_coa(ii)=dM_coa(ii)+dM_dust_add(ii,3)
+     dM_sha(ii)=dM_sha(ii)+dM_dust_add(ii,4)
+  enddo
 
   if((cooling.and..not.neq_chem).and.ilevel==levelmin.and.cosmo)then
 #ifdef grackle
@@ -48,7 +58,7 @@ end subroutine cooling_fine
 !###########################################################
 !###########################################################
 !###########################################################
-subroutine coolfine1(ind_grid,ngrid,ilevel)
+subroutine coolfine1(ind_grid,ngrid,ilevel,dM_dust_add)
   use amr_commons
   use hydro_commons
   use cooling_module
@@ -106,6 +116,8 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
   real(dp)::t0_coa,t0_sha,t_coa,t_sha                         ! Dust (YD) !!$dust_dev
   real(dp)::oneovertsha,oneovertcoa                           ! Dust (YD) !!$dust_dev
   integer::ilow,ihigh                                         ! Dust (YD)
+  real(dp),dimension(1:ndust,1:4)::dM_dust_add
+
 #ifdef RT
   integer::ii,ig,iNp,il
   real(kind=8),dimension(1:nvector):: ekk_new
@@ -241,6 +253,7 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
                        if(TRIM(chem_list(ich))=='Fe')write(*,'(A,I2,A,3es13.5,3I7)')'Zchem(',ich,'), Fe gas,dust,tot',Zchem(i,ich),mdustSil*FeoverSil/nH(i)/0.02,Zchem(i,ich)+mdustSil*FeoverSil/nH(i)/0.02,i,ind_leaf(i),myid
                        if(TRIM(chem_list(ich))=='Si')write(*,'(A,I2,A,3es13.5,3I7)')'Zchem(',ich,'), Si gas,dust,tot',Zchem(i,ich),mdustSil*SioverSil/nH(i)/0.02,Zchem(i,ich)+mdustSil*SioverSil/nH(i)/0.02,i,ind_leaf(i),myid
                        if(TRIM(chem_list(ich))=='O' )write(*,'(A,I2,A,3es13.5,3I7)')'Zchem(',ich,'), O  gas,dust,tot',Zchem(i,ich),mdustSil*OoverSil /nH(i)/0.02,Zchem(i,ich)+mdustSil*OoverSil /nH(i)/0.02,i,ind_leaf(i),myid
+                       write(*,*) dM_dust_add
 !!$                       stop
                     endif
                  enddo
@@ -572,7 +585,7 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
      ! Compute net cooling at constant nH
      if(cooling.and..not.neq_chem)then
 #if NCHEM>0
-           call solve_cooling(nH,T2,Zsolar,Zchem,fdust,sigma,boost,dtcool,delta_T2,nleaf,ilevel)
+           call solve_cooling(nH,T2,Zsolar,Zchem,fdust,sigma,boost,dtcool,delta_T2,nleaf,ilevel,dM_dust_add)
 #else
            call solve_cooling(nH,T2,Zsolar,fdust,sigma,boost,dtcool,delta_T2,nleaf,ilevel)
 #endif

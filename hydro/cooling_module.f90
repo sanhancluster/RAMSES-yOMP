@@ -484,7 +484,7 @@ subroutine compute_J0min(h,omegab,omega0,omegaL,J0min_in)
 end subroutine compute_J0min
 !=======================================================================
 #if NCHEM>0
-subroutine solve_cooling(nH,T2,zsolar,zchem,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
+subroutine solve_cooling(nH,T2,zsolar,zchem,fdust,sigma,boost,dt,deltaT2,ncell,ilevel,dM_dust_add)
 #else
 subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
 #endif
@@ -554,6 +554,7 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
   integer::i,i_T2,iter,n,n_active,ii,jj,jj1,jj2
   integer,dimension(1:ncell)::ind,i_nH
   logical::tau_negative
+  real(dp),dimension(1:ndust,1:4)::dM_dust_add
 
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
   year=3600_dp*24_dp*365_dp
@@ -1499,11 +1500,11 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
            rhoDT=0.0d0
            do ii=1,ndust
               !!sum on every cell
-              dM_acc(ii)=dM_acc(ii)+drhoD_acc(ii)/scale_nH*vol_loc !code units
-              dM_spu(ii)=dM_spu(ii)+drhoD_spu(ii)/scale_nH*vol_loc !code units
-              dM_coa(ii)=dM_coa(ii)+drhoD_coa(ii)/scale_nH*vol_loc !code units
-              dM_sha(ii)=dM_sha(ii)+drhoD_sha(ii)/scale_nH*vol_loc !code units
-              rhoDT=rhoDT+ fdust(ind(i),ii)*key2real(ii)*nh(ind(i)) ! Total DTG over all elements and sizes (not used anywhere...)
+              dM_dust_add(ii,1)=dM_dust_add(ii,1)+drhoD_acc(ii)/scale_nH*vol_loc !code units
+              dM_dust_add(ii,2)=dM_dust_add(ii,2)+drhoD_spu(ii)/scale_nH*vol_loc !code units
+              dM_dust_add(ii,3)=dM_dust_add(ii,3)+drhoD_coa(ii)/scale_nH*vol_loc !code units
+              dM_dust_add(ii,4)=dM_dust_add(ii,4)+drhoD_sha(ii)/scale_nH*vol_loc !code units
+              !rhoDT=rhoDT+ fdust(ind(i),ii)*key2real(ii)*nh(ind(i)) ! Total DTG over all elements and sizes (not used anywhere...)
            enddo
            if(metal_gasonly) then
               ! YD WARNING: do something here for the chemical composition of dust...
