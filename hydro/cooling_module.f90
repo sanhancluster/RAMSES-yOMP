@@ -676,7 +676,7 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
   do while(n>0)
 
      iter=iter+1
-     if (iter > 500) then
+     if (iter > 5000) then
         write(*,*) 'Too many iterations in solve_cooling',iter,n
         do i=1,n
            write(*,*)i,tau(ind(i)),T2(ind(i)),nH(ind(i)),i_nH(ind(i))
