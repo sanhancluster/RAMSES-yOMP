@@ -21,12 +21,12 @@ RT = 0
 DICE = 0
 REFMASK = 1
 LONGINT = 0
-QUADHILBERT = 0
+QUADHILBERT = 1
 # Set to 1 to use old MPI include statements instead of more recent `use mpi`.
 USE_OLD_MPI_INCLUDE = 0
 EXEC = ramses
 # Activate OpenMP
-OPENMP = 1
+OPENMP = 0
 #############################################################################
 # Patches to include (without DICE)
 #PATCH = ../patch/AGNSFSNpatch/AGNspinRT:../patch/AGNSFSNpatch/sfsn
@@ -117,8 +117,8 @@ PATCH := $(subst $(SPACE),:,$(PATCH))
 #FFLAGS = -cpp $(DEFINES) -DWITHOUTMPI
 
 # --- MPI, gfortran syntax ------------------------------
-F90 = mpif90 -frecord-marker=4 -O3 -ffree-line-length-none -g -fbacktrace $(OMPFLAG)
-FFLAGS = -x f95-cpp-input $(DEFINES)
+#F90 = mpif90 -frecord-marker=4 -O3 -ffree-line-length-none -g -fbacktrace $(OMPFLAG)
+#FFLAGS = -x f95-cpp-input $(DEFINES)
 
 # --- MPI, gfortran DEBUG syntax ------------------------------
 #F90 = mpif90 -frecord-marker=4 -ffree-line-length-none -fbacktrace -g -O0 -fbounds-check -Wuninitialized -Wall $(OMPFLAG)
@@ -129,8 +129,8 @@ FFLAGS = -x f95-cpp-input $(DEFINES)
 #FFLAGS = -Mpreprocess $(DEFINES)
 
 # --- MPI, ifort syntax ------------------------------
-#F90 = mpiifort $(OMPFLAG)
-#FFLAGS = -cpp -O3 -fpp -xAVX $(DEFINES) -DNOSYSTEM
+F90 = mpiifort $(OMPFLAG)
+FFLAGS = -cpp -O3 -fpp -xAVX $(DEFINES) -DNOSYSTEM
 
 # --- MPI, ifort syntax, additional checks -----------
 #F90 = mpiifort $(OMPFLAG)
