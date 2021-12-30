@@ -762,7 +762,7 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
         endif
 
 !!$        if(ind(i)==114.and.nh(ind(i))>1.24000E+01.and.nh(ind(i))< 1.24004E+01)then
-        if(ind(i)==47.and.nh(ind(i))>7.84279E+00.and.nh(ind(i))<7.84283E+00)then
+        if(ind(i)==72.and.nh(ind(i))>4.959E-02.and.nh(ind(i))<4.961E-02)then
 !!$           if(ind(i)==1)then
            okinfocell=.true.
         else
@@ -1404,11 +1404,11 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
 
                  if(.not.okdust)then !!if still in the do while (rk4)
 !!$                    write(*,'(A,2I7,2es13.5)')'error_rel (2)',ii,icount(ii),error_rel,errmax
-                    if(error_rel.le.errmax.and.error_rel.ge.0.0d0) then
+                    if(error_rel.le.errmax.and.error_rel.ge.0.0d0.or.dtloc/dt<=1d0/countmax) then
                        okdt_bin(ii)=.true.
                        if(error_rel.le.0.5d0*errmax)dtloc_bin(ii)=dtloc*2.0d0 !!new timestep
                     endif
-                    if(error_rel.gt.errmax.or.error_rel.lt.0.0d0)dtloc_bin(ii)=0.5d0*dtloc
+                    if(error_rel.gt.errmax.or.error_rel.lt.0.0d0.and.dtloc/dt>1d0/countmax)dtloc_bin(ii)=0.5d0*dtloc
                     icount(ii)=icount(ii)+1
                  endif !! still in rk4
 

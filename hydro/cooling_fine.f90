@@ -99,7 +99,7 @@ subroutine coolfine1(ind_grid,ngrid,ilevel,dM_dust_add)
   real(dp)::rhoG0,rhogZ0,rhoZ0                                ! Dust (YD)
   real(dp)::rhoGZ00,dtremain,dtloc,halfdtloc                  ! Dust (YD)
   real(dp),dimension(1:ndust)::dtloc_bin                      !!$dust_dev
-  integer ::countmax=100000                                    ! Dust (YD)
+  integer ::countmax=10000                                    ! Dust (YD)
   logical ::okdust                                            ! Dust (YD)
   logical ,dimension(1:ndust)::okdt_bin                       !!$dust_dev
   real(dp),dimension(1:ndust)::drhoD,rhoD,rhoD0               !!$dust_dev
