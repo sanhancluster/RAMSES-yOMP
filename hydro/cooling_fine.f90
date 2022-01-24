@@ -896,7 +896,7 @@ subroutine coolfine1(ind_grid,ngrid,ilevel,dM_dust_add)
 
               okdt_bin=.false.
               do ii=1,ndust
-                 if(rhoD0(ii)>0.)then
+                 if(rhoD0(ii)>1d-20)then
                     error_rel1=abs(drhoD(ii))/MIN(rhoD0(ii),rhoD(ii))
                     den0=(1d0-rhoD0(ii)/rhoZ0)*rhoD0(ii)
                     den =(1d0-rhoD(ii) /rhoZ0)*rhoD(ii)

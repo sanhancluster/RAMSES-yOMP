@@ -1387,7 +1387,7 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
 
               okdt_bin=.false.
               do ii=jj1,jj2
-                 if(rhoD0(ii)>0.)then
+                 if(rhoD0(ii)>1d-20)then
                     error_rel1=abs(drhoD(ii))/MIN(rhoD0(ii),rhoD(ii))
 !!$                    write(*,'(A,2I7,2es13.5)')'error_rel (1)',ii,icount(ii),rhoD0(ii),error_rel1
                     den0=(1d0-rhoD0(ii)/rhoZ0(ii))*rhoD0(ii)
