@@ -2059,6 +2059,10 @@ subroutine SNII_yield (zp_star, ej_m, ej_Z, ej_D, ej_chem, ej_chemD)
   log_SNII_Si=(/-2.12155986,-2.13799171,-2.18471670,-2.38103539,-2.38103538/)
   log_SNII_S =(/-2.47962835,-2.51751957,-2.56050127,-2.73642309,-2.73642306/)
   log_SNII_Fe=(/-2.36627148,-2.34970084,-2.32108920,-2.24041648,-2.24041646/)
+  if(dust)then
+     log_SNII_Dust   = (/-1.64239454, -1.66750928, -1.63063328, -1.5918899 , -1.5918899 /)
+     log_SNII_C_Dust = (/-1.92971473, -1.96882311, -1.94775635, -1.9249796 , -1.9249796 /)
+     log_SNII_Si_Dust= (/-2.74550454, -2.75600095, -2.70395892, -2.6507137 , -2.6507137 /)
   endif
   if(snyield_model == 1)then
   ! These are the numbers calculated from YD Stellar Yields for the SNII+pre-SNII phase
