@@ -964,34 +964,6 @@ subroutine cmp_stellar_wind_props_linearinterpol (birth_time,dteff, zstar,dfmlos
 !!$      endif
    end do
 
-   do ich=1,nchem
-      if(TRIM(chem_list(ich))=='C' )dc=dfmloss_spec(ich)-dfmdloss_spec(1)
-      if(TRIM(chem_list(ich))=='Mg')dc=dfmloss_spec(ich)-dfmdloss_spec(2)*MgoverSil
-      if(TRIM(chem_list(ich))=='Fe')dc=dfmloss_spec(ich)-dfmdloss_spec(2)*FeoverSil
-      if(TRIM(chem_list(ich))=='Si')dc=dfmloss_spec(ich)-dfmdloss_spec(2)*SioverSil
-      if(TRIM(chem_list(ich))=='O' )dc=dfmloss_spec(ich)-dfmdloss_spec(2)* OoverSil
-      if(dc < 0d0) then
-         write(*,*)'Error on stellar_winds_fine'
-         write(*,*) ich, dc
-         write(*,*) dfmloss_spec(ich), dfmdloss_spec(1), dfmdloss_spec(2)
-         write(*,*) age1, age2, zstar
-         write(*,*) itg1, izg, ft1, ft2, fz
-
-         dum1 = 10d0**log_cmSW_spec(ich,itg1,izg  )*ft1 + 10d0**log_cmSW_spec(ich,itg1+1,izg  )*(1d0-ft1)
-         dum2 = 10d0**log_cmSW_spec(ich,itg1,izg+1)*ft1 + 10d0**log_cmSW_spec(ich,itg1+1,izg+1)*(1d0-ft1)
-         write(*,*) dum1, dum2
-
-         cm1  = dum1*fz + dum2*(1d0-fz)
-         dum1 = 10d0**log_cmSW_spec(ich,itg2,izg  )*ft2 + 10d0**log_cmSW_spec(ich,itg2+1,izg  )*(1d0-ft2)
-         dum2 = 10d0**log_cmSW_spec(ich,itg2,izg+1)*ft2 + 10d0**log_cmSW_spec(ich,itg2+1,izg+1)*(1d0-ft2)
-         cm2  = dum1*fz + dum2*(1d0-fz)
-
-         write(*,*) dum1, dum2
-         write(*,*) cm1, cm2
-
-      end if
-   enddo
-
 !777 format(f5.2,1x,f5.2,1x,5(e15.7,1x))
 !   write(*,777) log_age1, log_age2, dfmloss, dfmzloss, log_deloss_erg,ce1,ce2
 
