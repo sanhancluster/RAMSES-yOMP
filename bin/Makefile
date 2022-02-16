@@ -12,7 +12,7 @@ METALS = 1
 NCHEM = 9
 NDUST = 4
 #Extra variables beyond those required by dimensions, or listed above
-NVAR_EXTRA = 0
+NVAR_EXTRA = 1
 SOLVER = hydro
 #############################################################################
 # Options

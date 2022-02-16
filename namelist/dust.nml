@@ -1,0 +1,210 @@
+&RUN_PARAMS
+cosmo=.true.
+pic=.true.
+poisson=.true.
+hydro=.true.
+verbose=.false.
+debug=.false.
+ordering='hilbert'
+nremap=10
+nsubcycle=1,1,1,30*2
+nrestart=-1
+!nrestart_quad=26
+ncontrol=1
+sink=.true.
+sinkprops=.true.
+!exact_timer=.true.
+magic_number=20
+!nthr_part=4
+nchunk=1
+sinkprops_dir='SINKPROPS/'
+!remap_pscalar=6,7,8,9,10,11,12,13,14,16,-15
+/
+
+&OUTPUT_PARAMS
+output=.true.
+!foutput=100
+noutput=91
+aout=0.06579732684981607, 0.08678447813736885, 0.10548241579432437, 0.12265610401828572, 0.13871292364071708, 0.15390260084585558, 0.16839233559821104, 0.18230112622285993, 0.195717542248692, 0.2087098406522859, 0.2213320712789953, 0.23362801607958816, 0.24563379475874272, 0.25737967646037124, 0.26889139448603505, 0.28019104899188785, 0.29129784518416924, 0.30222860579522615, 0.3129981955937595, 0.323619846480391, 0.33410540821668716, 0.34446555155192043, 0.35470995890445906, 0.364847440755349, 0.3748860534105298, 0.384833200894785, 0.3946957085518195, 0.4044799054906484, 0.4141916520154827, 0.4238364292054394, 0.4334193477004636, 0.4429452030386011, 0.45241849706397064, 0.46184347397066294, 0.4712241480868506, 0.48056430748452333, 0.48986755386300485, 0.49913731195857447, 0.5083768366955118, 0.5175892419774322, 0.5267774977998343, 0.5359444468703237, 0.5450928241178487, 0.5542252427366742, 0.5633442357010086, 0.5724522270032211, 0.5815515604385757, 0.5906444922957619, 0.5997332253765713, 0.6088198679065026, 0.6179064840447577, 0.6269950594803115, 0.6360875371280804, 0.6451858064053528, 0.6542916918084323, 0.6634069945272325, 0.6725334520766336, 0.6816727700839542, 0.6908266088146395, 0.6999966078705121, 0.7091843538729364, 0.7183914100731169, 0.7276193104925115, 0.7368695621964588, 0.7461436320238269, 0.7554429795899988, 0.7647690290248069, 0.7741231844167973, 0.7835068260375652, 0.7929213145904803, 0.8023680044682654, 0.8118482043353183, 0.8213632389991914, 0.8309143881239751, 0.8405029314064341, 0.8501301328880058, 0.8597972416259441, 0.8695054912850018, 0.8792561114063101, 0.8890503083799135, 0.8988892890360242, 0.9087742406959468, 0.9187063439356058, 0.9286867820383713, 0.9387167123448116, 0.9487972935128517, 0.9589296756196588, 0.9691150051005384, 0.9793544111322463, 0.9896490369457631, 1.0
+!wallstep=3000
+!foutput_timer=10
+!walltime_hrs=47.
+!dump_stop=.true.
+!early_stop_hrs=6.
+/
+
+&INIT_PARAMS
+filetype='grafic'
+initfile(1)='./ic/level_008'
+initfile(2)='./ic/level_009'
+initfile(3)='./ic/level_010'
+omega_b=0.04897
+/
+
+&AMR_PARAMS
+levelmin=8
+levelmax=19
+ngridmax=800000
+npartmax=4000000
+nexpand=1,1
+nsinkmax=500
+/
+
+&POISSON_PARAMS
+epsilon=1.d-4
+cg_levelmin=11           !Ideally this parameter must be (coarse grid level
+                         !of the zoom region) + 2
+cic_levelmax=16
+npartmax_rho=10000
+/
+
+&TRACER_PARAMS
+MC_tracer=.true.         !activate Monte Carlo tracer scheme (Cadiou+ 2019)
+tracer=.true.            !activate tracer particles
+tracer_feed_fmt='inplace'!place initial tracer particles based on cell density (only for zoom-in cells)
+tracer_per_cell=0.125
+/
+
+&HYDRO_PARAMS
+gamma=1.6666667
+courant_factor=0.8
+slope_type=1
+pressure_fix=.true.
+scheme='muscl'
+riemann='hllc'
+beta_fix=0.0
+checkhydro=.false.
+frozen=.false.
+/
+
+&FEEDBACK_PARAMS
+yield=0.05                !SN metal yield
+log_mfb=.false.           !activate MFB log
+mechanical_feedback=.true.!>0: activate mechanical SN feedback 2: activate Kimm+ 2014 feedback
+mechanical_geen=.true.    !activate Geen boost (Geen+ ????)
+t_sne=5d0                 !SN delay time (Myr) - previously t_delay
+snII_freq=0.045           !SNII energy output per mass (1E51 ergs/Msol)
+stellar_winds=.true.
+stellar_winds_file='../s99org_cb_pagb_ydust2.dat'
+!stellar_winds_file='../ramses_swind_Sikey.dat'
+use_initial_mass=.true.
+no_wind_energy=.false.
+SNII_zdep_yield=.true.
+snIa=.true.
+chem_list='H ','O ','Fe','Mg','C ','N ','Si','S ','D '
+snyield_model=1
+/
+
+&COOLING_PARAMS
+cooling=.true.           !activate cooling
+metal=.true.             !activate metal
+haardt_madau=.true.      !UV background model
+self_shielding=.true.    !activate self-shelding
+z_ave=1d-3               !average metal abundance
+z_reion=10.              !reionization redshift
+neq_chem=.false.         !non-equilibrium cooling
+
+!!! Dust !!!
+dust=.true.              !activate dust formation and destruction
+dust_chem=.true.         !activate chemical compositions for dust
+dust_cooling=.true.      !activate dust cooling
+dust_dest_within_cool=.true.
+dust_sputtering=.true.
+dust_accretion=.true.
+dust_coagulation=.true.
+dust_shattering=.true.
+dust_SNdest=.true.
+metal_gasonly=.true.
+dust_acc_neglected_large_bin=.false.
+sticking_coef='subgrid'
+thermal_sputtering='tsai'
+dust_SNdest_eff=0.1d0
+DTMini=1d-1
+nh_coa=-1.0
+asize=0.005d0,0.1d0,0.005d0,0.1d0
+sgrain=2.2d0,2.2d0,3.3d0,3.3d0
+t_sputter_ref=1d5
+t_growth_ref=4d5
+Sconstant=0.333333333d0  ! sticking coef=1/3
+t_sha_ref=5.41d7
+t_coa_ref=5.42d5
+!dustdebug=.true.
+/
+
+&SF_PARAMS
+!Keeped for for turbulent SF (Kimm 2017)
+!star_maker='federrath3'
+!n_gmc=10d0
+!eta_sn: fraction of stellar mass that turns into SN
+!M_SNII: mean mass of SN progenitors
+
+t_star=0.632456          !SF timescale (Gyr)
+n_star=5.               !SF denstiy threshold (H/cc), Combined with n_gmc
+fstar_min=0.5             !adjust star mass by this fraction
+T2_star=0.1              !typical ISM polytropic temperature
+g_star=1.0               !typical ISM polytropic index
+sf_virial=.false.
+!star_imf='chabrier'      !IMF model, sets eta_sn, M_SNII
+sf_model=6               !Kimm+ 2017 SF model
+eps_star=0.5             !base SF efficiency (was not settable in NH!)
+write_stellar_densities=.true.
+/
+
+&SMBH_PARAMS
+sink_AGN=.true.          !activate AGN feedback
+
+!!! Drag !!!
+drag=.true.              !activate gas drag force
+drag_part=.true.         !activate particle drag force
+boost_drag=0d0           !boost power factor the drag force
+boost_drag_part=1d0
+d_boost=5.               !Density threshold (H/cc) in the boost factor for gas accretion and drag force (Booth & Schaye 2009)
+                         !set d_boost ~ 10/(dx/40pc) (Maxime's suggestion)
+vrel_merge=.true.        !SMBH merge criterion based on escape velocity
+rmerge=4d0               !number of dx_min to allow for BH coalescence
+weighted_drag=.false.    !use weighted kernel for computing gas drag force
+adfmax=10.
+
+!!! Accretion !!!
+bondi=.true.             !activate Bondi-Hoyle accretion rate
+boost_acc=0d0            !boost power factor for the accretion rate 0.: no boost
+!sigmav_max=50d0          !maximum relative velocity in the Bondi accretion rate in km/s
+point_mass_sink=.true.	 !deposit the mass on the central cloud (for potential)
+
+!!! Feedback !!!
+spin_bh=.true.           !activate SMBH spin evolution (Dubois et al. 2014)
+mad_jet=.true.           !acrivate MAD jet model (McKinney et al. 2012)
+eAGN_K=1d0               !AGN energy efficiency in radio mode
+eAGN_T=0.05d0           !AGN energy efficiency in qusasar mode
+X_floor=1d-2             !Eddington ratio threshold between radio and quasar mode
+T2maxAGN=3d10            !maximum temperature increase due to AGN feedback (K)
+TAGN=0.0                 !temperature increase before energy release (K)
+rAGN_dx=2.0d0
+
+!!! Seeding !!!
+n_sink=100.
+ns_sink=2500.
+Mseed=1d5                !mass of the initial sink particle (Msun)
+r_gal=2d0               !radius from one another that inhibits SMBH formation (kpc)
+r_bhr=2d0
+force_exact_mseed=.true.
+sig_sink=50.
+t_que=50d0
+stellar_velocity_seed=.true.
+ns_sink_scaled=.true.
+/
+
+&REFINE_PARAMS
+m_refine=30*8.
+!level_zoom=7
+!rzoom=0.07               !radius to fill refinement parameter inside region
+ivar_refine=20
+var_cut_refine=0.01
+mass_cut_refine=1.25e-9
+interpol_var=1
+interpol_type=0
+sink_refine=.true.
+jeans_refine=30*1
+dens_jeans=5.             !name changed since update!
+trans_smooth=0.025
+/
