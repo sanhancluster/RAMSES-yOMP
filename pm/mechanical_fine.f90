@@ -2064,7 +2064,7 @@ subroutine SNII_yield (zp_star, ej_m, ej_Z, ej_D, ej_chem, ej_chemD)
      log_SNII_C_Dust = (/-2.13265801, -2.25493418, -2.1089341 , -1.9249796 , -1.9249796 /)
      log_SNII_Si_Dust= (/-2.74550454, -2.75600095, -2.70395892, -2.6507137 , -2.6507137 /)
   endif
-  if(snyield_model == 1)then
+  elseif(snyield_model == 1)then
   ! These are the numbers calculated from YD Stellar Yields for the SNII+pre-SNII phase
   ! Charbier IMF [0.01,100]Msun, failed SNII>30 Msun, low-high mass@8Msun
   ! Limongi&Chieffi18 yields with Prantzos IDROV + Karakas10
