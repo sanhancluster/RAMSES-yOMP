@@ -929,6 +929,7 @@ subroutine cmp_stellar_wind_props_linearinterpol (birth_time,dteff, zstar,dfmlos
          dum2 = 10d0**log_cmdSW_spec(1,itg2,izg+1)*ft2 + 10d0**log_cmdSW_spec(1,itg2+1,izg+1)*(1d0-ft2)
          cmd2 = dum1*fz + dum2*(1d0-fz)
          dfmdloss_spec(1) = MAX(cmd2 - cmd1, 0d0)
+         if(cmd1 < 1d-11 .and. cmd2 < 1d-11) dfmdloss_spec(1) = 0d0
          ! silicate
          dum1 = 10d0**log_cmdSW_spec(2,itg1,izg  )*ft1 + 10d0**log_cmdSW_spec(2,itg1+1,izg  )*(1d0-ft1)
          dum2 = 10d0**log_cmdSW_spec(2,itg1,izg+1)*ft1 + 10d0**log_cmdSW_spec(2,itg1+1,izg+1)*(1d0-ft1)
@@ -937,6 +938,7 @@ subroutine cmp_stellar_wind_props_linearinterpol (birth_time,dteff, zstar,dfmlos
          dum2 = 10d0**log_cmdSW_spec(2,itg2,izg+1)*ft2 + 10d0**log_cmdSW_spec(2,itg2+1,izg+1)*(1d0-ft2)
          cmd2 = dum1*fz + dum2*(1d0-fz)
          dfmdloss_spec(2) = MAX(cmd2 - cmd1, 0d0)
+         if(cmd1 < 1d-11 .and. cmd2 < 1d-11) dfmdloss_spec(2) = 0d0
 !!$         if(myid==71.and.j==90)then
 !!$            write(*,'(A,4es15.7,I9)')'age ',age1,age2,zstar,10d0**log_met,izg
 !!$            write(*,'(A,5es15.7)')'SWD ',dfmdloss_spec(2)*FeoverSil/SioverSil&
