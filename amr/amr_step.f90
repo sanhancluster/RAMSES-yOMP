@@ -29,11 +29,13 @@ recursive subroutine amr_step(ilevel,icount)
   real(dp)::scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2
 
   ! Conversion factor from user units to cgs units
-  call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
   if(numbtot(1,ilevel)==0)return
 
   if(verbose)write(*,999)icount,ilevel
 
+  call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
+
+  if(checkhydro)call check_uold_unew(ilevel,0)
   !-------------------------------------------
   ! Make new refinements and update boundaries
   !-------------------------------------------
@@ -269,8 +271,11 @@ recursive subroutine amr_step(ilevel,icount)
                                call timer('star - feedback','start')
 
      if(hydro.and.star.and. mechanical_feedback) then
+        if(checkhydro)call check_uold_unew(ilevel,10)
         call mechanical_feedback_fine(ilevel,icount)
+        if(checkhydro)call check_uold_unew(ilevel,11)
         if (snIa) call mechanical_feedback_snIa_fine(ilevel,icount)
+        if(checkhydro)call check_uold_unew(ilevel,12)
 
 #ifdef SOLVERmhd
         do ivar=1,nvar+3
@@ -398,9 +403,11 @@ recursive subroutine amr_step(ilevel,icount)
   endif
 #endif
 
+  if(checkhydro)call check_uold_unew(ilevel,20)
   ! Stellar winds from stars
                                call timer('star - feedback','start')
   if(hydro.and.star.and.stellar_winds) call stellar_winds_fine(ilevel)
+  if(checkhydro)call check_uold_unew(ilevel,21)
 
 
 
@@ -410,12 +417,14 @@ recursive subroutine amr_step(ilevel,icount)
   !-----------
   if((hydro).and.(.not.static_gas))then
 
+     if(checkhydro)call check_uold_unew(ilevel,30)
      ! Hyperbolic solver
                                call timer('hydro - godunov','start')
-     call godunov_fine(ilevel)
+     if(.not.frozen)call godunov_fine(ilevel)
 
      ! Reverse update boundaries
                                call timer('hydro - rev ghostzones','start')
+     if(checkhydro)call check_uold_unew(ilevel,31)
 
 
 #ifdef SOLVERmhd
@@ -488,10 +497,12 @@ recursive subroutine amr_step(ilevel,icount)
      if(ilevel==levelmin) call output_rt_stats
   endif
 #else
+  if(checkhydro)call check_uold_unew(ilevel,40)
                                call timer('cooling','start')
   if((hydro).and.(.not.static_gas)) then
     if(neq_chem.or.cooling.or.T2_star>0.0)call cooling_fine(ilevel)
   endif
+  if(checkhydro)call check_uold_unew(ilevel,41)
 #endif
 
   !---------------
@@ -516,8 +527,10 @@ recursive subroutine amr_step(ilevel,icount)
   !----------------------------------
   ! Star formation in leaf cells only
   !----------------------------------
+  if(checkhydro)call check_uold_unew(ilevel,50)
                                call timer('star - formation','start')
   if(hydro.and.star.and.(.not.static_gas))call star_formation(ilevel)
+  if(checkhydro)call check_uold_unew(ilevel,51)
 
   ! Compute Bondi-Hoyle accretion parameters
                                call timer('sinks - accretion','start')
@@ -590,7 +603,66 @@ recursive subroutine amr_step(ilevel,icount)
      call reset_tracer_move_flag(ilevel)
   end if
 
+#if NDUST>0
+  if(ilevel==levelmin) then
+  if(dtnew(ilevel).gt.0.0d0)then
+#ifndef WITHOUTMPI
+     call MPI_ALLREDUCE(dM_acc,dM_acc_all,ndust,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,mpi_err)
+     dM_acc=dM_acc_all
+     call MPI_ALLREDUCE(dM_spu,dM_spu_all,ndust,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,mpi_err)
+     dM_spu=dM_spu_all
+     call MPI_ALLREDUCE(dM_coa,dM_coa_all,ndust,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,mpi_err)
+     dM_coa=dM_coa_all
+     call MPI_ALLREDUCE(dM_sha,dM_sha_all,ndust,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,mpi_err)
+     dM_sha=dM_sha_all
+     call MPI_ALLREDUCE(dM_SNd,dM_SNd_all,ndust,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,mpi_err)
+     dM_SNd=dM_SNd_all
+     call MPI_ALLREDUCE(dM_SNd_Ia,dM_SNd_Ia_all,ndust,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,mpi_err)
+     dM_SNd_Ia=dM_SNd_Ia_all
+     call MPI_ALLREDUCE(dM_prod,dM_prod_all,ndust,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,mpi_err)
+     dM_prod=dM_prod_all
+     call MPI_ALLREDUCE(dM_prod_Ia,dM_prod_Ia_all,ndust,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,mpi_err)
+     dM_prod_Ia=dM_prod_Ia_all
+     call MPI_ALLREDUCE(dM_prod_SW,dM_prod_SW_all,ndust,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,mpi_err)
+     dM_prod_SW=dM_prod_SW_all
+#endif
+     if (myid==1) then
+        write(*,998) 'dM Acc        =', dM_acc*(scale_d*scale_l**3) /(dtnew(levelmin)*scale_t)
+        write(*,998) 'dM Spu        =', dM_spu*(scale_d*scale_l**3) /(dtnew(levelmin)*scale_t)
+        write(*,998) 'dM Coa        =', dM_coa*(scale_d*scale_l**3) /(dtnew(levelmin)*scale_t)
+        write(*,998) 'dM Sha        =', dM_sha*(scale_d*scale_l**3) /(dtnew(levelmin)*scale_t)
+        write(*,998) 'dM SNd  (II)  =', dM_SNd*(scale_d*scale_l**3) /(dtnew(levelmin)*scale_t)
+        if(snia)write(*,998) 'dM SNd  (Ia)  =', dM_SNd_Ia*(scale_d*scale_l**3) /(dtnew(levelmin)*scale_t)
+        write(*,998) 'dM Prod (II)  =', dM_prod*(scale_d*scale_l**3)/(dtnew(levelmin)*scale_t)
+        if(snia)write(*,998) 'dM Prod (Ia)  =', dM_prod_Ia*(scale_d*scale_l**3)/(dtnew(levelmin)*scale_t)
+        write(*,998) 'dM Prod (SW)  =', dM_prod_SW*(scale_d*scale_l**3)/(dtnew(levelmin)*scale_t)
+        write(*,*) 'time :', t*scale_t
+        write(*,*) 'dt   :', dtnew(levelmin)*scale_t
+     endif
+     dM_acc=0.0d0
+     dM_spu=0.0d0
+     dM_coa=0.0d0
+     dM_sha=0.0d0
+     dM_SNd=0.0d0
+     dM_SNd_Ia=0.0d0
+     dM_prod=0.0d0
+     dM_prod_IA=0.0d0
+     dM_prod_SW=0.0d0
+  endif
+  endif
+#endif
 
+  if(checkhydro)call check_uold_unew(ilevel,1000)
+
+#if NDUST==1
+998 format(A,es14.6)
+#endif
+#if NDUST==2
+998 format(A,2es14.6)
+#endif
+#if NDUST==4
+998 format(A,4es14.6)
+#endif
 999 format(' Entering amr_step(',i1,') for level',i2)
 
 end subroutine amr_step

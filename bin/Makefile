@@ -26,7 +26,7 @@ QUADHILBERT = 1
 USE_OLD_MPI_INCLUDE = 0
 EXEC = ramses
 # Activate OpenMP
-OPENMP = 1
+OPENMP = 0
 #############################################################################
 # Patches to include (without DICE)
 #PATCH = ../patch/AGNSFSNpatch/AGNspinRT:../patch/AGNSFSNpatch/sfsn

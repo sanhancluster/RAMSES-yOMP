@@ -11,8 +11,9 @@ subroutine cooling_fine(ilevel)
   !-------------------------------------------------------------------
   ! Compute cooling for fine levels
   !-------------------------------------------------------------------
-  integer::ncache,i,igrid,ngrid
+  integer::ncache,i,igrid,ngrid,ii
   integer,dimension(1:nvector),save::ind_grid
+  real(dp),dimension(1:ndust,1:4)::dM_dust_add
 
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
@@ -20,14 +21,23 @@ subroutine cooling_fine(ilevel)
   ! Operator splitting step for cooling source term
   ! by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(ngrid,ind_grid) schedule(static)
+  dM_dust_add=0d0
+!$omp parallel do private(ngrid,ind_grid) reduction(+:dM_dust_add) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
         ind_grid(i)=active(ilevel)%igrid(igrid+i-1)
      end do
-     call coolfine1(ind_grid,ngrid,ilevel)
+     call coolfine1(ind_grid,ngrid,ilevel,dM_dust_add)
   end do
+
+  do ii=1,ndust
+     !!sum on every cell
+     dM_acc(ii)=dM_acc(ii)+dM_dust_add(ii,1)
+     dM_spu(ii)=dM_spu(ii)+dM_dust_add(ii,2)
+     dM_coa(ii)=dM_coa(ii)+dM_dust_add(ii,3)
+     dM_sha(ii)=dM_sha(ii)+dM_dust_add(ii,4)
+  enddo
 
   if((cooling.and..not.neq_chem).and.ilevel==levelmin.and.cosmo)then
 #ifdef grackle
@@ -48,7 +58,7 @@ end subroutine cooling_fine
 !###########################################################
 !###########################################################
 !###########################################################
-subroutine coolfine1(ind_grid,ngrid,ilevel)
+subroutine coolfine1(ind_grid,ngrid,ilevel,dM_dust_add)
   use amr_commons
   use hydro_commons
   use cooling_module
@@ -70,7 +80,7 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
   integer,dimension(1:nvector)::ind_grid
   !-------------------------------------------------------------------
   !-------------------------------------------------------------------
-  integer::i,ind,iskip,idim,nleaf,nx_loc
+  integer::i,ii,ind,iskip,idim,nleaf,nx_loc,ich
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
   real(kind=8)::dtcool,nISM,nCOM,damp_factor,cooling_switch,t_blast
   real(dp)::polytropic_constant
@@ -80,17 +90,34 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
   real(kind=8),dimension(1:nvector)::T2_new
 #endif
   real(kind=8),dimension(1:nvector)::T2min,Zsolar,boost
+  real(kind=8),dimension(1:nvector,1:nchem)::Zchem
   real(dp),dimension(1:3)::skip_loc
   real(kind=8)::dx,dx_loc,scale,vol_loc
-  real(dp)::t0_dest,t0_acc,year,t_acc,t_des,d,T6,rhoD,rhoD0 ! Dust (YD)
-  real(dp)::error_rel,error_rel1,error_rel2,den0,den        ! Dust (YD)
-  real(dp)::rhoG0,rhogZ0,rhoZ0,drhoD                        ! Dust (YD)
-  real(dp)::rhoGZ00,rhoD00,halfdtloc                        ! Dust (YD)
-  real(dp)::oneovertdes,oneovertacc,dtremain,dtloc          ! Dust (YD)
-  integer ::icount,countmax                                 ! Dust (YD)
-  logical ::okdust                                          ! Dust (YD)
-  real(dp)::k1,k2,k3,k4,rhoD0k1,rhoD0k2,rhoD0k3             ! Dust (YD)
-  real(kind=8),dimension(1:nvector)::fdust                  ! Dust (YD)
+  real(dp)::mdust,mdustC,mdustSil,sigma2                      ! Dust (YD)
+  real(dp)::year,d,T6,myT2,rhoDT0,rhoDT00,rhoDT               ! Dust (YD)
+  real(dp)::error_rel,error_rel1,error_rel2,den0,den          ! Dust (YD)
+  real(dp)::rhoG0,rhogZ0,rhoZ0                                ! Dust (YD)
+  real(dp)::rhoGZ00,dtremain,dtloc,halfdtloc                  ! Dust (YD)
+  real(dp),dimension(1:ndust)::dtloc_bin                      !!$dust_dev
+  integer ::countmax=10000                                    ! Dust (YD)
+  logical ::okdust                                            ! Dust (YD)
+  logical ,dimension(1:ndust)::okdt_bin                       !!$dust_dev
+  real(dp),dimension(1:ndust)::drhoD,rhoD,rhoD0               !!$dust_dev
+  real(dp),dimension(1:ndust)::k1,k2,k3,k4                    !!$dust_dev
+  real(dp),dimension(1:ndust)::rhoD0k1,rhoD0k2,rhoD0k3        !!$dust_dev
+  real(dp),dimension(1:ndust)::rhoGZ0k1,rhoGZ0k2,rhoGZ0k3     !!$dust_dev
+  real(kind=8),dimension(1:nvector,1:ndust)::fdust       ! Dust (YD) !! Dust-to-gas ratio
+  real(kind=8),dimension(1:nvector)::sigma               ! Dust (YD) !! gas vel. dispersion
+  real(dp),dimension(1:ndust)::t_des,t_acc,t0_des,t0_acc ! Dust (YD)
+  real(dp),dimension(1:ndust)::oneovertdes,oneovertacc   ! Dust (YD)
+  real(dp),dimension(1:ndust)::rhoD00                    ! Dust (YD)
+  real(dp),dimension(1:ndust,1:4)::t0                         !!$dust_dev
+  integer,dimension(1:ndust)::icount                          ! Dust (YD) !!$dust_dev
+  real(dp)::t0_coa,t0_sha,t_coa,t_sha                         ! Dust (YD) !!$dust_dev
+  real(dp)::oneovertsha,oneovertcoa                           ! Dust (YD) !!$dust_dev
+  integer::ilow,ihigh                                         ! Dust (YD)
+  real(dp),dimension(1:ndust,1:4)::dM_dust_add
+
 #ifdef RT
   integer::ii,ig,iNp,il
   real(kind=8),dimension(1:nvector):: ekk_new
@@ -111,7 +138,7 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
 #endif
 
   fdust=0d0
-  countmax=100000
+  !countmax=100000
   year=3600_dp*24_dp*365_dp
   ! Mesh spacing in that level
   dx=0.5D0**ilevel
@@ -186,16 +213,73 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
      if(metal)then
         if(dust .and. metal_gasonly)then
            do i=1,nleaf
-              Zsolar(i)=(uold(ind_leaf(i),imetal)-uold(ind_leaf(i),idust))/nH(i)/0.02
+              Zsolar(i)=uold(ind_leaf(i),imetal)/nH(i)/0.02 !! total met (gas+dust)
+              do ich=1,nchem
+                 Zchem(i,ich)=uold(ind_leaf(i),ichem+ich-1)/nH(i)/0.02
+                 if(Zchem(i,ich)<0)write(*,'(A,3I7,es13.5)')'WARNING:',ind_leaf(i),myid,ich,Zchem(i,ich)
+              enddo
+              if(dust_chem)then
+                 mdustC=0.0d0;mdustSil=0.0d0
+                 ilow=idust;ihigh=ilow+dndsize
+                 mdustC  =SUM(uold(ind_leaf(i),ilow:ihigh))
+                 ilow=ihigh+1;ihigh=ilow+dndsize
+                 mdustSil=SUM(uold(ind_leaf(i),ilow:ihigh))/SioverSil
+
+!!$                 ndchemtype=ndust/2 ! not bullet proof (only works with ndust=2 or 4): more dust types needs some revision
+!!$                 do ii=1,ndchemtype
+!!$                    mdustC  =mdustC  +uold(ind_leaf(i),idust-1+ii)
+!!$                 enddo
+!!$                 do ii=ndchemtype+1,ndust
+!!$                    mdustSil=mdustSil+uold(ind_leaf(i),idust-1+ii)/SioverSil
+!!$                 enddo
+                 mdust=mdustC+mdustSil
+                 Zsolar(i)=Zsolar(i)-mdust/nH(i)/0.02 !! gas met
+!!$                 if(dustdebug)write(*,'(A,5es13.5)')'Zsolar',Zsolar(i),Zsolar(i)+mdust/nH(i)/0.02,mdust/nH(i)/0.02,mdustC/nH(i)/0.02,mdustSil/nH(i)/0.02
+                 do ich=1,nchem
+                    if(dustdebug)then
+!!$                    if(TRIM(chem_list(ich))=='C' )then
+!!$                       write(*,'(A,3es13.5)')'ZC (tot,gas,dust)=',Zchem(i,ich),Zchem(i,ich)-mdustC/nH(i)/0.02,mdustC/nH(i)/0.02!YD DEBUG
+!!$                    endif
+                    endif
+                    if(TRIM(chem_list(ich))=='C' )Zchem(i,ich)=Zchem(i,ich)-mdustC/nH(i)/0.02
+                    if(TRIM(chem_list(ich))=='Mg')Zchem(i,ich)=Zchem(i,ich)-mdustSil*MgoverSil/nH(i)/0.02
+                    if(TRIM(chem_list(ich))=='Fe')Zchem(i,ich)=Zchem(i,ich)-mdustSil*FeoverSil/nH(i)/0.02
+                    if(TRIM(chem_list(ich))=='Si')Zchem(i,ich)=Zchem(i,ich)-mdustSil*SioverSil/nH(i)/0.02
+                    if(TRIM(chem_list(ich))=='O' )Zchem(i,ich)=Zchem(i,ich)-mdustSil* OoverSil/nH(i)/0.02
+                    if(Zchem(i,ich).lt.0.0d0)then
+                       write(*,*)'Problem with Zchem<0 in cooling_fine'
+                       if(TRIM(chem_list(ich))=='C' )write(*,'(A,I2,A,3es13.5,3I7)')'Zchem(',ich,'), C  gas,dust,tot',Zchem(i,ich),mdustC/nH(i)/0.02,Zchem(i,ich)+mdustC/nH(i)/0.02,i,ind_leaf(i),myid
+                       if(TRIM(chem_list(ich))=='Mg')write(*,'(A,I2,A,3es13.5,3I7)')'Zchem(',ich,'), Mg gas,dust,tot',Zchem(i,ich),mdustSil*MgoverSil/nH(i)/0.02,Zchem(i,ich)+mdustSil*MgoverSil/nH(i)/0.02,i,ind_leaf(i),myid
+                       if(TRIM(chem_list(ich))=='Fe')write(*,'(A,I2,A,3es13.5,3I7)')'Zchem(',ich,'), Fe gas,dust,tot',Zchem(i,ich),mdustSil*FeoverSil/nH(i)/0.02,Zchem(i,ich)+mdustSil*FeoverSil/nH(i)/0.02,i,ind_leaf(i),myid
+                       if(TRIM(chem_list(ich))=='Si')write(*,'(A,I2,A,3es13.5,3I7)')'Zchem(',ich,'), Si gas,dust,tot',Zchem(i,ich),mdustSil*SioverSil/nH(i)/0.02,Zchem(i,ich)+mdustSil*SioverSil/nH(i)/0.02,i,ind_leaf(i),myid
+                       if(TRIM(chem_list(ich))=='O' )write(*,'(A,I2,A,3es13.5,3I7)')'Zchem(',ich,'), O  gas,dust,tot',Zchem(i,ich),mdustSil*OoverSil /nH(i)/0.02,Zchem(i,ich)+mdustSil*OoverSil /nH(i)/0.02,i,ind_leaf(i),myid
+                       write(*,*) dM_dust_add
+!!$                       stop
+                    endif
+                 enddo
+              else
+                 do ii=1,ndust
+                    Zsolar(i)=Zsolar(i)-uold(ind_leaf(i),idust-1+ii)/nH(i)/0.02 !! gas met
+                 enddo
+              endif
            end do
-           if(dust_cooling)then
-              do i=1,nleaf
-                 fdust(i)=uold(ind_leaf(i),idust)/nH(i) ! Dust-to-gas ratio
-              end do
-           endif
         else
            do i=1,nleaf
               Zsolar(i)=uold(ind_leaf(i),imetal)/nH(i)/0.02
+              do ich=1,nchem
+                 Zchem(i,ich)=uold(ind_leaf(i),ichem+ich-1)/nH(i)/0.02
+              enddo
+           end do
+        endif
+        if(dust)then
+           do i=1,nleaf
+              do ii=1,ndust!!$dust_dev
+                 fdust(i,ii)=uold(ind_leaf(i),idust-1+ii)/nH(i) ! Dust-to-gas ratio
+                 if(fdust(i,ii)<0.0)then
+                    write(*,*)'for bin :', ii, 'fdust<0 (beg cooling)',ind_leaf(i),uold(ind_leaf(i),idust-1+ii),nH(i)
+                    fdust(i,ii)=0.0d0
+                 endif
+              end do
            end do
         endif
      else
@@ -314,6 +398,18 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
         nH(i)=nH(i)*scale_nH
      end do
 
+!!$     if(dust_chem)then
+!!$        do i=1,nleaf
+!!$           if(myid==25.and.ind_leaf(i)==504376)write(*,'(A)')'               Zdust/0.02   nH(H/cc)     T(K)         myid Ztot/0.02   Zdustkey/0.02'
+!!$           do ii=1,ndchemtype
+!!$              if(myid==25.and.ind_leaf(i)==504376)write(*,'(A,I2,3es13.5,I4)')'(0) C  dust',ii,uold(ind_leaf(i),idust-1+ii)/(nH(i)/scale_nH)/0.02,nh(i),T2(i),myid
+!!$           enddo
+!!$           do ii=ndchemtype+1,ndust
+!!$              if(myid==25.and.ind_leaf(i)==504376)write(*,'(A,I2,3es13.5,I4)')'(0) Si dust',ii,uold(ind_leaf(i),idust-1+ii)/SioverSil/(nH(i)/scale_nH)/0.02,nh(i),T2(i),myid
+!!$           enddo
+!!$        enddo
+!!$     endif
+
      ! Compute radiation boost factor
      if(self_shielding)then
         do i=1,nleaf
@@ -353,6 +449,18 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
            T2(i) = min(max(T2(i)-T2min(i),T2_min_fix),T2max)
         end do
      endif
+
+     sigma(1:nvector)=0.0d0
+     if(sticking_coef=='subgrid')then
+        do i=1,nleaf
+           if(nH(i).ge.0.1d0)then
+              call cmp_sigma_turb(ind_leaf(i),sigma2,ilevel)
+              sigma(i)=sqrt(sigma2)*scale_v
+           endif
+           if(nvar>idust+ndust-1)uold(ind_leaf(i),nvar)=uold(ind_leaf(i),1)*sigma(i)/scale_v
+        enddo
+     endif
+
 
      ! Compute cooling time step in second
      dtcool = dtnew(ilevel)*scale_t
@@ -466,13 +574,21 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
      else
         ! Compute net cooling at constant nH
         if(cooling.and..not.neq_chem)then
-           call solve_cooling(nH,T2,Zsolar,fdust,boost,dtcool,delta_T2,nleaf)
+#if NCHEM>0
+           call solve_cooling(nH,T2,Zsolar,Zchem,fdust,sigma,boost,dtcool,delta_T2,nleaf,ilevel)
+#else
+           call solve_cooling(nH,T2,Zsolar,fdust,sigma,boost,dtcool,delta_T2,nleaf,ilevel)
+#endif
         endif
      endif
 #else
      ! Compute net cooling at constant nH
      if(cooling.and..not.neq_chem)then
-        call solve_cooling(nH,T2,Zsolar,fdust,boost,dtcool,delta_T2,nleaf)
+#if NCHEM>0
+           call solve_cooling(nH,T2,Zsolar,Zchem,fdust,sigma,boost,dtcool,delta_T2,nleaf,ilevel,dM_dust_add)
+#else
+           call solve_cooling(nH,T2,Zsolar,fdust,sigma,boost,dtcool,delta_T2,nleaf,ilevel)
+#endif
      endif
 #endif
 #ifdef RT
@@ -580,130 +696,316 @@ subroutine coolfine1(ind_grid,ngrid,ilevel)
 
      if(dust)then
 
-        t0_dest=1d5*year ! Assumes a unique grain size of 0.1 micron
-        t0_acc =1d8*year
-        do i=1,nleaf
+        if(.not.dust_dest_within_cool)then !! dust_cooling=false
+        do i=1,nleaf !!on all cell, compute temp
            T2(i)=(uold(ind_leaf(i),ndim+2) - ekk(i) - err(i) - emag(i))
            T2(i)=(gamma-1d0)*T2(i)
            T2(i)=T2(i)/nH(i)*scale_T2
         end do
+        do ii=1,ndust!!$dust_dev
+           t0_des(ii)=t_sputter_ref*year*asize(ii)/0.1d0 !!t0 for sputtering, depend on size
+           t0_acc(ii)=t_growth_ref *year*asize(ii)/0.005d0  !Aoyama, 2016
+        enddo
+        !!$work only for 2 dust bins, but didn't want to hard-code
+        t0_sha = t_sha_ref*year*(asize(2)/0.1) !!for v=10km/s and density_grain=3g.cm-3
+        t0_coa = t_coa_ref*year*(0.1d0/0.1d0)*(asize(1)/0.005)  !! velocity dispersion=0.1km/s
         do i=1,nleaf
-           rhoG0 =uold(ind_leaf(i),1)
-           rhoZ0 =uold(ind_leaf(i),imetal)
-           d=nH(i)*scale_nH
-           T6=T2(i)/1d6
-           t_des=t0_dest/d*(1d0+1d0/T6**3) ! Draine & Salpeter (1979) (see also Novak et al, 2012)
-           select case (sticking_coef)
+
+           rhoG0 =uold(ind_leaf(i),1) !!density
+           rhoZ0 =uold(ind_leaf(i),imetal) !!metal dens
+           d=nH(i)*scale_nH !!gas density in real units
+           myT2=MAX(T2(i),T2_star) ! -> replace T2(i) by myT2
+           T6=myT2/1d6 !!temp/1e6
+           select case (thermal_sputtering) !!Novak or Tsai (did in Granato et al.)
+           case('novak')
+              do ii=1,ndust
+                t_des(ii)=t0_des(ii)/d*(1d0+1d0/T6**3) ! Draine & Salpeter (1979) (see also Novak et al, 2012)
+              end do
+           case('tsai')
+              do ii=1,ndust
+                t_des(ii)=1.65d0*t0_des(ii)/d*(1d0+(2d0/T6)**2.5) ! Tsai & Matthews (1998)
+              end do
+           case default
+              do ii=1,ndust
+                t_des(ii)=1.65d0*t0_des(ii)/d*(1d0+(2d0/T6)**2.5) ! Tsai & Matthews (1998)
+              end do
+           end select
+           select case (sticking_coef) !!For accretion ->chaabouni
            case('constant')
-              t_acc=t0_acc /d*sqrt(20d0/T2(i))*(1d0+10.0d0*T6) ! Bekki (2015)
+              do ii=1,ndust
+                 t_acc(ii)=t0_acc(ii)* 1d3/d*sqrt(50d0/myT2)*(0.0134*rhoG0/rhoZ0)*(1d0+10.0d0*T6) ! Bekki (2015)
+              enddo
            case('step')
-              if(T2(i).gt.1d3)then
-                 t_acc=1d12*year
+              if(myT2.gt.1d3)then
+                 do ii=1,ndust
+                    t_acc(ii)=1d12*year
+                 enddo
               else
-                 t_acc=t0_acc /d*sqrt(20d0/T2(i))
+                 do ii=1,ndust
+                    t_acc(ii)=t0_acc(ii)* 1d3/d*sqrt(50d0/myT2)*(0.0134*rhoG0/rhoZ0)
+                 enddo
               endif
            case('chaabouni')
-              t_acc=t0_acc /d*sqrt(20d0/T2(i)) / (0.95d0*(1d0+2.22d0*T2(i)/56d0)/(1d0+T2(i)/56d0)**2.22d0)
-           case default
-              if(myid==1)then
-                 write(*,*)sticking_coef,"is not a valid choice for the sticking coefficient"
-                 write(*,*)"Automatically choosing the 'chaabouni' case"
-              endif
-              t_acc=t0_acc /d*sqrt(20d0/T2(i)) / (0.95d0*(1d0+2.22d0*T2(i)/56d0)/(1d0+T2(i)/56d0)**2.22d0)
+              do ii=1,ndust
+                 t_acc(ii)=t0_acc(ii)* 1d3/d*sqrt(50d0/myT2)*(0.0134*rhoG0/rhoZ0) / (0.95d0*(1d0+2.22d0*myT2/56d0)/(1d0+myT2/56d0)**2.22)
+              enddo
+           case('leitch')
+              do ii=1,ndust
+                 t_acc(ii)=t0_acc(ii) * 1d3/d*sqrt(50d0/myT2)*(0.0134*rhoG0/rhoZ0) / (1.9d-2*myT2*(1.7d-2+0.4d0)*exp(-7d-3*myT2))
+              enddo
+           case('bourlot') ! Le Bourlot+ 2012
+              do ii=1,ndust
+                 t_acc(ii)=t0_acc(ii) * 1d3/d*sqrt(50d0/myT2)*(0.0134*rhoG0/rhoZ0) * (1d0+1d-4*myT2**1.5)
+              enddo
+           case default ! chaabouni case
+              do ii=1,ndust
+                 t_acc(ii)=t0_acc(ii) * 1d3/d*sqrt(50d0/myT2)*(0.0134*rhoG0/rhoZ0) / (0.95d0*(1d0+2.22d0*myT2/56d0)/(1d0+myT2/56d0)**2.22)
+              enddo
            end select
 
-           dtremain=dtcool
-           oneovertdes=1d0/t_des
-           oneovertacc=1d0/t_acc
+           !Dust Coagulation
+           if(d>1d2) then !!between 1d2 and 1d3
+              t_coa=t0_coa*(0.01/(uold(ind_leaf(i),idust)/nH(i)))
+           else                                         !!take only dtg ratio of small bins
+              t_coa=1d12*year
+           endif
 
-           okdust=.false.
+           !Dust Shattering
+           if(d<1.0d0) then
+              t_sha=(t0_sha/d)*(0.01/(uold(ind_leaf(i),idust+1)/nH(i))) !!only dtg ratio of large bins
+           elseif (d<1d3) then
+              t_sha=(t0_sha/(d**(1.0d0/3.0d0)))*(0.01/(uold(ind_leaf(i),idust+1)/nH(i)))
+           else
+              t_sha=1d12*year
+           endif
+
+           if(rhoZ0.gt.0.0d0)then !!test if rhoZ not null in the cell
+              okdust=.false.
+           else
+              okdust=.true. !!else no rk4
+           endif
+
+           rhoDT00=0.0d0
            icount=0
-           rhoD00 =uold(ind_leaf(i),idust )
-           rhoGZ00=rhoZ0-rhoD00
+           dtremain=dtcool !!timestep for rk4
+           do ii=1,ndust!!$dust_dev
+              oneovertdes(ii)=1d0/t_des(ii) !!1/t_sputt
+              oneovertacc(ii)=1d0/t_acc(ii) !!1/t_acc
+              rhoD00(ii)=uold(ind_leaf(i),idust-1+ii) !!initial dust density
+              rhoDT00=rhoDT00+rhoD00(ii)
+           enddo
+           rhoGZ00=rhoZ0-rhoDT00
+           oneovertsha=1d0/t_sha
+           oneovertcoa=1d0/t_coa
+           t0=1d12*year
+           do ii=1,ndust
+              if(dust_accretion)   t0(ii,1)=0.1d0*t_acc(ii)
+              if(dust_sputtering)  t0(ii,2)=0.1d0*t_des(ii)
+              if(dust_shattering)  t0(ii,3)=0.1d0*t_sha
+              if(dust_coagulation) t0(ii,4)=0.1d0*t_coa
+           enddo
 
            do while (okdust .eqv. .false.)
-              rhoD0 =uold(ind_leaf(i),idust )
-              rhoGZ0=rhoZ0-rhoD0
-              if(icount==0)dtloc=MIN(0.1d0*t_acc,0.1d0*t_des)
-              dtloc=MIN(dtloc,dtremain)
-              halfdtloc=0.5d0*dtloc
+              rhoDT0=0.0d0 ! Total dust mass over all dust bins
+              do ii=1,ndust
+                 rhoDT0=rhoDT0+uold(ind_leaf(i),idust-1+ii)!!total dust dentity over bins
+                 rhoD0(ii)=uold(ind_leaf(i),idust-1+ii)    !!current dust density in bins
+                 if(icount(ii)==0) dtloc_bin(ii)=MINVAL(t0(ii,:)) !! first timestep -> 10% fastest processus
+              enddo
+              rhoGZ0=rhoZ0-rhoDT0
+              dtloc=MINVAL(dtloc_bin)
+              dtloc=MIN(dtloc,dtremain) !!min timestep
+              halfdtloc=0.5d0*dtloc !!timestep/2 for rk4
 
-              ! Explicit RK4
-              k1=(1d0-rhoD0  /rhoZ0)*rhoD0  *oneovertacc - rhoD0  *oneovertdes
-              rhoD0k1=rhoD0+halfdtloc*k1
-              k2=(1d0-rhoD0k1/rhoZ0)*rhoD0k1*oneovertacc - rhoD0k1*oneovertdes
-              rhoD0k2=rhoD0+halfdtloc*k2
-              k3=(1d0-rhoD0k2/rhoZ0)*rhoD0k2*oneovertacc - rhoD0k2*oneovertdes
-              rhoD0k3=rhoD0+    dtloc*k3
-              k4=(1d0-rhoD0k3/rhoZ0)*rhoD0k3*oneovertacc - rhoD0k3*oneovertdes
-              drhoD=dtloc/6d0*(k1+2d0*k2+2d0*k3+k4)
-
-              ! Explicit Euler
-!!$              drhoD=((1d0-rhoD0/rhoZ0)*rhoD0/t_acc - rhoD0/t_des)*dtloc
-
-              rhoD=rhoD0+drhoD
-
-              if(rhoD0>0.)then
-                 error_rel1=abs(drhoD)/MIN(rhoD0,rhoD)
-                 den0=(1d0-rhoD0/rhoZ0)*rhoD0
-                 den =(1d0-rhoD /rhoZ0)*rhoD
-                 error_rel2=abs(drhoD)/MIN(den0,den)
-                 error_rel=MAX(error_rel1,error_rel2)
-!!$                 if(rhoGZ0>0.)error_rel=MAX(error_rel,abs(drhoD)/MIN(rhoGZ0,rhoGZ0-drhoD))
-              else
-                 okdust=.true.
+              if(zdmax.gt.0.0d0)then !!to speed-up, test dust-to-metal ratio not too high (zdmax=0.9999d0, amr_parameters)
+                 if(rhoDT0/rhoZ0.gt.zdmax)then
+                    write(*,*) "Entering fix dust density :"
+                    okdust=.true. !!if sup, stop rk4
+                    do ii=1,ndust
+                       uold(ind_leaf(i),idust-1+ii)=zdmax*rhoZ0*(uold(ind_leaf(i),idust-1+ii)/rhoDT0) !!dust_dens_bin=max_ratio*metal_dens*dust_bin/total_dust
+                       write(*,*) uold(ind_leaf(i),idust-1+ii), ii
+                    enddo
+                    write(*,*)uold(ind_leaf(i),idust)+uold(ind_leaf(i),idust+1)
+                 endif
               endif
 
-              if(.not.okdust)then
-                 if(error_rel.le.0.10d0.and.error_rel.ge.0.0d0)then
-                    dtremain=dtremain-dtloc
-                    uold(ind_leaf(i),idust)=rhoD
-                    if(error_rel.le.0.05d0)dtloc=dtloc*2.0d0
+              !!$ RK4 for all processus
+              k1=0
+              do ii=1,ndust
+                 if(dust_accretion)  k1(ii) = k1(ii) + (rhoGZ0/rhoZ0)*rhoD0(ii)   *oneovertacc(ii)
+                 if(dust_sputtering) k1(ii) = k1(ii) -    rhoD0(ii)       *oneovertdes(ii)
+                 if(dust_shattering) then
+                    if(ii==1)        k1(ii) = k1(ii) +    rhoD0(2)        *oneovertsha
+                    if(ii==2)        k1(ii) = k1(ii) -    rhoD0(2)        *oneovertsha
                  endif
-                 if(error_rel.gt.0.10d0.or.error_rel.lt.0.0d0)dtloc=dtloc/2.0d0
-                 
-                 if(dtremain.le.0.0d0)okdust=.true.
-                 icount=icount+1
-                 
-                 if(icount>countmax)then
+                 if(dust_coagulation) then
+                    if(ii==1)        k1(ii) = k1(ii) -    rhoD0(1)        *oneovertcoa
+                    if(ii==2)        k1(ii) = k1(ii) +    rhoD0(1)        *oneovertcoa
+                 endif
+                 rhoD0k1(ii)=rhoD0(ii)+halfdtloc*k1(ii)
+                 rhoGZ0k1(ii)=rhoGZ0-halfdtloc*k1(ii)
+              enddo
+
+              k2=0
+              do ii=1,ndust
+                 if(dust_accretion)  k2(ii) = k2(ii) + (rhoGZ0k1(ii)/rhoZ0)*rhoD0k1(ii) *oneovertacc(ii)
+                 if(dust_sputtering) k2(ii) = k2(ii) -    rhoD0k1(ii)       *oneovertdes(ii)
+                 if(dust_shattering) then
+                    if(ii==1)        k2(ii) = k2(ii) +    rhoD0k1(2)        *oneovertsha
+                    if(ii==2)        k2(ii) = k2(ii) -    rhoD0k1(2)        *oneovertsha
+                 endif
+                 if(dust_coagulation) then
+                    if(ii==1)        k2(ii) = k2(ii) -    rhoD0k1(1)        *oneovertcoa
+                    if(ii==2)        k2(ii) = k2(ii) +    rhoD0k1(1)        *oneovertcoa
+                 endif
+                 rhoD0k2(ii)=rhoD0(ii)+halfdtloc*k2(ii)
+                 rhoGZ0k2(ii)=rhoGZ0-halfdtloc*k2(ii)
+              enddo
+
+              k3=0
+              do ii=1,ndust
+                 if(dust_accretion)  k3(ii) = k3(ii) + (rhoGZ0k2(ii)/rhoZ0)*rhoD0k2(ii) *oneovertacc(ii)
+                 if(dust_sputtering) k3(ii) = k3(ii) -    rhoD0k2(ii)       *oneovertdes(ii)
+                 if(dust_shattering) then
+                    if(ii==1)        k3(ii) = k3(ii) +    rhoD0k2(2)        *oneovertsha
+                    if(ii==2)        k3(ii) = k3(ii) -    rhoD0k2(2)        *oneovertsha
+                 endif
+                 if(dust_coagulation) then
+                    if(ii==1)        k3(ii) = k3(ii) -    rhoD0k2(1)        *oneovertcoa
+                    if(ii==2)        k3(ii) = k3(ii) +    rhoD0k2(1)        *oneovertcoa
+                 endif
+                 rhoD0k3(ii)=rhoD0(ii)+dtloc*k3(ii)
+                 rhoGZ0k3(ii)=rhoGZ0-dtloc*k3(ii)
+              enddo
+
+              k4=0
+              do ii=1,ndust
+                 if(dust_accretion)  k4(ii) = k4(ii) + (rhoGZ0k3(ii)/rhoZ0)*rhoD0k3(ii) *oneovertacc(ii)
+                 if(dust_sputtering) k4(ii) = k4(ii) -    rhoD0k3(ii)       *oneovertdes(ii)
+                 if(dust_shattering) then
+                    if(ii==1)        k4(ii) = k4(ii) +    rhoD0k3(2)        *oneovertsha
+                    if(ii==2)        k4(ii) = k4(ii) -    rhoD0k3(2)        *oneovertsha
+                 endif
+                 if(dust_coagulation) then
+                    if(ii==1)        k4(ii) = k4(ii) -    rhoD0k3(1)        *oneovertcoa
+                    if(ii==2)        k4(ii) = k4(ii) +    rhoD0k3(1)        *oneovertcoa
+                 endif
+                 drhoD(ii)=dtloc/6d0*(k1(ii)+2d0*k2(ii)+2d0*k3(ii)+k4(ii))
+                 rhoD(ii)=rhoD0(ii)+drhoD(ii) !!new dust density (eqn 24 Trebitsch, 2020)
+              enddo
+
+              okdt_bin=.false.
+              do ii=1,ndust
+                 if(rhoD0(ii)>1d-20)then
+                    error_rel1=abs(drhoD(ii))/MIN(rhoD0(ii),rhoD(ii))
+                    den0=(1d0-rhoD0(ii)/rhoZ0)*rhoD0(ii)
+                    den =(1d0-rhoD(ii) /rhoZ0)*rhoD(ii)
+                    if(MIN(den0,den)<1d-10) then
+                       error_rel=error_rel1
+                    else
+                       error_rel2=abs(drhoD(ii))/MIN(den0,den)
+                       error_rel=MAX(error_rel1,error_rel2)
+                    endif
+                 else
+                    okdust=.true. !!else stop rk4
+                 endif
+
+                 if(.not.okdust)then !!if still in the do while (rk4)
+                    if(error_rel.le.errmax.and.error_rel.ge.0.0d0) then
+                       uold(ind_leaf(i),idust-1+ii)=rhoD(ii) !!save dust density in bin
+                       okdt_bin(ii)=.true.
+                       if(error_rel.le.0.5d0*errmax)dtloc_bin(ii)=dtloc*2.0d0 !!new timestep
+                    endif
+                    if(error_rel.gt.errmax.or.error_rel.lt.0.0d0)dtloc_bin(ii)=dtloc/2.0d0
+                    icount(ii)=icount(ii)+1
+                 endif !! still in rk4
+                 if(icount(ii)>countmax)then !!error, stop do while
                     write(*,*)'stopping in dust processing icount>',countmax
+                    write(*,*) 'bin :', ii
                     write(*,*)'rhoG      rhoZ     rhoGZ      rhoD      Temperature'
-                    write(*,'(5e10.2)')rhoG0*scale_nH,rhoZ0*scale_nH,rhoGZ0 *scale_nH,rhoD0 *scale_nH,T6*1d6
-                    write(*,'(5e10.2)')rhoG0*scale_nH,rhoZ0*scale_nH,rhoGZ00*scale_nH,rhoD00*scale_nH,T6*1d6
-!!$                    write(*,'(5e10.2)')rhoG0*scale_nH,rhoZ0/rhoG0/0.02,rhoGZ0 /rhoG0/0.02,rhoD0 /rhoG0/0.02,T6*1d6
-!!$                    write(*,'(5e10.2)')rhoG0*scale_nH,rhoZ0/rhoG0/0.02,rhoGZ00/rhoG0/0.02,rhoD00/rhoG0/0.02,T6*1d6
+                    write(*,'(5e10.2)')rhoG0*scale_nH,rhoZ0*scale_nH,rhoGZ0 *scale_nH,rhoD0(ii) *scale_nH,T6*1d6
+                    write(*,'(5e10.2)')rhoG0*scale_nH,rhoZ0*scale_nH,rhoGZ00*scale_nH,rhoD00(ii)*scale_nH,T6*1d6
                     write(*,*)'dtloc     dtstep     dtremain'
-                    write(*,'(3e10.3,A)')dtloc/3.15d13,dtcool/3.15d13,dtremain/3.15d13,' Myr'
+                    write(*,'(3e10.3,A)')dtloc_bin(ii)/3.15d13,dtcool/3.15d13,dtremain/3.15d13,' Myr'
                     write(*,*)'t_acc     t_des'
-                    write(*,'(2e10.3,A)')t_acc/3.15d13,t_des/3.15d13,' Myr'
+                    write(*,'(2e10.3,A)')t_acc(ii)/3.15d13,t_des(ii)/3.15d13,' Myr'
                     write(*,'(e10.3,2I10)')error_rel,i,nleaf
                     stop
                  endif
-                 if(uold(ind_leaf(i),idust)<0.)then
-                    write(*,'(A,e10.2,I10)')'stopping in dust processing rhoD<0',rhoD,icount
+                 if(uold(ind_leaf(i),idust)<0.)then !!error, stop do while
+                    write(*,'(A,e10.2,I10)')'stopping in dust processing rhoD<0',rhoD(ii),icount(ii)
+                    write(*,*) 'bin :', ii
                     write(*,*)'rhoG      rhoZ     rhoGZ      rhoD      Temperature'
-                    write(*,'(5e10.2)')rhoG0*scale_nH,rhoZ0/rhoG0/0.02,rhoGZ0/rhoG0/0.02,rhoD0/rhoG0/0.02,T6*1d6
-                    write(*,'(5e10.2)')rhoG0*scale_nH,rhoZ0/rhoG0/0.02,rhoGZ00/rhoG0/0.02,rhoD00/rhoG0/0.02,T6*1d6
+                    write(*,'(5e10.2)')rhoG0*scale_nH,rhoZ0/rhoG0/0.02,rhoGZ0 /rhoG0/0.02,rhoD0(ii) /rhoG0/0.02,T6*1d6
+                    write(*,'(5e10.2)')rhoG0*scale_nH,rhoZ0/rhoG0/0.02,rhoGZ00/rhoG0/0.02,rhoD00(ii)/rhoG0/0.02,T6*1d6
                     write(*,*)'dtloc     dtstep     dtremain'
-                    write(*,'(3e10.3,A)')dtloc/3.15d13,dtcool/3.15d13,dtremain/3.15d13,' Myr'
+                    write(*,'(3e10.3,A)')dtloc_bin(ii)/3.15d13,dtcool/3.15d13,dtremain/3.15d13,' Myr'
                     write(*,*)'t_acc     t_des'
-                    write(*,'(2e10.3,A)')t_acc/3.15d13,t_des/3.15d13,' Myr'
+                    write(*,'(2e10.3,A)')t_acc(ii)/3.15d13,t_des(ii)/3.15d13,' Myr'
                     write(*,'(e10.3,2I10)')error_rel,i,nleaf
                     stop
                  endif
+                 if(.not.okdust .and. i==1) then
+                    write(*,*)'BIN',ii, ': icount = ', icount(ii)
+                    write(*,'(A,E12.5)') ' fdust =', uold(ind_leaf(i),idust-1+ii)/nH(i)
+                    write(*,'(A,E12.5,A,E12.5)') 'rhoGZ0 =', rhoGZ0, ', rhoZ0 =', rhoZ0
+                    write(*,'(A,E12.5,A,E12.5,A,E12.5)') ' rhoD0 =', rhoD0(ii), ', drhoD =',drhoD(ii), ', rhoD =', rhoD(ii)
+                    write(*,'(A,E12.5)') 'rhoDT0 =', rhoDT0
+                    write(*,*)'dtloc     dtstep     dtremain'
+                    write(*,'(3e10.3,A)')dtloc_bin(ii)/3.15d13,dtcool/3.15d13,dtremain/3.15d13,' Myr'
+                    write(*,*)'t_acc     t_des     t_sha     t_coa'
+                    write(*,'(4e10.3,A)')t_acc(ii)/3.15d13,t_des(ii)/3.15d13,t_sha/3.15d13,t_coa/3.15d13,' Myr'
+                    write(*,'(A,E12.5,A,E12.5)') 'error rel =', error_rel, ', error max =', errmax
+                 endif
+              enddo !!on bins
+              if(.not.okdust)then !!if still in the do while (rk4)
+                 if(ALL(okdt_bin).eqv..true.) dtremain=dtremain-dtloc
+                 if(dtremain.le.0.0d0)okdust=.true.
               endif
-
+           enddo !!on do while
+           rhoDT=0.0d0
+           do ii=1,ndust
+              rhoDT=rhoDT+uold(ind_leaf(i),idust-1+ii)
            enddo
+        enddo !!on nleaf
+        else !!if dust_dest_within_cool=.true. -> compute in solve_cooling
+           do i=1,nleaf
+              do ii=1,ndust
+                if(fdust(i,ii)<0.0)then
+                   write(*,*)'END COOLING : fdust<0 on bin :',ii
+                   write(*,*) ind_leaf(i),uold(ind_leaf(i),idust-1+ii),nH(i)
+                endif
+                uold(ind_leaf(i),idust-1+ii)=fdust(i,ii)*uold(ind_leaf(i),1) !!dust_dens=dust2gas_ratio*gas_dens if dust_dens>0
         enddo
+           enddo
+        endif
 
         if(zdmax.gt.0d0)then
            do i=1,nleaf
-              if(uold(ind_leaf(i),idust)/uold(ind_leaf(i),imetal).gt.zdmax)then
-                 uold(ind_leaf(i),idust)=zdmax*uold(ind_leaf(i),imetal)
-              endif
+              rhoDT=0.0d0
+              do ii=1,ndust
+                 rhoDT=rhoDT+uold(ind_leaf(i),idust-1+ii)
            enddo
+              do ii=1,ndust !!$dust_dev
+                 if(uold(ind_leaf(i),idust-1+ii)/uold(ind_leaf(i),imetal).gt.zdmax)then
+                    uold(ind_leaf(i),idust-1+ii)=zdmax*uold(ind_leaf(i),imetal)*uold(ind_leaf(i),idust-1+ii)/rhoDT
         endif
+              enddo
+           enddo
      endif
+
+!!$        if(dust_chem)then
+!!$           do i=1,nleaf
+!!$              do ii=1,ndchemtype
+!!$                 if(myid==25.and.ind_leaf(i)==504376)write(*,'(A,I2,3es13.5,I4,es13.5)')'(1) C  dust',ii,uold(ind_leaf(i),idust-1+ii)/nH(i)/0.02,nh(i)*scale_nH,T2(i)/nH(i)*(gamma-1.0)*scale_T2,myid,uold(ind_leaf(i),ichem+5-1)/nH(i)/0.02
+!!$              enddo
+!!$              do ii=ndchemtype+1,ndust
+!!$                 if(myid==25.and.ind_leaf(i)==504376)write(*,'(A,I2,3es13.5,I4,2es13.5)')'(1) Si dust',ii,uold(ind_leaf(i),idust-1+ii)/SioverSil/nH(i)/0.02,nh(i)*scale_nH,T2(i)/nH(i)*(gamma-1.0)*scale_T2,myid,uold(ind_leaf(i),ichem+7-1),uold(ind_leaf(i),idust-1+ii)/nH(i)/0.02
+!!$              enddo
+!!$           enddo
+!!$        endif
+
+     endif !!endif(dust)
 
 #ifdef RT
      if(neq_chem) then
@@ -823,3 +1125,165 @@ subroutine cmp_Eddington_tensor(Npc,Fp,T_Edd)
 
 end subroutine cmp_Eddington_tensor
 #endif
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
+subroutine cmp_sigma_turb(icell,sigma2,ilevel)
+  use amr_commons
+  use hydro_commons
+  implicit none
+  integer::ilevel,icell,ncell
+  real(dp)::d,d1,d2,d3,d4,d5,d6,ul,ur
+  real(dp)::sigma2,sigma2_comp,sigma2_sole
+  integer ,dimension(1:nvector)::ind_cell2
+  integer ,dimension(1:nvector,0:twondim)::ind_nbor
+
+  ! We need to estimate the norm of the gradient of the velocity field in the cell (tensor of 2nd rank)
+  ! i.e. || A ||^2 = trace( A A^T) where A = grad vec(v) is the tensor.
+  ! So construct values of velocity field on the 6 faces of the cell using simple linear interpolation
+  ! from neighbouring cell values and differentiate.
+  ! Get neighbor cells if they exist, otherwise use straight injection from local cell
+  ncell = 1 ! we just want the neighbors of that cell
+  ind_cell2(1)=icell
+  d=uold(icell,1)
+  call getnbor(ind_cell2,ind_nbor,ncell,ilevel)
+  d1           = uold(ind_nbor(1,1),1) ; d2 = uold(ind_nbor(1,2),1) ; d3 = uold(ind_nbor(1,3),1)
+  d4           = uold(ind_nbor(1,4),1) ; d5 = uold(ind_nbor(1,5),1) ; d6 = uold(ind_nbor(1,6),1)
+  sigma2       = 0d0 ; sigma2_comp = 0d0 ; sigma2_sole = 0d0
+  !!!!!!!!!!!!!!!!!!
+  ! Divergence terms
+  !!!!!!!!!!!!!!!!!!
+  ul        = (uold(ind_nbor(1,2),2) + uold(icell,2))/(d2+d)
+  ur        = (uold(ind_nbor(1,1),2) + uold(icell,2))/(d1+d)
+  sigma2_comp = sigma2_comp + (ur-ul)**2
+  ul        = (uold(ind_nbor(1,4),3) + uold(icell,3))/(d4+d)
+  ur        = (uold(ind_nbor(1,3),3) + uold(icell,3))/(d3+d)
+  sigma2_comp = sigma2_comp + (ur-ul)**2
+  ul        = (uold(ind_nbor(1,6),4) + uold(icell,4))/(d6+d)
+  ur        = (uold(ind_nbor(1,5),4) + uold(icell,4))/(d5+d)
+  sigma2_comp = sigma2_comp + (ur-ul)**2
+  !!!!!!!!!!!!
+  ! Curl terms
+  !!!!!!!!!!!!
+  ul        = (uold(ind_nbor(1,6),3) + uold(icell,3))/(d6+d)
+  ur        = (uold(ind_nbor(1,5),3) + uold(icell,3))/(d5+d)
+  sigma2_sole = sigma2_sole + (ur-ul)**2
+  ul        = (uold(ind_nbor(1,4),4) + uold(icell,4))/(d4+d)
+  ur        = (uold(ind_nbor(1,3),4) + uold(icell,4))/(d3+d)
+  sigma2_sole = sigma2_sole + (ur-ul)**2
+  ul        = (uold(ind_nbor(1,6),2) + uold(icell,2))/(d6+d)
+  ur        = (uold(ind_nbor(1,5),2) + uold(icell,2))/(d5+d)
+  sigma2_sole = sigma2_sole + (ur-ul)**2
+  ul        = (uold(ind_nbor(1,2),4) + uold(icell,4))/(d2+d)
+  ur        = (uold(ind_nbor(1,1),4) + uold(icell,4))/(d1+d)
+  sigma2_sole = sigma2_sole + (ur-ul)**2
+  ul        = (uold(ind_nbor(1,4),2) + uold(icell,2))/(d4+d)
+  ur        = (uold(ind_nbor(1,3),2) + uold(icell,2))/(d3+d)
+  sigma2_sole = sigma2_sole + (ur-ul)**2
+  ul        = (uold(ind_nbor(1,2),3) + uold(icell,3))/(d2+d)
+  ur        = (uold(ind_nbor(1,1),3) + uold(icell,3))/(d1+d)
+  sigma2_sole = sigma2_sole + (ur-ul)**2
+  sigma2    = sigma2_comp+sigma2_sole
+
+end subroutine cmp_sigma_turb
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
+!!$subroutine cmp_sigma_turb2(ind_cell,ncell,ilevel)
+!!$  implicit none
+!!$  use amr_commons
+!!$  use pm_commons
+!!$  use hydro_commons
+!!$  use poisson_commons
+!!$  integer::ilevel
+!!$  integer ::i,ncell,nx_loc
+!!$  real(dp),dimension(1:3)::skip_loc
+!!$  real(dp)::d
+!!$  real(dp)::ul,ur,fl,fr,trgv
+!!$  real(dp)::sigma2,sigma2_comp,sigma2_sole
+!!$  real(dp)::divv,divv2,curlv,curlva,curlvb,curlvc,curlv2
+!!$  real(dp)::dx,dx_loc,scale,d1,d2,d3,d4,d5,d6
+!!$  integer ,dimension(1:ncell)::ind_cell,ind_cell2
+!!$  integer ,dimension(1:ncell,0:twondim)::ind_nbor
+!!$
+!!$  ! Mesh spacing in that level
+!!$  dx=0.5D0**ilevel
+!!$  nx_loc=(icoarse_max-icoarse_min+1)
+!!$  skip_loc=(/0.0d0,0.0d0,0.0d0/)
+!!$  if(ndim>0)skip_loc(1)=dble(icoarse_min)
+!!$  if(ndim>1)skip_loc(2)=dble(jcoarse_min)
+!!$  if(ndim>2)skip_loc(3)=dble(kcoarse_min)
+!!$  scale=boxlen/dble(nx_loc)
+!!$  dx_loc=dx*scale
+!!$
+!!$  do i=1,ncell
+!!$     ! We need to estimate the norm of the gradient of the velocity field in the cell (tensor of 2nd rank)
+!!$     ! i.e. || A ||^2 = trace( A A^T) where A = grad vec(v) is the tensor.
+!!$     ! So construct values of velocity field on the 6 faces of the cell using simple linear interpolation
+!!$     ! from neighbouring cell values and differentiate.
+!!$     ! Get neighbor cells if they exist, otherwise use straight injection from local cell
+!!$     ncell2 = 1 ! we just want the neighbors of that cell
+!!$     ind_cell2(1) = ind_cell(i)
+!!$     call getnbor(ind_cell2,ind_nbor,ncell2,ilevel)
+!!$     d1           = uold(ind_nbor(1,1),1) ; d2 = uold(ind_nbor(1,2),1) ; d3 = uold(ind_nbor(1,3),1)
+!!$     d4           = uold(ind_nbor(1,4),1) ; d5 = uold(ind_nbor(1,5),1) ; d6 = uold(ind_nbor(1,6),1)
+!!$     sigma2       = 0d0 ; sigma2_comp = 0d0 ; sigma2_sole = 0d0
+!!$     trgv         = 0d0 ; divv = 0d0 ; curlva = 0d0 ; curlvb = 0d0 ; curlvc = 0d0
+!!$     flong        = 0d0
+!!$!!!!!!!!!!!!!!!!!!
+!!$     ! Divergence terms
+!!$!!!!!!!!!!!!!!!!!!
+!!$     ul        = (d2*uold(ind_nbor(1,2),2) + d*uold(ind_cell(i),2))/(d2+d)
+!!$     ur        = (d1*uold(ind_nbor(1,1),2) + d*uold(ind_cell(i),2))/(d1+d)
+!!$     sigma2_comp = sigma2_comp + (ur-ul)**2
+!!$     divv      = divv + (ur-ul)
+!!$     ul        = (d4*uold(ind_nbor(1,4),3) + d*uold(ind_cell(i),3))/(d4+d)
+!!$     ur        = (d3*uold(ind_nbor(1,3),3) + d*uold(ind_cell(i),3))/(d3+d)
+!!$     sigma2_comp = sigma2_comp + (ur-ul)**2
+!!$     divv      = divv + (ur-ul)
+!!$     ul        = (d6*uold(ind_nbor(1,6),4) + d*uold(ind_cell(i),4))/(d6+d)
+!!$     ur        = (d5*uold(ind_nbor(1,5),4) + d*uold(ind_cell(i),4))/(d5+d)
+!!$     sigma2_comp = sigma2_comp + (ur-ul)**2
+!!$     divv      = divv + (ur-ul)
+!!$     ftot      = flong
+!!$!!!!!!!!!!!!
+!!$     ! Curl terms
+!!$!!!!!!!!!!!!
+!!$     ul        = (d6*uold(ind_nbor(1,6),3) + d*uold(ind_cell(i),3))/(d6+d)
+!!$     ur        = (d5*uold(ind_nbor(1,5),3) + d*uold(ind_cell(i),3))/(d5+d)
+!!$     sigma2_sole = sigma2_sole + (ur-ul)**2
+!!$     curlva    = curlva-(ur-ul)
+!!$     ul        = (d4*uold(ind_nbor(1,4),4) + d*uold(ind_cell(i),4))/(d4+d)
+!!$     ur        = (d3*uold(ind_nbor(1,3),4) + d*uold(ind_cell(i),4))/(d3+d)
+!!$     sigma2_sole = sigma2_sole + (ur-ul)**2
+!!$     curlva    = (curlva + (ur-ul))
+!!$     ul        = (d6*uold(ind_nbor(1,6),2) + d*uold(ind_cell(i),2))/(d6+d)
+!!$     ur        = (d5*uold(ind_nbor(1,5),2) + d*uold(ind_cell(i),2))/(d5+d)
+!!$     sigma2_sole = sigma2_sole + (ur-ul)**2
+!!$     curlvb    = curlvb+(ur-ul)
+!!$     ul        = (d2*uold(ind_nbor(1,2),4) + d*uold(ind_cell(i),4))/(d2+d)
+!!$     ur        = (d1*uold(ind_nbor(1,1),4) + d*uold(ind_cell(i),4))/(d1+d)
+!!$     sigma2_sole = sigma2_sole + (ur-ul)**2
+!!$     curlvb    = (curlvb - (ur-ul))
+!!$     ul        = (d4*uold(ind_nbor(1,4),2) + d*uold(ind_cell(i),2))/(d4+d)
+!!$     ur        = (d3*uold(ind_nbor(1,3),2) + d*uold(ind_cell(i),2))/(d3+d)
+!!$     sigma2_sole = sigma2_sole + (ur-ul)**2
+!!$     curlvc    = curlvc-(ur-ul)
+!!$     ul        = (d2*uold(ind_nbor(1,2),3) + d*uold(ind_cell(i),3))/(d2+d)
+!!$     ur        = (d1*uold(ind_nbor(1,1),3) + d*uold(ind_cell(i),3))/(d1+d)
+!!$     sigma2_sole = sigma2_sole + (ur-ul)**2
+!!$     curlvc    = (curlvc + (ur-ul))
+!!$     sigma2    = sigma2_comp+sigma2_sole
+!!$     ! Trace of gradient velocity tensor
+!!$     trgv      = sigma2/dx_loc**2
+!!$     ! Velocity vector divergence
+!!$     divv      = divv/dx_loc
+!!$     ! Velocity vector curl
+!!$     curlv     = (curlva+curlvb+curlvc)/dx_loc
+!!$     divv2     = divv**2
+!!$     curlv2    = curlv**2
+!!$  enddo
+!!$
+!!$end subroutine cmp_sigma_turb2

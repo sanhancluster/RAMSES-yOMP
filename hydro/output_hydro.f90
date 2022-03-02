@@ -10,7 +10,7 @@ subroutine backup_hydro(filename, filename_desc)
 
   character(len=80), intent(in) :: filename, filename_desc
 
-  integer :: i, ivar, ncache, ind, ilevel, igrid, iskip, istart, ibound
+  integer :: i, ii, ivar, ncache, ind, ilevel, igrid, iskip, istart, ibound
   integer :: unit_out, unit_info
   integer, allocatable, dimension(:) :: ind_grid
   real(dp), allocatable, dimension(:) :: xdp
@@ -133,8 +133,8 @@ subroutine backup_hydro(filename, filename_desc)
                     field_name = 'metallicity'
                  else if (ivar == ivar_refine) then
                     field_name = 'refinement_scalar'
-                 else if (ivar == idust) then
-                    field_name = 'dust'
+                 else if ((ivar >= idust).and.(ivar< idust+ndust)) then
+                    write(field_name, '("dust_bin", i0.2)') ivar-idust+1
                  else if (ivar >= ichem .and. ivar < ichem+nchem) then
                     field_name = 'chem_'//TRIM(chem_list(ivar - ichem + 1))
                  else

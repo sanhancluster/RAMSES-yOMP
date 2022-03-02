@@ -42,9 +42,11 @@ module mechanical_commons
    real(dp),dimension(1:ncomm_max)::nSN_comm          ! number of SNe
    real(dp),dimension(1:ncomm_max)::mSN_comm          ! gas mass of SNe 
    real(dp),dimension(1:ncomm_max)::mZSN_comm         ! metal mass of SNe 
+   real(dp),dimension(1:ncomm_max)::mZdSN_comm        ! dust mass of SNe
    real(dp),dimension(1:ncomm_max)::mloadSN_comm      ! ejecta mass + gas entrained
    real(dp),dimension(1:ncomm_max)::eloadSN_comm      ! kinetic energy of ejecta + gas entrained
    real(dp),dimension(1:ncomm_max)::mZloadSN_comm     ! metals ejected + entrained
+   real(dp),dimension(1:ncomm_max,1:ndust)::mZdloadSN_comm    ! dust ejected + entrained !!$dust_dev
    real(dp),dimension(1:3,1:ncomm_max)::xSN_comm      ! pos of SNe host cell (leaf)
    real(dp),dimension(1:3,1:ncomm_max)::pSN_comm      ! total momentum of total SNe in each leaf cell
    real(dp),dimension(1:3,1:ncomm_max)::ploadSN_comm  ! momentum from original star + gas entrained
@@ -88,10 +90,14 @@ module mechanical_commons
 
    ! For chemical abundance due to SN II
    real(dp)::Zejecta_chem_II(1:nchem)
+   ! For dust chemical abundance due to SN II
+   real(dp)::ZDejecta_chem_II(1:2)
 
    ! For chemical abundance due to SN Ia
    real(dp)::mejecta_Ia
    real(dp)::Zejecta_chem_Ia(1:nchem)
+   ! For dust chemical abundance due to SN Ia
+   real(dp)::ZDejecta_chem_Ia(1:2)
 
    real(dp)::nsnIa_comm=0d0
 end module mechanical_commons
@@ -198,6 +204,9 @@ subroutine init_mechanical
       end do
    endif
 
+  ZDejecta_chem_II(1)=10.**(-1.9249796) ! C dust
+  ZDejecta_chem_II(2)=10.**(-2.3521914) ! Fe dust in silicate
+
   if (snIa) call init_snIa_yield
 
   ! This is not to double count SN feedback
@@ -218,6 +227,7 @@ subroutine init_snIa_yield
    integer::ich
    real(kind=8)::yield_snIa(1:66)
    character(len=2)::element_name
+   real(kind=8)::nMg_Ia,nFe_Ia,nSi_Ia,nO_Ia
 !----------------------------------------------------------------------------
 !  Iwamoto et al. (1999) W70 (carbon-deflagration model)
 !            (updated from Nomoto et al. 1997)
@@ -251,24 +261,31 @@ subroutine init_snIa_yield
       select case (element_name)
          case ('C ')
             Zejecta_chem_Ia(ich)=sum(yield_snIa(1:2))/mejecta_Ia
+            ZDejecta_chem_Ia(1)=Zejecta_chem_Ia(ich)*0.5d0 ! Use the Dwek value
          case ('N ')
             Zejecta_chem_Ia(ich)=sum(yield_snIa(3:4))/mejecta_Ia
          case ('O ')
             Zejecta_chem_Ia(ich)=sum(yield_snIa(5:7))/mejecta_Ia
+            nO_Ia =Zejecta_chem_Ia(ich)/(nsilO *muO )
          case ('Mg')
             Zejecta_chem_Ia(ich)=sum(yield_snIa(13:15))/mejecta_Ia
+            nMg_Ia=Zejecta_chem_Ia(ich)/(nsilMg*muMg)
          case ('Si')
             Zejecta_chem_Ia(ich)=sum(yield_snIa(17:19))/mejecta_Ia
+            nSi_Ia=Zejecta_chem_Ia(ich)/(nsilSi*muSi)
          case ('S ')
             Zejecta_chem_Ia(ich)=sum(yield_snIa(21:24))/mejecta_Ia
          case ('Fe')
             Zejecta_chem_Ia(ich)=sum(yield_snIa(51:54))/mejecta_Ia
+            nFe_Ia=Zejecta_chem_Ia(ich)/(nsilFe*muFe)
          case ('D ')
             Zejecta_chem_Ia(ich)=0d0
          case default
             Zejecta_chem_Ia(ich)=0d0
       end select     
    enddo
+   ! Assume a Dwek efficiency of ~100%, and assign the value to the Si key element
+   ZDejecta_chem_Ia(2)=0.99d0*MIN(nMg_Ia,nFe_Ia,nSi_Ia,nO_Ia)*nsilSi*muSi
 
 end subroutine init_snIa_yield
 !####################################################################

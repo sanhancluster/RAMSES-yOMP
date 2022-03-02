@@ -408,6 +408,7 @@ subroutine star_formation(ilevel)
 
            ! Set star particle variables
            tp(ind_part(i)) = birth_epoch  ! Birth epoch
+           if(sn2_real_delay)tpl(ind_part(i)) = birth_epoch  ! Birth epoch
            mp(ind_part(i)) = n*mstar      ! Mass
            if(use_initial_mass) then
               mp0(ind_part(i)) = mp(ind_part(i)) ! Initial Mass
@@ -1011,8 +1012,12 @@ subroutine starform2(ind_grid,ngrid,ilevel,ntot,mstar_tot_tmp,mstar_lost_tmp,see
               if(T2>2e4)then
                  ok(i)=.false.
               else
+                 if(tsfr_damp_IC>0.)then
+                    sfr_ff(i) = eps_star*MIN(1.0d0,t/(tsfr_damp_IC*3.15d13/scale_t))
+                 else
                  sfr_ff(i) = eps_star
               endif
+           endif
            endif
         end do
      endif

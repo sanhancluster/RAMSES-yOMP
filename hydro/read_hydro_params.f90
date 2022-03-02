@@ -7,9 +7,10 @@ subroutine read_hydro_params(nml_ok)
   !--------------------------------------------------
   ! Local variables
   !--------------------------------------------------
-  integer::i,idim,ifixed,nboundary_true=0,ipar
+  integer::i,idim,ifixed,nboundary_true=0,ipar,ich
   integer ,dimension(1:MAXBOUND)::bound_type
   real(dp)::ek_bound,eta_sn_ini
+  real(dp)::numtot,fracMgD,fracFeD,fracSiD,fracOD
   logical :: dummy
 #ifdef SOLVERmhd
   real(dp)::em_bound
@@ -37,7 +38,7 @@ subroutine read_hydro_params(nml_ok)
 #if NENER>0
        & ,prad_region &
 #endif
-       & ,omega_b
+       & ,omega_b,galage
 
   ! Hydro parameters
   namelist/hydro_params/gamma,courant_factor,smallr,smallc &
@@ -48,7 +49,7 @@ subroutine read_hydro_params(nml_ok)
 #ifdef SOLVERmhd
        & ,riemann2d,slope_mag_type,eta_mag &
 #endif
-       & ,pressure_fix,beta_fix,scheme,riemann
+       & ,pressure_fix,beta_fix,scheme,riemann,frozen,checkhydro
 
   ! Refinement parameters
   namelist/refine_params/x_refine,y_refine,z_refine,r_refine &
@@ -88,29 +89,38 @@ subroutine read_hydro_params(nml_ok)
        & ,log_mfb,log_mfb_mega,mechanical_feedback,mechanical_geen &
        & ,nsn2mass,sn2_real_delay,sn_IC,sn_trelax &
        & ,ir_feedback,ir_eff,t_diss,t_sne,mass_star_max,mass_sne_min &
-       & ,stellar_winds,stellar_winds_file,chem_list,snII_freq &
+       & ,stellar_winds,stellar_winds_file,supernovae_II_file,chem_list,snII_freq &
        & ,snIa,E_SNIa,phi_snIa,t_ini_SNIa,t_fin_snIa,SNII_zdep_yield &
-       & ,use_initial_mass,no_wind_energy
+       & ,use_initial_mass,no_wind_energy,snyield_model
 
   ! Cooling / basic chemistry parameters
   namelist/cooling_params/cooling,metal,isothermal,haardt_madau,J21 &
-       & ,dust,dust_cooling,sticking_coef,zdmax,metal_gasonly                    &
-       & ,a_spec,self_shielding,z_ave,z_reion,T2max,neq_chem
+       & ,dust,dust_cooling,sticking_coef,zdmax,metal_gasonly,dust_dest_within_cool,errmax,asize &
+       & ,dust_SNdest,dust_cond_eff,dust_cond_eff_Ia,dust_SNdest_eff,thermal_sputtering &
+       & ,dust_acc_neglected_large_bin,dust_prod_neglected_small_bin &
+       & ,dust_shattering,dust_coagulation &
+       & ,dust_sputtering,dust_accretion,dust_turb &
+       & ,t_sputter_ref, t_growth_ref, boost_growth,nhboost_growth, Tdust_growth, nh_growth, Sconstant &
+       & ,t_sha_ref, t_coa_ref, nh_coa, power_coa &
+       & ,a_spec,self_shielding,z_ave,z_reion,T2max,neq_chem &
+       & ,muMg,muFe,muSi,muO,nsilMg,nsilFe,nsilSi,nsilO &
+       & ,fsmall_ej,dust_chem,dustdebug,sgrain,DTMini,fsmall_ini
 
   ! Star formation parameters
   namelist/sf_params/m_star,t_star,n_star,T2_star,g_star,del_star &
        & ,eps_star,jeans_ncells,sf_virial,sf_trelax,sf_tdiss,sf_model &
        & ,fstar_min,star_imf,sf_lamjt,write_stellar_densities &
-       & ,sf_mach_threshold,sf_log_properties,sf_imf,sf_compressive
+       & ,sf_mach_threshold,sf_log_properties,sf_imf,sf_compressive,tsfr_damp_IC
 
   ! Sink-SMBH parameters
   namelist/smbh_params/agn,smbh,sink_AGN,bondi,drag,spin_bh,force_exact_mseed &
-       & ,bhspinmerge,vrel_merge,random_jet,mad_jet,selfgrav,Mseed,n_sink,ns_sink &
+       & ,bhspinmerge,vrel_merge,random_jet,mad_jet,selfgrav,Mseed,n_sink,ns_sink,ns2_sink &
        & ,eAGN_K,eAGN_T,X_floor,boost_acc,boost_drag,boost_drag_part,T2maxAGN,TAGN,mloadAGN &
        & ,f_bondi,ind_rsink,rAGN,rAGN_dx,r_gal,r_bhr,rmerge,sigmav_max,star_ratio_floor &
        & ,drag_part,DF_ncells,d_boost,no_accretion,fix_smbh_position &
        & ,eddington_limit,jetfrac,maximum_accretion,finestep_AGN &
-       & ,point_mass_sink,n_gal,sig_sink,t_que,weighted_drag,adfmax
+       & ,point_mass_sink,n_gal,sig_sink,t_que,weighted_drag,adfmax,stellar_velocity_seed &
+       & ,ns_sink_scaled
 
   ! Units parameters
   namelist/units_params/units_density,units_time,units_length
@@ -319,12 +329,14 @@ subroutine read_hydro_params(nml_ok)
      if(myid==1)write(*,*)'Error: dust requires metal=.true.'
      nml_ok=.false.
   endif
+  if(dust.and.dust_cooling)dust_dest_within_cool=.true.
 #ifdef SOLVERmhd
-  if(dust.and.nvar<(ndim+5))then
+  if(dust.and.nvar<(ndim+7))then
+     if(myid==1)write(*,*)'Error: dust needs nvar >= ndim+7'
 #else
   if(dust.and.nvar<(ndim+4))then
-#endif
      if(myid==1)write(*,*)'Error: dust needs nvar >= ndim+4'
+#endif
      if(myid==1)write(*,*)'Make sure METALS = 1 and NVAR_EXTRA > 0 in the Makefile and recompile'
      nml_ok=.false.
   endif
@@ -544,7 +556,20 @@ subroutine read_hydro_params(nml_ok)
   end if
   if(dust)then
      idust=ipar
-     ipar=ipar+1
+     ipar=ipar+ndust
+     if (ndust>1) then
+        if (asize(1)>asize(2)) then
+           write(*,*) 'ERROR : dust grains sizes must be in increasing order in asize (amr_parameters)'
+           write(*,*) 'asize :', asize
+           call clean_stop
+        endif
+     endif
+     if (ndust.eq.1 .and. (dust_coagulation .or. dust_shattering)) then
+        write(*,*) "ERROR : ndust can't be !=2 with coagulation/shattering on"
+        call clean_stop
+     endif
+     flarge_ej=MIN(MAX(1d0-fsmall_ej,0.0d0),1.0d0)
+     sgrain=sgrain/3d0 ! renormalised to 3g.cm^-3 (implicity assumed in all calculations)
   endif
   if(delayed_cooling)then
      idelay=ipar
@@ -563,6 +588,30 @@ subroutine read_hydro_params(nml_ok)
      ichem=ipar
      ipar=ipar+1
   endif
+  numtot=muMg*nsilMg+muFe*nsilFe+muSi*nsilSi+muO*nsilO
+  MgoverSil=muMg*nsilMg/numtot
+  FeoverSil=muFe*nsilFe/numtot
+  SioverSil=muSi*nsilSi/numtot
+  OoverSil =muO *nsilO /numtot
+  multMgoverSi=MgoverSil/SioverSil
+  multFeoverSi=FeoverSil/SioverSil
+  multOoverSi = OoverSil/SioverSil
+  if(dust_chem)then
+     do ich=1,nchem
+        if(TRIM(chem_list(ich))=='C' )ichC =ich
+        if(TRIM(chem_list(ich))=='Mg')ichMg=ich
+        if(TRIM(chem_list(ich))=='Fe')ichFe=ich
+        if(TRIM(chem_list(ich))=='Si')ichSi=ich
+        if(TRIM(chem_list(ich))=='O' )ichO =ich
+     enddo
+     ndchemtype=2
+     if(ndust==2)dndsize=0
+     if(ndust==4)dndsize=1
+  else
+     ndchemtype=1
+     if(ndust==1)dndsize=0
+     if(ndust==2)dndsize=1
+  endif
   if(myid==1.and.hydro.and.(nvar>ndim+2)) then
      write(*,'(A50)')"__________________________________________________"
      write(*,*) 'Hydro var indices:'
@@ -571,7 +620,49 @@ subroutine read_hydro_params(nml_ok)
 #endif
      if(metal)           write(*,*) '   imetal   = ',imetal
      if(nchem>0)         write(*,*) '   ichems   = ',ichem,'-',ichem+nchem-1
-     if(dust)            write(*,*) '   idust    = ',idust
+     if(dust) then
+        write(*,*) 'cooling  = ',cooling
+        write(*,*) '   =============***Dust Parameters***=============   '
+        write(*,*) '   idust      = ',idust,',   ndust    = ',ndust
+        write(*,*) 'dust_chem     = ',dust_chem
+        if(dust_chem)then
+           if(ndust.eq.1)then
+              write(*,*)'if you decide to use dust_chem, ndust>1. Stopping...'
+              stop
+           elseif(ndust==2)then
+              write(*,'(I3,A,I3,A)')idust,' for carbon, and',idust+1,' for silicates'
+           elseif(ndust==4)then
+              write(*,'(I3,A,I3,A,I3,A,I3,A)')idust,' and',idust+1,' for carbon, and',idust+2,' and',idust+3,' for silicates'
+           endif
+        endif
+        write(*,*) 'dust_cooling  = ',dust_cooling
+        write(*,*) 'dust_acc      = ',dust_accretion  ,',        dust_sput     = ',dust_sputtering
+        write(*,*) 'dust_coa      = ',dust_coagulation,',        dust_sha      = ',dust_shattering
+        write(*,*) 'dust prod neglected on small grains       = ', dust_prod_neglected_small_bin
+        write(*,*) 'dust acc  neglected on large grains       = ', dust_acc_neglected_large_bin
+        write(*,'(A,E10.2,A,E10.2)') ' dust_cond_eff =',dust_cond_eff,',dust_SNdest_eff =',dust_SNdest_eff
+        if (ndust==4) then
+           write(*,'(A,E10.2,A,E10.2)') ' Sizes (µm) carbon   : S =',asize (1),',              L =',asize (2)
+           write(*,'(A,E10.2,A,E10.2)') ' Sizes (µm) silicate : S =',asize (3),',              L =',asize (4)
+           write(*,'(A,E10.2,A,E10.2)') ' s (g/cm^3) carbon   : S =',sgrain(1)*3d0,',              L =',sgrain(2)*3d0
+           write(*,'(A,E10.2,A,E10.2)') ' s (g/cm^3) silicate : S =',sgrain(3)*3d0,',              L =',sgrain(4)*3d0
+        else if(ndust==2)then
+           write(*,'(A,E10.2,A,E10.2)') ' Sizes (µm): S =',asize (1),',              L =',asize (2)
+           write(*,'(A,E10.2,A,E10.2)') ' s (g/cm^3): S =',sgrain(1),',              L =',sgrain(2)
+        endif
+        write(*,*)'           t_acc_ref t_des_ref t_sha_ref t_coa_ref'
+        write(*,'(A,4e10.3,A)')'           ', t_growth_ref/1d6,t_sputter_ref/1d6,t_sha_ref/1d6,t_coa_ref/1d6,' Myr'
+        write(*,'(A,4e10.3,A)')'  Model :  ',4d5/1d6,1d5/1d6,5.41d7/1d6,2.71d5/1d6,' Myr'
+        write(*,'(A,2f7.4)')'Respective fraction of small and large grains in stellar ejecta:',fsmall_ej,flarge_ej
+        if(dust_chem)then
+           write(*,*) 'Mass fraction in silicates of:'
+           write(*,*) 'Mg    Fe    Si    O'
+           write(*,'(4f6.3)') nsilMg,nsilFe,nsilSi,nsilO
+           write(*,'(4f6.3)') MgoverSil,FeoverSil,SioverSil,OoverSil
+           write(*,*)'Key element to track silicate is Si'
+        endif
+        write(*,*) '   ===============================================   '
+     endif
      if(delayed_cooling) write(*,*) '   idelay   = ',idelay
      if(sf_virial .and. sf_model /= 6)then
            write(*,*) '   ivirial1 = ',ivirial1

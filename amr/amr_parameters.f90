@@ -41,6 +41,11 @@ module amr_parameters
 #else
   integer,parameter::ndim=NDIM
 #endif
+#ifndef NDUST
+  integer,parameter::ndust=2
+#else
+  integer,parameter::ndust=NDUST
+#endif
   integer,parameter::twotondim=2**ndim
   integer,parameter::threetondim=3**ndim
   integer,parameter::twondim=2*ndim
@@ -58,7 +63,7 @@ module amr_parameters
 #else
   integer,parameter :: nchem=NCHEM
 #endif
-  integer(kind=4),parameter::nvarSN=15+nchem
+  integer(kind=4),parameter::nvarSN=15+nchem+ndust
 
 
   ! Precompute powers of 2 in the right prec for hilbert curve (MT)
@@ -141,6 +146,7 @@ module amr_parameters
   integer::foutput_timer=-1   ! Output frequency of timer
   integer::wallstep=-1        ! Number of step foward to finish
   real(dp)::tstart=0.0        ! MPI clock at start
+  logical::frozen=.false.
 
   ! Lightcone parameters
   real(dp)::thetay_cone=12.5
@@ -159,6 +165,7 @@ module amr_parameters
   real(dp)::texp   =0.0D0     ! Current proper time
   real(dp)::n_sink = -1.d0    ! Sink particle density threshold in H/cc
   real(dp)::ns_sink = -1.d0   ! Sink particle stellar density threshold in H/cc
+  real(dp)::ns2_sink = -1.d0  ! Sink particle stellar density threshold in H/cc (overrides r_gal)
   real(dp)::rho_sink = -1.D0  ! Sink particle density threshold in g/cc
   real(dp)::sig_sink = -1.    ! Sink particle stellar 3D velocity dispersion threshold in km/s
   real(dp)::d_sink = -1.D0    ! Sink particle density threshold in user units
@@ -211,7 +218,7 @@ module amr_parameters
   real(dp)::boost_acc=2.0d0   ! Boost power factor for the accretion rate
   real(dp)::boost_drag=2.0d0  ! Boost power factor for drag force
   real(dp)::boost_drag_part=0.0d0  ! Boost power factor for particle drag force
-  real(dp)::r_gal  =1.0d2     ! SMBH sphere radius of influence in kpc (for active sinks)
+  real(dp)::r_gal  =1.0d2     ! SMBH sphere radius of influence in kpc
   real(dp)::r_bhr  =1.0d2     ! SMBH minimum sphere radius of influence in kpc
   real(dp)::n_gal =0.1d0      ! Minimum required background density (gas, H/cc) to activate r_gal
   real(dp)::sigmav_max=10d15  ! Maximum relative velocity in the Bondi accretion rate in kpc
@@ -229,9 +236,73 @@ module amr_parameters
   real(dp)::t_que=-1.         ! Minimum stellar age to use for sink creation density threshold
   logical::weighted_drag=.false. ! Activate kernel-weighted drag force measurement
   real(dp)::adfmax=-1.        ! Maximum acceleration from gas drag force (km/s/Myr)
-
-  real(dp)::zdmax=-1d0        ! Maximum allowed dust ratio
   character(len=128)::sinkprops_dir='SINKPROPS/'
+  real(dp)::dust_SNdest_eff=0.1d0   ! Dust SN destruction efficiency
+  real(dp)::dust_cond_eff=0.5d0     ! Dust condensation efficiency in SN remnants
+  real(dp)::dust_cond_eff_Ia=0.5d0  ! Dust condensation efficiency in SN Ia remnants
+  real(dp)::zdmax=1.0d0 !0.99d0     ! Maximum allowed dust-to-metal ratio (1d-2)
+  real(dp)::errmax=0.1d0            ! criterion for convergence in dust cooling/sputtering
+  real(dp)::DTMini=1d-1             ! initial dust-to-metal ratio
+  real(dp)::fsmall_ini=0.5d0        ! initial fraction of small grains
+  real(dp)::tsfr_damp_IC=-1.0d0     ! damping time scale for star_formation IC
+#if NDUST==1
+  real(dp),dimension(1:2):: asize=(/0.1d0,0.1d0/)    ! grain size (in microns)
+#else
+  real(dp),dimension(1:4):: asize=(/0.005d0,0.1d0,0.005d0,0.1d0/)    ! grain size (in microns)
+#endif
+  real(dp),dimension(1:ndust):: sgrain=3d0 ! grain material density (in g/cm^3)
+!!$#if NDUST==4
+!!$
+!!$#endif
+!!$#if NDUST==2
+!!$  real(dp),dimension(1:ndust):: asize=(/0.005d0,0.1d0/)    ! grain size (in microns)
+!!$#else
+!!$  real(dp),dimension(1:2):: asize=(/0.1d0,0.1d0/) ! duplicate the values
+!!$#endif
+  real(dp)::t_sputter_ref=1d5 ! 1e5 yr (0.1 Myr)
+  real(dp)::t_growth_ref=4d5  !
+  real(dp)::Sconstant=1.0d0
+  real(dp)::boost_growth=0.0d0
+  real(dp)::nhboost_growth=1d15
+  real(dp),dimension(1:ndust)::Tdust_growth=2d1  ! Dust temperature in K for the stick. coef. of Leitch-Devlin
+  real(dp)::t_sha_ref=5.41d7  !  large grains size=0.1µ, v=10km/s, density grain=3g.cm-3
+  real(dp)::t_coa_ref=2.71d5  !  small grains size=0.005µ,  v=0.1km/s, density grain=3g.cm-3
+  real(dp)::nh_growth=1d-1    !  gas density above which dust accretion is allowed (H/cm3)
+  real(dp)::nh_coa=1d2        !  gas density above which dust coagulation is allowed (H/cm3)
+  real(dp)::power_coa=0.0d0   !  power-law dependency with density of the coagulation timescale
+  real(dp),dimension(1:ndust):: dM_acc = 0.0d0
+  real(dp),dimension(1:ndust):: dM_acc_all = 0.0d0
+  real(dp),dimension(1:ndust):: dM_spu = 0.0d0
+  real(dp),dimension(1:ndust):: dM_spu_all = 0.0d0
+  real(dp),dimension(1:ndust):: dM_coa = 0.0d0
+  real(dp),dimension(1:ndust):: dM_coa_all = 0.0d0
+  real(dp),dimension(1:ndust):: dM_sha = 0.0d0
+  real(dp),dimension(1:ndust):: dM_sha_all = 0.0d0
+  real(dp),dimension(1:ndust):: dM_prod = 0.0d0
+  real(dp),dimension(1:ndust):: dM_prod_all = 0.0d0
+  real(dp),dimension(1:ndust):: dM_prod_Ia = 0.0d0
+  real(dp),dimension(1:ndust):: dM_prod_Ia_all = 0.0d0
+  real(dp),dimension(1:ndust):: dM_prod_SW = 0.0d0
+  real(dp),dimension(1:ndust):: dM_prod_SW_all = 0.0d0
+  real(dp),dimension(1:ndust):: dM_SNd = 0.0d0
+  real(dp),dimension(1:ndust):: dM_SNd_all = 0.0d0
+  real(dp),dimension(1:ndust):: dM_SNd_Ia = 0.0d0
+  real(dp),dimension(1:ndust):: dM_SNd_Ia_all = 0.0d0
+  real(dp)::muMg=24.3050d0
+  real(dp)::muFe=55.8450d0
+  real(dp)::muSi=28.0855d0
+  real(dp)::muO =15.9990d0
+  real(dp)::nsilMg=1.0d0
+  real(dp)::nsilFe=1.0d0
+  real(dp)::nsilSi=1.0d0
+  real(dp)::nsilO =4.0d0
+  real(dp)::multMgoverSi,multFeoverSi,multOoverSi
+  real(dp)::MgoverSil,FeoverSil,SioverSil,OoverSil
+  real(dp)::fsmall_ej=0.0d0
+  real(dp)::flarge_ej
+  integer::ndchemtype
+  integer::dndsize
+  integer::ichC,ichMg,ichFe,ichSi,ichO
 
   logical ::self_shielding=.false.
   logical ::pressure_fix=.false.
@@ -241,9 +312,22 @@ module amr_parameters
   logical ::isothermal=.false.
   logical ::metal=.false.
   logical ::dust=.false.
-  logical ::dust_cooling=.false.   ! Activate high-T cooling of the gas from dust
-  logical ::metal_gasonly=.false.  ! Only count gas-phase metals for cooling
+  logical ::checkhydro=.false.
+  logical ::dust_turb=.false.
+  logical ::dustdebug=.false.
+  logical ::dust_chem=.false.
+  logical ::dust_cooling=.false.          ! Activate high-T cooling of the gas from dust
+  logical ::dust_dest_within_cool=.false. ! Dust destruction is done w/in cooling_module
+  logical ::metal_gasonly=.false.         ! Only count gas-phase metals for cooling
+  logical ::dust_SNdest=.true.            ! Dust destruction in SN explosions
+  character(LEN=20)::thermal_sputtering='tsai' ! Thermal sputtering law (Tsai&Matthews 1995)
   character(LEN=20)::sticking_coef='chaabouni'
+  logical ::dust_acc_neglected_large_bin=.false. !Dust accretion only done on small grains
+  logical ::dust_prod_neglected_small_bin=.false.!Dust production from SN only affect large grains
+  logical ::dust_coagulation=.false.           ! Activate grain coagulation (two grain sizes)
+  logical ::dust_shattering=.false.            ! Activate grain shattering (two grain sizes)
+  logical ::dust_accretion=.false.             ! Activate grain growth by accretion
+  logical ::dust_sputtering=.false.            ! Activate grain destruction by thermal sputtering
   logical ::haardt_madau=.false.
   logical ::delayed_cooling=.false.
   logical ::smbh=.false.
@@ -275,11 +359,14 @@ module amr_parameters
   logical ::momentum_feedback=.false.
   logical :: drag_part = .false. !activate the friction from stars/DM (HP)
   logical :: holdback = .true. ! Activate strict hold-back method to preserve max physical resolution
-
+  logical :: galage = .false.  ! read age from a file of particles (used with the merger patch)
+  logical :: stellar_velocity_seed = .false. ! Set initial smbh seed to follow local stellar velocity
+  logical :: ns_sink_scaled = .false. ! set ns_sink to scale with (physical grid size)**3. To prevent the effect from shot noises when the grid size is small.
 
   ! Stellar winds for yOMP
   logical::stellar_winds=.false.
   character(len=128)::stellar_winds_file='none'
+  character(len=128)::supernovae_II_file='none'
 #ifdef NCHEM
 #if NCHEM==8
   character(LEN=2),dimension(1:nchem)::chem_list=(/'H ','O ','Fe','Mg','C ','N ','Si','S '/)
@@ -424,6 +511,7 @@ module amr_parameters
   logical :: mechanical_geen = .false.
   logical :: log_mfb=.false.
   logical :: log_mfb_mega=.false.
+  integer :: snyield_model=0
   real(dp) :: A_SN=2.5d5
   real(dp) :: expN_SN=-2d0/17d0
   real(dp) :: A_SN_geen = 5d5

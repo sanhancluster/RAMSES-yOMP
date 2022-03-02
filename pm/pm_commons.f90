@@ -66,7 +66,7 @@ module pm_commons
 #ifdef OUTPUT_PARTICLE_POTENTIAL
   real(dp), allocatable, dimension(:)   :: ptcl_phi  ! Potential of particle added by AP for output purposes
 #endif
-  real(dp), allocatable, dimension(:)   :: tp       ! Birth epoch
+  real(dp), allocatable, dimension(:)   :: tp,tpl   ! Birth epoch
   real(dp), allocatable, dimension(:,:) :: weightp  ! weight of cloud parts for sink accretion only
   real(dp), allocatable, dimension(:)   :: zp       ! Birth metallicity
 #ifdef NCHEM

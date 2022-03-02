@@ -725,19 +725,19 @@ subroutine init_chem(ich,z_chem)
       case ('H ')
          z_chem=1d0-Yp-z_ini
       case ('C ')
-         z_chem=tiny(0d0)
+         z_chem=1d-20
       case ('N ')
-         z_chem=tiny(0d0)
+         z_chem=1d-20
       case ('O ')
-         z_chem=tiny(0d0)
+         z_chem=1d-20
       case ('Mg')
-         z_chem=tiny(0d0)
+         z_chem=1d-20
       case ('Si')
-         z_chem=tiny(0d0)
+         z_chem=1d-20
       case ('S ')
-         z_chem=tiny(0d0)
+         z_chem=1d-20
       case ('Fe')
-         z_chem=tiny(0d0)
+         z_chem=1d-20
       case ('D ')
          z_chem=(1d0-Yp-z_ini)*2.55d-5
       case default

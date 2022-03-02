@@ -38,6 +38,197 @@ end subroutine godunov_fine
 !###########################################################
 !###########################################################
 !###########################################################
+subroutine check_uold_unew(ilevel,check_mynumber)
+  use amr_commons
+  use hydro_commons
+  implicit none
+  integer::ilevel
+  !--------------------------------------------------------------------------
+  ! This routine checks the values of uold/unew
+  !--------------------------------------------------------------------------
+  integer::i,ivar,ind,icpu,iskip,check_mynumber
+  integer::ii,ich,icell,ilow,ihigh
+  real(dp)::d,u,v,w,e
+  real(dp)::Zsolar,mdustC,mdustSil,mdust,Zd
+  real(dp),dimension(1:nchem)::Zchem
+#if NENER>0
+  integer::irad
+#endif
+
+  if(numbtot(1,ilevel)==0)return
+  if(verbose)write(*,111)ilevel
+
+  ! Set unew to uold for myid cells
+  do ind=1,twotondim
+     iskip=ncoarse+(ind-1)*ngridmax
+     do i=1,active(ilevel)%ngrid
+
+        if(dust_chem)then
+           icell=active(ilevel)%igrid(i)+iskip
+
+           ! For uold
+           Zsolar=uold(icell,imetal)/uold(icell,1)/0.02
+           do ich=1,nchem
+              Zchem(ich)=uold(icell,ichem+ich-1)/uold(icell,1)/0.02
+           enddo
+           if(Zsolar<0.0d0)then
+              write(*,*)'in check uold Ztot:',Zsolar,check_mynumber
+           endif
+           do ich=1,nchem
+              if(Zchem(ich)<0.0d0)then
+                 write(*,'(A,I2,A,2I9,es13.5,2I9)')'in check uold Ztotchem(',ich,'):',icell,myid,Zchem(ich),check_mynumber,ilevel
+              endif
+           enddo
+           mdustC=0.0d0;mdustSil=0.0d0
+           ilow=idust;ihigh=ilow+dndsize
+           mdustC  =SUM(uold(icell,ilow:ihigh))
+           ilow=ihigh+1;ihigh=ilow+dndsize
+           mdustSil=SUM(uold(icell,ilow:ihigh))/SioverSil
+!!$           ndchemtype=ndust/2
+!!$           mdustC=0.0d0;mdustSil=0.0d0
+!!$           do ii=1,ndchemtype
+!!$              mdustC  =mdustC  +uold(icell,idust-1+ii)
+!!$           enddo
+!!$           do ii=ndchemtype+1,ndust
+!!$              mdustSil=mdustSil+uold(icell,idust-1+ii)/SioverSil
+!!$           enddo
+           mdust=mdustC+mdustSil
+           Zsolar=Zsolar-mdust/uold(icell,1)/0.02 !! gas met
+           do ich=1,nchem
+              if(TRIM(chem_list(ich))=='C' )Zchem(ich)=Zchem(ich)-mdustC/uold(icell,1)/0.02
+              if(TRIM(chem_list(ich))=='Mg')Zchem(ich)=Zchem(ich)-mdustSil*MgoverSil/uold(icell,1)/0.02
+              if(TRIM(chem_list(ich))=='Fe')Zchem(ich)=Zchem(ich)-mdustSil*FeoverSil/uold(icell,1)/0.02
+              if(TRIM(chem_list(ich))=='Si')Zchem(ich)=Zchem(ich)-mdustSil*SioverSil/uold(icell,1)/0.02
+              if(TRIM(chem_list(ich))=='O' )Zchem(ich)=Zchem(ich)-mdustSil* OoverSil/uold(icell,1)/0.02
+           enddo
+           if(Zsolar<0.0d0)then
+              write(*,'(A,2I9,es13.5,2I9)')'in check uold Zgas:',icell,myid,Zsolar,check_mynumber,ilevel
+           endif
+           do ich=1,nchem
+              if(Zchem(ich)<0.0d0)then
+                 if(TRIM(chem_list(ich))=='C' )Zd=mdustC/uold(icell,1)/0.02
+                 if(TRIM(chem_list(ich))=='Mg')Zd=mdustSil*MgoverSil/uold(icell,1)/0.02
+                 if(TRIM(chem_list(ich))=='Fe')Zd=mdustSil*FeoverSil/uold(icell,1)/0.02
+                 if(TRIM(chem_list(ich))=='Si')Zd=mdustSil*SioverSil/uold(icell,1)/0.02
+                 if(TRIM(chem_list(ich))=='O' )Zd=mdustSil* OoverSil/uold(icell,1)/0.02
+                 write(*,'(A,I2,A,2I9,2es13.5,2I9)')'in check uold Zgaschem(',ich,'):',icell,myid,Zchem(ich),Zd,check_mynumber,ilevel
+              endif
+           enddo
+
+           ! For unew
+           Zsolar=unew(icell,imetal)/unew(icell,1)/0.02
+           do ich=1,nchem
+              Zchem(ich)=unew(icell,ichem+ich-1)/unew(icell,1)/0.02
+           enddo
+           if(Zsolar<0.0d0)then
+              write(*,'(A,2I9,es13.5,2I9)')'in check unew Ztot:',icell,myid,Zsolar,check_mynumber,ilevel
+           endif
+           do ich=1,nchem
+              if(Zchem(ich)<0.0d0)then
+                 write(*,'(A,I2,A,2I9,es13.5,2I9)')'in check unew Ztotchem(',ich,'):',icell,myid,Zchem(ich),check_mynumber,ilevel
+              endif
+           enddo
+           mdustC=0.0d0;mdustSil=0.0d0
+           ilow=idust;ihigh=ilow+dndsize
+           mdustC  =SUM(unew(icell,ilow:ihigh))
+           ilow=ihigh+1;ihigh=ilow+dndsize
+           mdustSil=SUM(unew(icell,ilow:ihigh))/SioverSil
+!!$           ndchemtype=ndust/2
+!!$           mdustC=0.0d0;mdustSil=0.0d0
+!!$           do ii=1,ndchemtype
+!!$              mdustC  =mdustC  +unew(icell,idust-1+ii)
+!!$           enddo
+!!$           do ii=ndchemtype+1,ndust
+!!$              mdustSil=mdustSil+unew(icell,idust-1+ii)/SioverSil
+!!$           enddo
+           mdust=mdustC+mdustSil
+           Zsolar=Zsolar-mdust/unew(icell,1)/0.02 !! gas met
+           do ich=1,nchem
+              if(TRIM(chem_list(ich))=='C' )Zchem(ich)=Zchem(ich)-mdustC/unew(icell,1)/0.02
+              if(TRIM(chem_list(ich))=='Mg')Zchem(ich)=Zchem(ich)-mdustSil*MgoverSil/unew(icell,1)/0.02
+              if(TRIM(chem_list(ich))=='Fe')Zchem(ich)=Zchem(ich)-mdustSil*FeoverSil/unew(icell,1)/0.02
+              if(TRIM(chem_list(ich))=='Si')Zchem(ich)=Zchem(ich)-mdustSil*SioverSil/unew(icell,1)/0.02
+              if(TRIM(chem_list(ich))=='O' )Zchem(ich)=Zchem(ich)-mdustSil* OoverSil/unew(icell,1)/0.02
+           enddo
+           if(Zsolar<0.0d0)then
+              write(*,'(A,2I9,es13.5,2I9)')'in check unew Zgas:',icell,myid,Zsolar,check_mynumber,ilevel
+           endif
+           do ich=1,nchem
+              if(Zchem(ich)<0.0d0)then
+                 if(TRIM(chem_list(ich))=='C' )Zd=mdustC/unew(icell,1)/0.02
+                 if(TRIM(chem_list(ich))=='Mg')Zd=mdustSil*MgoverSil/unew(icell,1)/0.02
+                 if(TRIM(chem_list(ich))=='Fe')Zd=mdustSil*FeoverSil/unew(icell,1)/0.02
+                 if(TRIM(chem_list(ich))=='Si')Zd=mdustSil*SioverSil/unew(icell,1)/0.02
+                 if(TRIM(chem_list(ich))=='O' )Zd=mdustSil* OoverSil/unew(icell,1)/0.02
+                 write(*,'(A,I2,A,2I9,2es13.5,2I9)')'in check unew Zgaschem(',ich,'):',icell,myid,Zchem(ich),Zd,check_mynumber,ilevel
+              endif
+           enddo
+!!$           if(icell==6181.and.myid==26.and.ilevel==14)then
+!!$              ich=5
+!!$              if(TRIM(chem_list(ich))=='C' )Zd=mdustC/unew(icell,1)/0.02
+!!$           endif
+!!$           if(icell==1005155.and.myid==37.and.ilevel==14)then
+!!$              ich=3
+!!$              if(TRIM(chem_list(ich))=='Fe')Zd=mdustSil*FeoverSil/unew(icell,1)/0.02
+!!$              write(*,'(A,I2,A,2I9,2es13.5,2I9)')'in check unew Zgaschem(',ich,'):',icell,myid,Zchem(ich),Zd,check_mynumber,ilevel
+!!$           endif
+        endif
+
+
+        if(unew(icell,imetal)<0.0d0)then
+           write(*,'(A,2I9,e18.9,2I9)')'check unew(metal) in active CPU:',icell,myid,unew(icell,imetal),check_mynumber,ilevel
+        endif
+        if(uold(icell,imetal)<0.0d0)then
+           write(*,'(A,2I9,e18.9,2I9)')'check uold(metal) in active CPU:',icell,myid,uold(icell,imetal),check_mynumber,ilevel
+        endif
+        if(unew(icell,idust)<0.0d0)then
+           write(*,'(A,2I9,e18.9,2I9)')'check unew in active CPU:',icell,myid,unew(icell,idust),check_mynumber,ilevel
+        endif
+        if(uold(icell,idust)<0.0d0)then
+           write(*,'(A,2I9,e18.9,2I9)')'check uold in active CPU:',icell,myid,uold(icell,idust),check_mynumber,ilevel
+        endif
+
+        if(unew(icell,imetal)<unew(icell,idust))then
+           write(*,'(A,2I9,2e18.9,2I9)')'check unew(metal) in active CPU:',icell,myid,unew(icell,imetal),unew(icell,idust),check_mynumber,ilevel
+        endif
+        if(uold(icell,imetal)<uold(icell,idust))then
+           write(*,'(A,2I9,2e18.9,2I9)')'check uold(metal) in active CPU:',icell,myid,uold(icell,imetal),uold(icell,idust),check_mynumber,ilevel
+        endif
+
+!!$        if(icell==1002142)then
+!!$           write(*,'(A,2I9,4e18.9)')'***:',myid,icell,unew(icell,imetal),unew(icell,idust),uold(icell,imetal),uold(icell,idust)
+!!$        endif
+
+     end do
+  end do
+
+!!$  do icpu=1,ncpu
+!!$  do ind=1,twotondim
+!!$     iskip=ncoarse+(ind-1)*ngridmax
+!!$     do i=1,reception(icpu,ilevel)%ngrid
+!!$        if(unew(reception(icpu,ilevel)%igrid(i)+iskip,imetal)<0.0d0)then
+!!$           write(*,*)'check unew(metal) in virtual cells:',reception(icpu,ilevel)%igrid(i)+iskip,unew(reception(icpu,ilevel)%igrid(i)+iskip,imetal)
+!!$        endif
+!!$        if(uold(reception(icpu,ilevel)%igrid(i)+iskip,imetal)<0.0d0)then
+!!$           write(*,*)'check uold(metal) in virtual cells:',reception(icpu,ilevel)%igrid(i)+iskip,uold(reception(icpu,ilevel)%igrid(i)+iskip,imetal)
+!!$        endif
+!!$        if(unew(reception(icpu,ilevel)%igrid(i)+iskip,idust)<0.0d0)then
+!!$           write(*,*)'check unew in virtual cells:',reception(icpu,ilevel)%igrid(i)+iskip,unew(reception(icpu,ilevel)%igrid(i)+iskip,idust)
+!!$        endif
+!!$        if(uold(reception(icpu,ilevel)%igrid(i)+iskip,idust)<0.0d0)then
+!!$           write(*,*)'check uold in virtual cells:',reception(icpu,ilevel)%igrid(i)+iskip,uold(reception(icpu,ilevel)%igrid(i)+iskip,idust)
+!!$        endif
+!!$     end do
+!!$  end do
+!!$  end do
+
+111 format('   Entering set_unew for level ',i2)
+
+end subroutine check_uold_unew
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
 subroutine set_unew(ilevel)
   use amr_commons
   use hydro_commons
@@ -466,6 +657,9 @@ subroutine godfine1(ind_grid,ncache,ilevel)
   integer::i3min,i3max,j3min,j3max,k3min,k3max
   real(dp)::dx,scale,oneontwotondim
 
+  integer::ich,ilow,ihigh
+  real(dp)::mdustC,mdustSil
+
   oneontwotondim = 1.d0/dble(twotondim)
 
   ! Mesh spacing in that level
@@ -530,6 +724,29 @@ subroutine godfine1(ind_grid,ncache,ilevel)
                  u1(i,j,ivar)=uold(ibuffer_father(i,j),ivar)
               end do
            end do
+
+           if(dust_chem)then
+              do i=1,nbuffer
+              mdustC=0.0d0;mdustSil=0.0d0
+              ilow=idust;ihigh=ilow+dndsize
+              mdustC  =SUM(u1(i,j,ilow:ihigh))
+              ilow=ihigh+1;ihigh=ilow+dndsize
+              mdustSil=SUM(u1(i,j,ilow:ihigh))/SioverSil
+              do ich=1,nchem
+                 if(TRIM(chem_list(ich))=='C' )u1(i,j,ichem+ich-1)=u1(i,j,ichem+ich-1)-mdustC
+                 if(TRIM(chem_list(ich))=='Mg')u1(i,j,ichem+ich-1)=u1(i,j,ichem+ich-1)-mdustSil*MgoverSil
+                 if(TRIM(chem_list(ich))=='Fe')u1(i,j,ichem+ich-1)=u1(i,j,ichem+ich-1)-mdustSil*FeoverSil
+                 if(TRIM(chem_list(ich))=='Si')u1(i,j,ichem+ich-1)=u1(i,j,ichem+ich-1)-mdustSil*SioverSil
+                 if(TRIM(chem_list(ich))=='O' )u1(i,j,ichem+ich-1)=u1(i,j,ichem+ich-1)-mdustSil* OoverSil
+              enddo
+              enddo
+           else
+              ilow=idust;ihigh=ilow+dndsize
+              do i=1,nbuffer
+                 u1(i,j,imetal)=u1(i,j,imetal)-SUM(u1(i,j,ilow:ihigh))
+              enddo
+           endif
+
         end do
         call interpol_hydro(u1,u2,nbuffer)
      endif
@@ -559,6 +776,30 @@ subroutine godfine1(ind_grid,ncache,ilevel)
               uloc(ind_nexist(i),i3,j3,k3,ivar)=u2(i,ind_son,ivar)
            end do
         end do
+
+        if(dust_chem)then
+           ! only for the cells w/o interpolations
+           !(those with interpolations their values have been manipulated on u1, giving u2)
+           do i=1,nexist
+              mdustC=0.0d0;mdustSil=0.0d0
+              ilow=idust;ihigh=ilow+dndsize
+              mdustC  =SUM(uloc(ind_exist(i),i3,j3,k3,ilow:ihigh))
+              ilow=ihigh+1;ihigh=ilow+dndsize
+              mdustSil=SUM(uloc(ind_exist(i),i3,j3,k3,ilow:ihigh))/SioverSil
+              do ich=1,nchem
+                 if(TRIM(chem_list(ich))=='C' )uloc(ind_exist(i),i3,j3,k3,ichem+ich-1)=uloc(ind_exist(i),i3,j3,k3,ichem+ich-1)-mdustC
+                 if(TRIM(chem_list(ich))=='Mg')uloc(ind_exist(i),i3,j3,k3,ichem+ich-1)=uloc(ind_exist(i),i3,j3,k3,ichem+ich-1)-mdustSil*MgoverSil
+                 if(TRIM(chem_list(ich))=='Fe')uloc(ind_exist(i),i3,j3,k3,ichem+ich-1)=uloc(ind_exist(i),i3,j3,k3,ichem+ich-1)-mdustSil*FeoverSil
+                 if(TRIM(chem_list(ich))=='Si')uloc(ind_exist(i),i3,j3,k3,ichem+ich-1)=uloc(ind_exist(i),i3,j3,k3,ichem+ich-1)-mdustSil*SioverSil
+                 if(TRIM(chem_list(ich))=='O' )uloc(ind_exist(i),i3,j3,k3,ichem+ich-1)=uloc(ind_exist(i),i3,j3,k3,ichem+ich-1)-mdustSil* OoverSil
+              enddo
+           enddo
+        else
+           ilow=idust;ihigh=ilow+dndsize
+           do i=1,nexist
+              uloc(ind_exist(i),i3,j3,k3,imetal)=uloc(ind_exist(i),i3,j3,k3,imetal)-SUM(uloc(ind_exist(i),i3,j3,k3,ilow:ihigh))
+           enddo
+        endif
 
         ! Gather gravitational acceleration
         if(poisson)then
@@ -702,6 +943,50 @@ subroutine godfine1(ind_grid,ncache,ilevel)
                    & -flux(i,i3+i0,j3+j0,k3+k0,ivar,idim))
            end do
         end do
+        if(dust_chem)then
+           do i=1,ncache
+              do ich=1,nchem
+                 if(TRIM(chem_list(ich))=='C' )then
+                    ilow=idust;ihigh=ilow+dndsize
+                    unew(ind_cell(i),ichem+ich-1)=unew(ind_cell(i),ichem+ich-1)+ &
+                         & (SUM(flux(i,i3   ,j3   ,k3   ,ilow:ihigh,idim)) &
+                         & -SUM(flux(i,i3+i0,j3+j0,k3+k0,ilow:ihigh,idim)))
+                 endif
+                 if(TRIM(chem_list(ich))=='Mg')then
+                    ilow=idust+dndsize+1;ihigh=ilow+dndsize
+                    unew(ind_cell(i),ichem+ich-1)=unew(ind_cell(i),ichem+ich-1)+ &
+                         & (SUM(flux(i,i3   ,j3   ,k3   ,ilow:ihigh,idim)) &
+                         & -SUM(flux(i,i3+i0,j3+j0,k3+k0,ilow:ihigh,idim)))*MgoverSil/SioverSil
+                 endif
+                 if(TRIM(chem_list(ich))=='Fe')then
+                    ilow=idust+dndsize+1;ihigh=ilow+dndsize
+                    unew(ind_cell(i),ichem+ich-1)=unew(ind_cell(i),ichem+ich-1)+ &
+                         & (SUM(flux(i,i3   ,j3   ,k3   ,ilow:ihigh,idim)) &
+                         & -SUM(flux(i,i3+i0,j3+j0,k3+k0,ilow:ihigh,idim)))*FeoverSil/SioverSil
+                 endif
+                 if(TRIM(chem_list(ich))=='Si')then
+                    ilow=idust+dndsize+1;ihigh=ilow+dndsize
+                    unew(ind_cell(i),ichem+ich-1)=unew(ind_cell(i),ichem+ich-1)+ &
+                         & (SUM(flux(i,i3   ,j3   ,k3   ,ilow:ihigh,idim)) &
+                         & -SUM(flux(i,i3+i0,j3+j0,k3+k0,ilow:ihigh,idim)))
+                 endif
+                 if(TRIM(chem_list(ich))=='O' )then
+                    ilow=idust+dndsize+1;ihigh=ilow+dndsize
+                    unew(ind_cell(i),ichem+ich-1)=unew(ind_cell(i),ichem+ich-1)+ &
+                         & (SUM(flux(i,i3   ,j3   ,k3   ,ilow:ihigh,idim)) &
+                         & -SUM(flux(i,i3+i0,j3+j0,k3+k0,ilow:ihigh,idim)))* OoverSil/SioverSil
+                 endif
+              enddo
+           enddo
+        else
+           ilow=idust;ihigh=ilow+dndsize
+           do i=1,ncache
+              unew(ind_cell(i),imetal)=unew(ind_cell(i),imetal)+ &
+                   & (SUM(flux(i,i3   ,j3   ,k3   ,ilow:ihigh,idim)) &
+                   & -SUM(flux(i,i3+i0,j3+j0,k3+k0,ilow:ihigh,idim)))
+           enddo
+        endif
+
         if(pressure_fix) then
            ! Update velocity divergence
            do i=1,ncache
@@ -773,6 +1058,51 @@ subroutine godfine1(ind_grid,ncache,ilevel)
         unew(ind_buffer(i),ivar)=unew(ind_buffer(i),ivar)+uflow(i,ivar)*oneontwotondim
         end do
      end do
+
+     if(dust_chem)then
+        do i=1,nb_noneigh
+           do ich=1,nchem
+              if(TRIM(chem_list(ich))=='C' )then
+                 ilow=idust;ihigh=ilow+dndsize
+!$omp atomic update
+                 unew(ind_buffer(i),ichem+ich-1)=unew(ind_buffer(i),ichem+ich-1)+ &
+                      & SUM(uflow(i,ilow:ihigh))*oneontwotondim
+              endif
+              if(TRIM(chem_list(ich))=='Mg')then
+                 ilow=idust+dndsize+1;ihigh=ilow+dndsize
+!$omp atomic update
+                 unew(ind_buffer(i),ichem+ich-1)=unew(ind_buffer(i),ichem+ich-1)+ &
+                      & SUM(uflow(i,ilow:ihigh))*oneontwotondim*MgoverSil/SioverSil
+              endif
+              if(TRIM(chem_list(ich))=='Fe')then
+                 ilow=idust+dndsize+1;ihigh=ilow+dndsize
+!$omp atomic update
+                 unew(ind_buffer(i),ichem+ich-1)=unew(ind_buffer(i),ichem+ich-1)+ &
+                      & SUM(uflow(i,ilow:ihigh))*oneontwotondim*FeoverSil/SioverSil
+              endif
+              if(TRIM(chem_list(ich))=='Si')then
+                 ilow=idust+dndsize+1;ihigh=ilow+dndsize
+!$omp atomic update
+                 unew(ind_buffer(i),ichem+ich-1)=unew(ind_buffer(i),ichem+ich-1)+ &
+                      & SUM(uflow(i,ilow:ihigh))*oneontwotondim
+              endif
+              if(TRIM(chem_list(ich))=='O' )then
+                 ilow=idust+dndsize+1;ihigh=ilow+dndsize
+!$omp atomic update
+                 unew(ind_buffer(i),ichem+ich-1)=unew(ind_buffer(i),ichem+ich-1)+ &
+                      & SUM(uflow(i,ilow:ihigh))*oneontwotondim* OoverSil/SioverSil
+              endif
+           enddo
+        enddo
+     else
+        ilow=idust;ihigh=ilow+dndsize
+        do i=1,nb_noneigh
+!$omp atomic update
+           unew(ind_buffer(i),imetal)=unew(ind_buffer(i),imetal)+ &
+                & SUM(uflow(i,ilow:ihigh))*oneontwotondim
+        enddo
+     endif
+
      if(pressure_fix) then
         do i=1,nb_noneigh
 !$omp atomic update
@@ -826,6 +1156,51 @@ subroutine godfine1(ind_grid,ncache,ilevel)
          unew(ind_buffer(i),ivar)=unew(ind_buffer(i),ivar)+uflow(i,ivar)*oneontwotondim
         end do
      end do
+
+     if(dust_chem)then
+        do i=1,nb_noneigh
+           do ich=1,nchem
+              if(TRIM(chem_list(ich))=='C' )then
+                 ilow=idust;ihigh=ilow+dndsize
+!$omp atomic update
+                 unew(ind_buffer(i),ichem+ich-1)=unew(ind_buffer(i),ichem+ich-1)+ &
+                      & SUM(uflow(i,ilow:ihigh))*oneontwotondim
+              endif
+              if(TRIM(chem_list(ich))=='Mg')then
+                 ilow=idust+dndsize+1;ihigh=ilow+dndsize
+!$omp atomic update
+                 unew(ind_buffer(i),ichem+ich-1)=unew(ind_buffer(i),ichem+ich-1)+ &
+                      & SUM(uflow(i,ilow:ihigh))*oneontwotondim*MgoverSil/SioverSil
+              endif
+              if(TRIM(chem_list(ich))=='Fe')then
+                 ilow=idust+dndsize+1;ihigh=ilow+dndsize
+!$omp atomic update
+                 unew(ind_buffer(i),ichem+ich-1)=unew(ind_buffer(i),ichem+ich-1)+ &
+                      & SUM(uflow(i,ilow:ihigh))*oneontwotondim*FeoverSil/SioverSil
+              endif
+              if(TRIM(chem_list(ich))=='Si')then
+                 ilow=idust+dndsize+1;ihigh=ilow+dndsize
+!$omp atomic update
+                 unew(ind_buffer(i),ichem+ich-1)=unew(ind_buffer(i),ichem+ich-1)+ &
+                      & SUM(uflow(i,ilow:ihigh))*oneontwotondim
+              endif
+              if(TRIM(chem_list(ich))=='O' )then
+                 ilow=idust+dndsize+1;ihigh=ilow+dndsize
+!$omp atomic update
+                 unew(ind_buffer(i),ichem+ich-1)=unew(ind_buffer(i),ichem+ich-1)+ &
+                      & SUM(uflow(i,ilow:ihigh))*oneontwotondim* OoverSil/SioverSil
+              endif
+           enddo
+        enddo
+     else
+        ilow=idust;ihigh=ilow+dndsize
+        do i=1,nb_noneigh
+!$omp atomic update
+           unew(ind_buffer(i),imetal)=unew(ind_buffer(i),imetal)+ &
+                & SUM(uflow(i,ilow:ihigh))*oneontwotondim
+        enddo
+     endif
+
      if(pressure_fix) then
         do i=1,nb_noneigh
 !$omp atomic update

@@ -108,7 +108,7 @@ subroutine make_sink(ilevel)
   !----------------------------------------------------------------------
   ! local constants
   real(dp),dimension(1:twotondim,1:3)::xc
-  integer ::ncache,nnew,ngrid,icpu,index_sink,index_sink_tot,index_sink_omp,index_sink_tot_omp
+  integer ::ncache,nnew,ngrid,icpu,index_sink,index_sink_tot,index_sink_omp,index_sink_tot_omp,index_sink_tot_old
   integer ::igrid,ix,iy,iz,ind,i,j,iskip,isink,nx_loc
   integer ::ind_cloud,itype,idim
   integer ::ntot,ntot_all,info,ntot_tmp,izero_myid,ninc,ntot_myid,ninc_omp
@@ -116,10 +116,10 @@ subroutine make_sink(ilevel)
   logical ::ok_free
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_m
   real(dp)::d,x,y,z,u,v,w,e,temp
-  real(dp)::d_jeans,d_thres,dd_sink,ds_sink
+  real(dp)::d_jeans,d_thres,dd_sink,ds_sink,ds2_sink
   real(dp)::birth_epoch,rmax_sink2,x_half,y_half,z_half,x_box,y_box,z_box
   real(dp),dimension(1:3)::xbound,skip_loc
-  real(dp)::dx,dx_loc,scale,dxx,dyy,dzz,dr_sink,rmax_sink,rmin_sink,d_gal
+  real(dp)::dx,dx_loc,scale,dxx,dyy,dzz,dr_sink,rmax_sink,rmin_sink,d_gal,dx_eff
   real(dp)::factG,pi,d_star,star_ratio
 #ifdef SOLVERmhd
   real(dp)::bx1,bx2,by1,by2,bz1,bz2
@@ -173,6 +173,11 @@ subroutine make_sink(ilevel)
   else
      ds_sink=dd_sink
   end if
+
+  if(ns2_sink>0)then
+     ds2_sink=ns_sink/scale_nH
+  end if
+
   d_star=0d0
   d_gal=0d0
   if (star)d_star=n_star/scale_nH
@@ -188,11 +193,16 @@ subroutine make_sink(ilevel)
   if(ndim>2)skip_loc(3)=dble(kcoarse_min)
   scale=boxlen/dble(nx_loc)
   dx_loc=dx*scale
+  ! fixed physical minimum resoltuion
+  dx_min=scale*0.5d0**(nlevelmax-nlevelsheld)/aexp
 
   if(drag_part) then
-     dx_min=scale*0.5d0**(nlevelmax-nlevelsheld)/aexp
      vol_cloud = 4d0/3d0*pi*(DF_ncells*dx_min)**3
   end if
+
+   if(ns_sink_scaled)then
+      ds_sink = ds_sink * (dx_min / dx_loc)**3
+   end if
 
   x_half=scale*xbound(1)/2.0; y_half=scale*xbound(2)/2.0; z_half=scale*xbound(3)/2.0
   x_box =scale*xbound(1); y_box =scale*xbound(2); z_box =scale*xbound(3)
@@ -354,8 +364,7 @@ subroutine make_sink(ilevel)
               y=(xg(ind_grid(i),2)+xc(ind,2)-skip_loc(2))*scale
               z=(xg(ind_grid(i),3)+xc(ind,3)-skip_loc(3))*scale
               do isink=1,nsink
-                 if(.not. drag_part .or. (d_avgptr(isink) > 0d0 .and. d_avgptr(isink) > d_gal) &
-                       & .or. (m_background(isink,1) > 0d0 .and. m_background(isink,1)/vol_cloud > d_star)) then
+                 if(rho_star(ind_cell(i)) < ds2_sink) then
                     rmax_sink2 = rmax_sink**2
                  else
                     rmax_sink2 = rmin_sink**2
@@ -596,6 +605,7 @@ subroutine make_sink(ilevel)
      index_sink=nsink-ntot_all+ntot_sink_cpu(myid-1)
      index_sink_tot=nindsink-ntot_all+ntot_sink_cpu(myid-1)
   end if
+  index_sink_tot_old = index_sink_tot
 
   ! Loop over grids
   ncache=active(ilevel)%ngrid
@@ -638,10 +648,18 @@ subroutine make_sink(ilevel)
 
            ! Get gas variables
            d=max(uold(ind_cell_new(i),1), smallr)
-           u=uold(ind_cell_new(i),2)
-           v=uold(ind_cell_new(i),3)
-           w=uold(ind_cell_new(i),4)
+           if (stellar_velocity_seed) then
+              ! Set seed velocity to follow the local stellar velocity
+              u=v_star(ind_cell_new(i),1)/max(rho_star(ind_cell_new(i)), smallr)
+              v=v_star(ind_cell_new(i),2)/max(rho_star(ind_cell_new(i)), smallr)
+              w=v_star(ind_cell_new(i),3)/max(rho_star(ind_cell_new(i)), smallr)
+           else
+              u=uold(ind_cell_new(i),2)
+              v=uold(ind_cell_new(i),3)
+              w=uold(ind_cell_new(i),4)
+           end if
            e=uold(ind_cell_new(i),5)
+
 
            ! Get gas cell position
            x=(xg(ind_grid_new(i),1)+xc(ind,1)-skip_loc(1))*scale
@@ -4191,7 +4209,7 @@ subroutine get_rho_star(ilevel)
   ! Array rho_star is stored with:
   ! - rho_star containing the poisson source term fo stars
   !------------------------------------------------------------------
-  integer::iskip,icpu,ind,i,nx_loc,ibound
+  integer::iskip,icpu,ind,i,nx_loc,ibound,idim
   real(dp)::dx,scale,dx_loc
 
   if(.not. poisson)return
@@ -4211,6 +4229,11 @@ subroutine get_rho_star(ilevel)
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
         rho_star(active(ilevel)%igrid(i)+iskip)=0.0D0
+        if(stellar_velocity_seed) then
+           do idim=1,ndim
+              v_star(active(ilevel)%igrid(i)+iskip,idim)=0.0D0
+           end do
+        end if
      end do
   end do
 
@@ -4223,6 +4246,11 @@ subroutine get_rho_star(ilevel)
         iskip=ncoarse+(ind-1)*ngridmax
         do i=1,reception(icpu,ilevel)%ngrid
            rho_star(reception(icpu,ilevel)%igrid(i)+iskip)=0.0D0
+           if(stellar_velocity_seed) then
+              do idim=1,ndim
+                 v_star(reception(icpu,ilevel)%igrid(i)+iskip,idim)=0.0D0
+              end do
+           end if
         end do
      end do
   end do
@@ -4235,7 +4263,12 @@ subroutine get_rho_star(ilevel)
   ! Update boudaries
   call make_virtual_reverse_dp(rho_star(1),ilevel)
   call make_virtual_fine_dp   (rho_star(1),ilevel)
-
+  if(stellar_velocity_seed) then
+     do idim=1,ndim
+        call make_virtual_reverse_dp(v_star(1,idim),ilevel)
+        call make_virtual_fine_dp   (v_star(1,idim),ilevel)
+     end do
+  end if
   !----------------------------------------------------
   ! Reset rho_star in physical boundaries
   !----------------------------------------------------
@@ -4245,6 +4278,11 @@ subroutine get_rho_star(ilevel)
      do ibound=1,nboundary
         do i=1,boundary(ibound,ilevel)%ngrid
            rho_star(boundary(ibound,ilevel)%igrid(i)+iskip)=0.0
+           if(stellar_velocity_seed) then
+              do idim=1,ndim
+                 v_star(boundary(ibound,ilevel)%igrid(i)+iskip,idim)=0.0D0
+              end do
+           end if
         end do
      end do
   end do
@@ -4343,11 +4381,12 @@ subroutine rhostar_from_current_level(ilevel)
               end if
 
               ! Use stars below minimum initial mass only
-              if(use_initial_mass) then
-                 ok_star = ok_star .and. mp0(ipart) < mstar * 1.1
-              else
-                 ok_star = ok_star .and. mp(ipart) < mstar * 1.1
-              end if
+              ! No longer used: to equally resolve high SFR region
+              !if(use_initial_mass) then
+              !   ok_star = ok_star .and. mp0(ipart) < mstar * 1.1
+              !else
+              !   ok_star = ok_star .and. mp(ipart) < mstar * 1.1
+              !end if
 
               if (ok_star) then
                  local_count = local_count + 1
@@ -4420,7 +4459,7 @@ subroutine cic_star(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel)
   ! are updated by the input particle list.
   !------------------------------------------------------------------
   logical::error
-  integer::j,ind,idim,nx_loc,ind2
+  integer::j,ind,idim,nx_loc,ind2,ind_grid_now,ind_nbor
   real(dp)::dx,dx_loc,scale,vol_loc
   ! Grid-based arrays
   integer ,dimension(1:nvector,1:threetondim)::nbors_father_cells
@@ -4428,13 +4467,16 @@ subroutine cic_star(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel)
   ! Particle-based arrays
   logical ,dimension(1:nvector,1:twotondim)::ok
   real(dp),dimension(1:nvector)::mmm
+  real(dp),dimension(1:nvector,1:ndim)::vvv
   real(dp),dimension(1:nvector,1:twotondim)::vol2
+  real(dp),dimension(1:nvector,1:twotondim,1:ndim)::vol3
   real(dp),dimension(1:nvector,1:ndim)::x,dd,dg
   integer ,dimension(1:nvector,1:ndim)::ig,id,igg,igd,icg,icd
   real(dp),dimension(1:nvector,1:twotondim)::vol
   integer ,dimension(1:nvector,1:twotondim)::igrid,icell,indp,kg
   real(dp),dimension(1:3)::skip_loc
   real(dp),dimension(1:threetondim,1:twotondim)::rho_star_add
+  real(dp),dimension(1:threetondim,1:twotondim,1:ndim)::v_star_add
   integer ,dimension(1:threetondim,1:twotondim)::indp_nb
 
   ! Mesh spacing in that level
@@ -4472,6 +4514,14 @@ subroutine cic_star(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel)
   do j=1,np
      mmm(j)=mp(ind_part(j))
   end do
+  ! Gather particle velocity
+  if (stellar_velocity_seed) then
+     do j=1,np
+        do idim=1,ndim
+           vvv(j,idim)=vp(ind_part(j),idim)
+        end do
+     end do
+  end if
 
   ! Check for illegal moves
   error=.false.
@@ -4612,53 +4662,96 @@ subroutine cic_star(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel)
      do j=1,np
         vol2(j,ind)=mmm(j)*vol(j,ind)/vol_loc
      end do
+     if (stellar_velocity_seed) then
+        do j=1,np
+           do idim=1,ndim
+              vol3(j,ind,idim)=vvv(j,idim)*vol2(j,ind)
+           end do
+        end do
+     end if
   end do
 
-  ! OMPNOTE: We use 2 strategies
-  ! Single grid case: deposit rho to temporary array and put it to common array later (Faster at high density)
-  ! Multiple grid case: classical way (Faster at low density)
-  if(ng==1) then
-     rho_star_add = 0d0
-     do ind=1,twotondim
-        do j=1,np
-           if(ok(j,ind)) then
-              rho_star_add(kg(j,ind),icell(j,ind))=rho_star_add(kg(j,ind),icell(j,ind))+vol2(j,ind)
-           end if
-        end do
-     end do
-
-     do ind2=1,threetondim
-        do ind=1,twotondim
-           indp_nb(ind2,ind)=ncoarse+(ind-1)*ngridmax+son(nbors_father_cells(1,ind2))
-        end do
-     end do
-
-     do ind2=1,threetondim
-        do ind=1,twotondim
-           if(rho_star_add(ind2,ind)>0d0) then
+   rho_star_add = 0d0
+   if (stellar_velocity_seed) v_star_add=0d0
+   ind_grid_now = 0
+   do j=1,np
+      if(ind_grid_part(j) /= ind_grid_now) then
+         if(ind_grid_now > 0) then
+            ! Compute neighboring grid indices
+            do ind2=1,threetondim
+               do ind=1,twotondim
+                  ind_nbor = nbors_father_cells(ind_grid_now,ind2)
+                  if(ind_nbor>0)then
+                     indp_nb(ind2,ind)=ncoarse+(ind-1)*ngridmax+son(ind_nbor)
+                  else
+                     indp_nb(ind2,ind)=0
+                  end if
+               end do
+            end do
+            ! Add temporal arrays to common arrays
+            do ind2=1,threetondim
+               do ind=1,twotondim
+                  if(indp_nb(ind2,ind)>0 .and. rho_star_add(ind2,ind)>0d0) then
 !$omp atomic update
-              rho_star(indp_nb(ind2,ind))=rho_star(indp_nb(ind2,ind))+rho_star_add(ind2,ind)
-           end if
-        end do
-     end do
-  else
-     ! Compute parent cell adress
-     do ind=1,twotondim
-        do j=1,np
-           indp(j,ind)=ncoarse+(icell(j,ind)-1)*ngridmax+igrid(j,ind)
-        end do
-     end do
-
-     do ind=1,twotondim
-        do j=1,np
-           if (ok(j,ind)) then
+                     rho_star(indp_nb(ind2,ind))=rho_star(indp_nb(ind2,ind))+rho_star_add(ind2,ind)
+                     if (stellar_velocity_seed) then
+                        ! Store stellar velocity field in temporal array f
+                        do idim=1,ndim
 !$omp atomic update
-              rho_star(indp(j,ind))=rho_star(indp(j,ind))+vol2(j,ind)
-           end if
-        end do
-     end do
-  end if
+                           v_star(indp_nb(ind2,ind),idim)=v_star(indp_nb(ind2,ind),idim)+v_star_add(ind2,ind,idim)
+                        end do
+                     end if
+                  end if
+               end do
+            end do
+         end if
+         rho_star_add = 0d0
+         if (stellar_velocity_seed) v_star_add=0d0
+         ind_grid_now = ind_grid_part(j)
+      end if
 
+      do ind=1,twotondim
+         if(ok(j,ind)) then
+            rho_star_add(kg(j,ind),icell(j,ind))=rho_star_add(kg(j,ind),icell(j,ind))+vol2(j,ind)
+            if (stellar_velocity_seed) then
+               do idim=1,ndim
+                  v_star_add(kg(j,ind),icell(j,ind),idim)=v_star_add(kg(j,ind),icell(j,ind),idim)+vol3(j,ind,idim)
+               end do
+            end if
+         end if
+      end do
+   end do
+
+   ! Empty remaining cache
+   if(ind_grid_now > 0) then
+      ! Compute neighboring grid indices
+      do ind2=1,threetondim
+         do ind=1,twotondim
+            ind_nbor = nbors_father_cells(ind_grid_now,ind2)
+            if(ind_nbor>0)then
+               indp_nb(ind2,ind)=ncoarse+(ind-1)*ngridmax+son(ind_nbor)
+            else
+               indp_nb(ind2,ind)=0
+            end if
+         end do
+      end do
+      ! Add temporal arrays to common arrays
+      do ind2=1,threetondim
+         do ind=1,twotondim
+            if(indp_nb(ind2,ind)>0 .and. rho_star_add(ind2,ind)>0d0) then
+!$omp atomic update
+               rho_star(indp_nb(ind2,ind))=rho_star(indp_nb(ind2,ind))+rho_star_add(ind2,ind)
+               if (stellar_velocity_seed) then
+                  ! Store stellar velocity field
+                  do idim=1,ndim
+!$omp atomic update
+                     v_star(indp_nb(ind2,ind),idim)=v_star(indp_nb(ind2,ind),idim)+v_star_add(ind2,ind,idim)
+                  end do
+               end if
+            end if
+         end do
+      end do
+   end if
 end subroutine cic_star
 !###########################################################
 !###########################################################
@@ -6787,7 +6880,7 @@ subroutine get_drag_part(ilevel)
            end do
         end do
      end do
-!$omp end do nowait
+!$omp end do
   end do
 !$omp end parallel
 
