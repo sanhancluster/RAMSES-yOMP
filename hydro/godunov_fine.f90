@@ -1138,6 +1138,39 @@ subroutine godfine1(ind_grid,ncache,ilevel)
      end do
      end do
 
+     if(dust_chem)then
+        do i=1,nb_noneigh
+           do ich=1,nchem
+              if(TRIM(chem_list(ich))=='C' )then
+                 ilow=idust;ihigh=ilow+dndsize
+                 uflow(i,ichem+ich-1)=uflow(i,ichem+ich-1)+SUM(uflow(i,ilow:ihigh))
+              endif
+              if(TRIM(chem_list(ich))=='Mg')then
+                 ilow=idust+dndsize+1;ihigh=ilow+dndsize
+                 uflow(i,ichem+ich-1)=uflow(i,ichem+ich-1)+SUM(uflow(i,ilow:ihigh))*MgoverSil/SioverSil
+              endif
+              if(TRIM(chem_list(ich))=='Fe')then
+                 ilow=idust+dndsize+1;ihigh=ilow+dndsize
+                 uflow(i,ichem+ich-1)=uflow(i,ichem+ich-1)+SUM(uflow(i,ilow:ihigh))*FeoverSil/SioverSil
+              endif
+              if(TRIM(chem_list(ich))=='Si')then
+                 ilow=idust+dndsize+1;ihigh=ilow+dndsize
+                 uflow(i,ichem+ich-1)=uflow(i,ichem+ich-1)+SUM(uflow(i,ilow:ihigh))
+              endif
+              if(TRIM(chem_list(ich))=='O' )then
+                 ilow=idust+dndsize+1;ihigh=ilow+dndsize
+                 uflow(i,ichem+ich-1)=uflow(i,ichem+ich-1)+SUM(uflow(i,ilow:ihigh))*OoverSil/SioverSil
+              endif
+           enddo
+        enddo
+     else
+        ilow=idust;ihigh=ilow+dndsize
+        do i=1,nb_noneigh
+           uflow(i,imetal)=uflow(i,imetal)+ &
+                & SUM(uflow(i,ilow:ihigh))
+        enddo
+     endif
+
      ! Update common arrays
      do i=1,nb_noneigh
         do ivar=1,nvar
@@ -1145,50 +1178,6 @@ subroutine godfine1(ind_grid,ncache,ilevel)
          unew(ind_buffer(i),ivar)=unew(ind_buffer(i),ivar)+uflow(i,ivar)*oneontwotondim
         end do
      end do
-
-     if(dust_chem)then
-        do i=1,nb_noneigh
-           do ich=1,nchem
-              if(TRIM(chem_list(ich))=='C' )then
-                 ilow=idust;ihigh=ilow+dndsize
-!$omp atomic update
-                 unew(ind_buffer(i),ichem+ich-1)=unew(ind_buffer(i),ichem+ich-1)+ &
-                      & SUM(uflow(i,ilow:ihigh))*oneontwotondim
-              endif
-              if(TRIM(chem_list(ich))=='Mg')then
-                 ilow=idust+dndsize+1;ihigh=ilow+dndsize
-!$omp atomic update
-                 unew(ind_buffer(i),ichem+ich-1)=unew(ind_buffer(i),ichem+ich-1)+ &
-                      & SUM(uflow(i,ilow:ihigh))*oneontwotondim*MgoverSil/SioverSil
-              endif
-              if(TRIM(chem_list(ich))=='Fe')then
-                 ilow=idust+dndsize+1;ihigh=ilow+dndsize
-!$omp atomic update
-                 unew(ind_buffer(i),ichem+ich-1)=unew(ind_buffer(i),ichem+ich-1)+ &
-                      & SUM(uflow(i,ilow:ihigh))*oneontwotondim*FeoverSil/SioverSil
-              endif
-              if(TRIM(chem_list(ich))=='Si')then
-                 ilow=idust+dndsize+1;ihigh=ilow+dndsize
-!$omp atomic update
-                 unew(ind_buffer(i),ichem+ich-1)=unew(ind_buffer(i),ichem+ich-1)+ &
-                      & SUM(uflow(i,ilow:ihigh))*oneontwotondim
-              endif
-              if(TRIM(chem_list(ich))=='O' )then
-                 ilow=idust+dndsize+1;ihigh=ilow+dndsize
-!$omp atomic update
-                 unew(ind_buffer(i),ichem+ich-1)=unew(ind_buffer(i),ichem+ich-1)+ &
-                      & SUM(uflow(i,ilow:ihigh))*oneontwotondim* OoverSil/SioverSil
-              endif
-           enddo
-        enddo
-     else
-        ilow=idust;ihigh=ilow+dndsize
-        do i=1,nb_noneigh
-!$omp atomic update
-           unew(ind_buffer(i),imetal)=unew(ind_buffer(i),imetal)+ &
-                & SUM(uflow(i,ilow:ihigh))*oneontwotondim
-        enddo
-     endif
 
      if(pressure_fix) then
         do i=1,nb_noneigh
