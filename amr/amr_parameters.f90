@@ -511,6 +511,7 @@ module amr_parameters
   logical :: mechanical_geen = .false.
   logical :: log_mfb=.false.
   logical :: log_mfb_mega=.false.
+  logical :: log_dc=.false.
   integer :: snyield_model=0
   real(dp) :: A_SN=2.5d5
   real(dp) :: expN_SN=-2d0/17d0
