@@ -950,7 +950,7 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
                  enddo
               else
                  do ii=1,ndust
-                    t_acc(ii)=t0_acc(ii)*(Zsunchem(ii)*rhoG0/rhoZ0(ii))* 1d3/nH(ind(i)) *sqrt(50d0/100d0)*(Zsunchem(ii)*rhoG0/rhoZ0(ii)) / Sconstant &
+                    t_acc(ii)=t0_acc(ii)* 1d3/nH(ind(i)) *sqrt(50d0/100d0)*(Zsunchem(ii)*rhoG0/rhoZ0(ii)) / Sconstant &
                          & / boost_acc(ind(i))
                  enddo
               endif
