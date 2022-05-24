@@ -302,7 +302,7 @@ module amr_parameters
   real(dp)::flarge_ej
   integer::ndchemtype
   integer::dndsize
-  integer::ichC,ichMg,ichFe,ichSi,ichO
+  integer::ichC=-1,ichMg=-1,ichFe=-1,ichSi=-1,ichO=-1,ichH=-1,ichHe=-1,ichN=-1,ichS=-1,ichD=-1
 
   logical ::self_shielding=.false.
   logical ::pressure_fix=.false.

@@ -235,17 +235,19 @@ subroutine coolfine1(ind_grid,ngrid,ilevel,dM_dust_add)
                  mdust=mdustC+mdustSil
                  Zsolar(i)=Zsolar(i)-mdust/nH(i)/0.02 !! gas met
 !!$                 if(dustdebug)write(*,'(A,5es13.5)')'Zsolar',Zsolar(i),Zsolar(i)+mdust/nH(i)/0.02,mdust/nH(i)/0.02,mdustC/nH(i)/0.02,mdustSil/nH(i)/0.02
+
+                 Zchem(i,ichC)=Zchem(i,ichC)-mdustC/nH(i)/0.02
+                 Zchem(i,ichMg)=Zchem(i,ichMg)-mdustSil*MgoverSil/nH(i)/0.02
+                 Zchem(i,ichFe)=Zchem(i,ichFe)-mdustSil*FeoverSil/nH(i)/0.02
+                 Zchem(i,ichSi)=Zchem(i,ichSi)-mdustSil*SioverSil/nH(i)/0.02
+                 Zchem(i,ichO)=Zchem(i,ichO)-mdustSil* OoverSil/nH(i)/0.02
+
                  do ich=1,nchem
                     if(dustdebug)then
 !!$                    if(TRIM(chem_list(ich))=='C' )then
 !!$                       write(*,'(A,3es13.5)')'ZC (tot,gas,dust)=',Zchem(i,ich),Zchem(i,ich)-mdustC/nH(i)/0.02,mdustC/nH(i)/0.02!YD DEBUG
 !!$                    endif
                     endif
-                    if(TRIM(chem_list(ich))=='C' )Zchem(i,ich)=Zchem(i,ich)-mdustC/nH(i)/0.02
-                    if(TRIM(chem_list(ich))=='Mg')Zchem(i,ich)=Zchem(i,ich)-mdustSil*MgoverSil/nH(i)/0.02
-                    if(TRIM(chem_list(ich))=='Fe')Zchem(i,ich)=Zchem(i,ich)-mdustSil*FeoverSil/nH(i)/0.02
-                    if(TRIM(chem_list(ich))=='Si')Zchem(i,ich)=Zchem(i,ich)-mdustSil*SioverSil/nH(i)/0.02
-                    if(TRIM(chem_list(ich))=='O' )Zchem(i,ich)=Zchem(i,ich)-mdustSil* OoverSil/nH(i)/0.02
                     if(Zchem(i,ich).lt.0.0d0)then
                        write(*,*)'Problem with Zchem<0 in cooling_fine'
                        if(TRIM(chem_list(ich))=='C' )write(*,'(A,I2,A,3es13.5,3I7)')'Zchem(',ich,'), C  gas,dust,tot',Zchem(i,ich),mdustC/nH(i)/0.02,Zchem(i,ich)+mdustC/nH(i)/0.02,i,ind_leaf(i),myid

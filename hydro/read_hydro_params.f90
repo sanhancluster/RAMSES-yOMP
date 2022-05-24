@@ -598,6 +598,12 @@ subroutine read_hydro_params(nml_ok)
   multOoverSi = OoverSil/SioverSil
   if(dust_chem)then
      do ich=1,nchem
+        if(TRIM(chem_list(ich))=='H' )ichH =ich
+        if(TRIM(chem_list(ich))=='He')ichHe=ich
+        if(TRIM(chem_list(ich))=='N' )ichN =ich
+        if(TRIM(chem_list(ich))=='S' )ichS =ich
+        if(TRIM(chem_list(ich))=='D' )ichD =ich
+
         if(TRIM(chem_list(ich))=='C' )ichC =ich
         if(TRIM(chem_list(ich))=='Mg')ichMg=ich
         if(TRIM(chem_list(ich))=='Fe')ichFe=ich

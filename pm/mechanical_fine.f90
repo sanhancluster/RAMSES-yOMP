@@ -2005,7 +2005,8 @@ end subroutine get_icell_from_pos
 !################################################################
 subroutine SNII_yield (zp_star, ej_m, ej_Z, ej_D, ej_chem, ej_chemD)
   use amr_commons, ONLY:dp,nchem,chem_list,dust,snyield_model
-  use hydro_parameters, ONLY:ichem 
+  use hydro_parameters, ONLY:ichem
+  use amr_parameters, ONLY:ichC,ichMg,ichFe,ichSi,ichO,ichH,ichHe,ichN,ichS,ichD
   implicit none
   real(dp)::zp_star,ej_m,ej_Z,ej_D
   real(dp),dimension(1:nchem)::ej_chem
@@ -2118,27 +2119,26 @@ subroutine SNII_yield (zp_star, ej_m, ej_Z, ej_D, ej_chem, ej_chemD)
   endif
 
   do ich=1,nchem
-      element_name=chem_list(ich)
-      select case (element_name)
-         case ('H ')
+      select case (ich)
+         case (ichH )
             dum1d = log_SNII_H
-         case ('He')
+         case (ichHe)
             dum1d = log_SNII_He
-         case ('C ')
+         case (ichC)
             dum1d = log_SNII_C
-         case ('N ')
+         case (ichN )
             dum1d = log_SNII_N
-         case ('O ')
+         case (ichO )
             dum1d = log_SNII_O
-         case ('Mg')
+         case (ichMg)
             dum1d = log_SNII_Mg
-         case ('Si')
+         case (ichSi)
             dum1d = log_SNII_Si
-         case ('S ')
+         case (ichS )
             dum1d = log_SNII_S
-         case ('Fe')
+         case (ichFe)
             dum1d = log_SNII_Fe
-         case ('D ')
+         case (ichD )
             dum1d = -99.
          case default
             dum1d = 0d0
