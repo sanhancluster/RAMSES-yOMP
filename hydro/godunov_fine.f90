@@ -1113,7 +1113,6 @@ subroutine godfine1(ind_grid,ncache,ilevel)
 
      if(dust_chem)then
         do i=1,nb_noneigh
-           do ich=1,nchem
            ilow=idust;ihigh=ilow+dndsize
            uflow(i,ichem+ichC -1)=uflow(i,ichem+ichC -1)+SUM(uflow(i,ilow:ihigh))
 
