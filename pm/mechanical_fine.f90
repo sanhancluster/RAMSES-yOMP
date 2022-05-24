@@ -2119,30 +2119,29 @@ subroutine SNII_yield (zp_star, ej_m, ej_Z, ej_D, ej_chem, ej_chemD)
   endif
 
   do ich=1,nchem
-      select case (ich)
-         case (ichH )
-            dum1d = log_SNII_H
-         case (ichHe)
-            dum1d = log_SNII_He
-         case (ichC)
-            dum1d = log_SNII_C
-         case (ichN )
-            dum1d = log_SNII_N
-         case (ichO )
-            dum1d = log_SNII_O
-         case (ichMg)
-            dum1d = log_SNII_Mg
-         case (ichSi)
-            dum1d = log_SNII_Si
-         case (ichS )
-            dum1d = log_SNII_S
-         case (ichFe)
-            dum1d = log_SNII_Fe
-         case (ichD )
-            dum1d = -99.
-         case default
-            dum1d = 0d0
-      end select
+     if(ich == ichH ) then
+        dum1d = log_SNII_H
+     elseif(ich == ichHe) then
+        dum1d = log_SNII_He
+     elseif(ich == ichC ) then
+        dum1d = log_SNII_C
+     elseif(ich == ichN ) then
+        dum1d = log_SNII_N
+     elseif(ich == ichO ) then
+        dum1d = log_SNII_O
+     elseif(ich == ichMg) then
+        dum1d = log_SNII_Mg
+     elseif(ich == ichSi) then
+        dum1d = log_SNII_Si
+     elseif(ich == ichS ) then
+        dum1d = log_SNII_S
+     elseif(ich == ichFe) then
+        dum1d = log_SNII_Fe
+     elseif(ich == ichD ) then
+        dum1d = -99.
+     else
+        dum1d = 0d0
+     end if
 
      ej_chem(ich) = dum1d(izg)*fz + dum1d(izg+1)*(1d0-fz)
      ej_chem(ich) = 10d0**ej_chem(ich)
