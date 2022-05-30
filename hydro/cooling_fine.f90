@@ -277,8 +277,10 @@ subroutine coolfine1(ind_grid,ngrid,ilevel,dM_dust_add)
            do i=1,nleaf
               do ii=1,ndust!!$dust_dev
                  fdust(i,ii)=uold(ind_leaf(i),idust-1+ii)/nH(i) ! Dust-to-gas ratio
-                 if(fdust(i,ii)<0.0 .and. log_dc)then
-                    write(*,*)'for bin :', ii, 'fdust<0 (beg cooling)',ind_leaf(i),uold(ind_leaf(i),idust-1+ii),nH(i)
+                 if(fdust(i,ii)<0.0)then
+                    if(log_dc)then
+                       write(*,*)'for bin :', ii, 'fdust<0 (beg cooling)',ind_leaf(i),uold(ind_leaf(i),idust-1+ii),nH(i)
+                    end if
                     fdust(i,ii)=0.0d0
                  endif
               end do
