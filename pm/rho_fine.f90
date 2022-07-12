@@ -219,7 +219,7 @@ subroutine rho_fine(ilevel,icount)
      else
         aoff = (aexp-aexp_trans(ilevel+1))/trans_smooth
         if(aoff<=-1.) then ! refinement not started yet
-           m_refine(ilevel)=100d0
+           m_refine(ilevel)=1d20
            ! prevent_refine=.true.
         elseif(aoff<1.) then ! ongoing transition
            !m_refine=8d0
