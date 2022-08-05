@@ -374,8 +374,11 @@ subroutine cmp_new_cpu_map
   end do
   end do
   ! Loop over levels
-!$omp parallel private(dx,ix,iy,iz,xc,ncache) &
-!$omp & private(ngrid,ind_grid,iskip,ind_cell,idim,ncell_loc,xx,order_min,order_max,dom,ncell_omp,isub,wflag)
+!$omp parallel default(none) firstprivate(order_min,order_max,dom,xx) private(dx,ix,iy,iz,xc,ncache) &
+!$omp & private(ngrid,ind_grid,iskip,ind_cell,idim,ncell_loc,ncell_omp,isub,wflag) &
+!$omp & shared(nlevelmax,icoarse_min,jcoarse_min,kcoarse_min,ncpu,myid,active,reception,ncoarse,ngridmax,cpu_map, &
+!$omp & son,xg,scale,ncell,ncell_sub,flag1,magic_number,pic,tracer,tracer_first_balance_part_per_cell,niter_cost, &
+!$omp & part_univ_cost,npart_sub,hilbert_key,numbp,tracer_first_balance_levelmin)
   do ilevel=1,nlevelmax
      ! Cell size and cell center offset
      dx=0.5d0**ilevel

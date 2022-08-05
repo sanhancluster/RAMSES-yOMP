@@ -921,7 +921,7 @@ subroutine build_comm(ilevel)
   integer,dimension(MPI_STATUS_SIZE,ncpu)::statuses
   integer::countsend,countrecv
 #endif
-  integer,dimension(1:nvector),save::ind_grid,ind_cell
+  integer,dimension(1:nvector)::ind_grid,ind_cell
 
   if(verbose)write(*,111)ilevel
   nxny=nx*ny
@@ -946,7 +946,7 @@ subroutine build_comm(ilevel)
      call make_virtual_coarse_int(flag2(1))
   else
      ! Initialize flag2 to local adress for cpu map = myid cells
-!$omp parallel private(ncache,ngrid,ind_grid,iskip,ind_cell)
+!$omp parallel private(icpu,i,ind,igrid,ncache,ngrid,ind_grid,iskip,ind_cell)
      do icpu=1,ncpu
         if(icpu==myid) then
            ncache=active(ilevel-1)%ngrid
