@@ -4848,6 +4848,8 @@ subroutine quenching(ilevel)
         sig_v=sqrt(max(sig_v/tot_m-ave_v**2, 0._dp))*scale_v/1d5
         sig_w=sqrt(max(sig_w/tot_m-ave_w**2, 0._dp))*scale_v/1d5
         sig_tot=sqrt(sig_u**2+sig_v**2+sig_w**2)
+     else
+        sig_tot=0
      endif
 
      ! Loop over cells
