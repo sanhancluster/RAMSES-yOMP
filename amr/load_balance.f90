@@ -328,6 +328,10 @@ subroutine cmp_new_cpu_map
      end do
   else
      niter_cost(levelmin:nlevelmax)=1
+     ! cost set to 2 times rather than power of 2 in order to save memory / Julien Devriendt
+     do ilevel=levelmin+1,nlevelmax
+        niter_cost(ilevel)=2*(ilevel-levelmin)
+     end do
   endif
 
   if(verbose) print *,"Entering cmp_new_cpu_map"
