@@ -80,7 +80,7 @@ CEXEC += _lint
 endif
 # --- QUADHILBERT -----------------------------------------------------------
 ifeq ($(QUADHILBERT),1)
-+DEFINES += -DQUADHILBERT
+DEFINES += -DQUADHILBERT
 CEXEC += _qhil
 endif
 #############################################################################
