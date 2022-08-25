@@ -8,18 +8,20 @@ NPRE = 8
 NENER = 0
 NGROUPS = 0
 NIONS = 0
-METALS = 0
+METALS = 1
+NCHEM = 9
+NDUST = 4
 #Extra variables beyond those required by dimensions, or listed above
-NVAR_EXTRA = 0
+NVAR_EXTRA = 1
 SOLVER = hydro
 #############################################################################
 # Options
 GRACKLE = 0
 RT = 0
 DICE = 0
-REFMASK = 0
+REFMASK = 1
 LONGINT = 0
-QUADHILBERT = 0
+QUADHILBERT = 1
 # Set to 1 to use old MPI include statements instead of more recent `use mpi`.
 USE_OLD_MPI_INCLUDE = 0
 EXEC = ramses
@@ -32,7 +34,7 @@ OPENMP = 1
 #PATCH = ../patch/debug
 #############################################################################
 # Compute the right value for NVAR
-NVAR := $(shell echo $$(($(NDIM) + 2 + $(NVAR_EXTRA) + $(NIONS) + $(NENER) + $(REFMASK)+ $(METALS) )) )
+NVAR := $(shell echo $$(($(NDIM) + 2 + $(NVAR_EXTRA) + $(NIONS) + $(NENER) + $(REFMASK)+ $(METALS) + $(NCHEM) + $(NDUST) )) )
 #############################################################################
 GITBRANCH = $(shell git rev-parse --abbrev-ref HEAD)
 GITHASH = $(shell git log --pretty=format:'%H' -n 1)
@@ -40,7 +42,7 @@ GITREMOTE = $(shell git config --get branch.$(GITBRANCH).remote)
 GITREPO = $(shell git config --get remote.$(GITREMOTE).url)
 BUILDDATE = $(shell date +"%D-%T")
 DEFINES = -DNVECTOR=$(NVECTOR) -DNDIM=$(NDIM) -DNPRE=$(NPRE) -DNENER=$(NENER) -DNVAR=$(NVAR) \
-          -DSOLVER$(SOLVER)
+          -DSOLVER$(SOLVER) -DNCHEM=$(NCHEM) -DNDUST=$(NDUST)
 ifeq ($(USE_OLD_MPI_INCLUDE),1)
 DEFINES += -DMPI_OLD
 endif
@@ -128,7 +130,7 @@ PATCH := $(subst $(SPACE),:,$(PATCH))
 
 # --- MPI, ifort syntax ------------------------------
 #F90 = mpiifort $(OMPFLAG)
-#FFLAGS = -cpp -O3 -xAVX -fpp $(DEFINES) -DNOSYSTEM
+#FFLAGS = -cpp -O3 -fpp -xAVX $(DEFINES) -DNOSYSTEM
 
 # --- MPI, ifort syntax, additional checks -----------
 #F90 = mpiifort $(OMPFLAG)
@@ -139,7 +141,7 @@ F90 = mpiifort -Wl,-z,noexecstack $(OMPFLAG)
 FFLAGS = -cpp $(DEFINES) -O3 -fPIC -free -xMIC-AVX512 -fma -align array64byte -finline-functions -DNOSYSTEM
 
 # --- MPI, ifort DEBUG syntax for Xeon phi ------------------------------
-#F90 = mpiifort -Wl,-z,noexecstack $(OMPFLAG)
+#F90 = mpiifort -Wl,-z,noexecstack $(OMPFLAG) 
 #FFLAGS = -cpp -O0 -g -traceback -fpe0 -ftrapuv -check bounds $(DEFINES) -DNOSYSTEM
 
 # --- MPI, ifort syntax ------------------------------
@@ -149,6 +151,14 @@ FFLAGS = -cpp $(DEFINES) -O3 -fPIC -free -xMIC-AVX512 -fma -align array64byte -f
 # --- MPI, ifort syntax, additional checks -----------
 #F90 = ftn
 #FFLAGS = -O3 -g -traceback -fpe0 -ftrapuv -cpp $(DEFINES) -DNOSYSTEM #-DRT
+
+# --- MPI, ifort syntax for NURION ------------------------------
+#F90 = mpiifort -Wl,-z,noexecstack $(OMPFLAG)
+#F90 = mpiifort
+#FFLAGS = -cpp $(DEFINES) -fast -free -xMIC-AVX512 -align array64byte -DNOSYSTEM
+#FFLAGS = -cpp $(DEFINES) -O3 -free -align array64byte -DNOSYSTEM
+#FFLAGS = -cpp $(DEFINES) -O0 -traceback -check bounds -DNOSYSTEM -fpe0
+#FFLAGS = -cpp $(DEFINES) -O3 -DNOSYSTEM
 
 #############################################################################
 MOD = mod
@@ -185,9 +195,6 @@ ifeq ($(RT),1)
 MODOBJ += rt_parameters.o rt_hydro_commons.o coolrates_module.o \
          rt_spectra.o rt_cooling_module.o rt_flux_module.o
 endif
-ifeq ($(OPENMP),1)
-MODOBJ += omp_utils.o
-endif
 ifeq ($(DICE),1)
 AMROBJ = dice_commons.o
 else
@@ -204,7 +211,8 @@ PMOBJ = init_part.o output_part.o rho_fine.o synchro_fine.o           \
         remove_list.o star_formation.o          \
         sink_particle.o feedback.o clump_finder.o clump_merger.o      \
         flag_formation_sites.o init_sink.o output_sink.o              \
-        mechanical_commons.o mechanical_fine.o
+        mechanical_commons.o mechanical_fine.o stellar_winds_fine.o   \
+        mechanical_fine_snIa.o
 # Poisson solver objects
 POISSONOBJ = init_poisson.o phi_fine_cg.o interpol_phi.o force_fine.o multigrid_coarse.o multigrid_fine_commons.o \
              multigrid_fine_fine.o multigrid_fine_coarse.o gravana.o boundary_potential.o rho_ana.o output_poisson.o
