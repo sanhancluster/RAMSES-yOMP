@@ -280,6 +280,7 @@ subroutine rho_from_current_level(ilevel)
   integer,dimension(1:nvector)::ind_grid,ind_cell
   integer,dimension(1:nvector)::ind_part,ind_grid_part
   real(dp),dimension(1:nvector,1:ndim)::x0
+  integer ,dimension(1:ncpu,1:IRandNumSize)::allseed
 
   integer :: counter
 
@@ -288,6 +289,11 @@ subroutine rho_from_current_level(ilevel)
   integer :: nrest1,nrest2
   logical :: ok
 !$omp threadprivate(ompseed)
+
+  if(localseed(1)==-1)then
+     call rans(ncpu,iseed,allseed)
+     localseed=allseed(myid,1:IRandNumSize)
+  end if
 
 #ifdef _OPENMP
 !$omp parallel
