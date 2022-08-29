@@ -162,7 +162,12 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   ! Loop over cpus
 !$omp parallel private(ip,ind_grid,ind_pos_cell,nSNe,mSNe,pSNe,nphSNe,mchSNe,mdchSNe,mZSNe,mZdSNe,igrid,npart1,npart2,ipart,next_part, &
 !$omp & x0,m8,mz8,mzd8,p8,n8,nph8,mch8,mdch8,ok,ind_son,ind,iskip,ind_cell,mejecta,nsnII_star,mass0,mass_t,mfrac_snII, &
-!$omp & Zejecta,Dejecta,Zejecta_chem_II_local,ZDejecta_chem_II_local) firstprivate(M_SNII_var) reduction(+:nSNc,nsnII_tot,dM_prod) default(none) &
+!$omp & Zejecta,Dejecta,Zejecta_chem_II_local,ZDejecta_chem_II_local) firstprivate(M_SNII_var) reduction(+:nSNc,nsnII_tot) default(none) &
+#if NDUST > 0
+!$omp & reduction(+:dM_prod) &
+#else
+!$omp & shared(dM_prod) &
+#endif
 !$omp & shared(ncpu,numbl,ilevel,myid,active,reception,numbp,xg,dx,skip_loc,headp,nextp,typep,use_initial_mass,mp0, &
 !$omp & scale_msun,mp,sn2_real_delay,tp,tpl,texp,tyoung,current_time,snII_Zdep_yield,zp,snII_freq,yield,dteff,idp,done_star,xp,scale,scale_t, &
 !$omp & ncoarse,ngridmax,son,vp,metal,dust,dust_chem,MC_tracer,tmpp,Zejecta_chem_II,ZDejecta_chem_II,dust_cond_eff,fsmall_ej,flarge_ej,nchunk)

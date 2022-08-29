@@ -22,7 +22,11 @@ subroutine cooling_fine(ilevel)
   ! by vector sweeps
   ncache=active(ilevel)%ngrid
   dM_dust_add=0d0
-!$omp parallel do private(ngrid,ind_grid) reduction(+:dM_dust_add) schedule(static)
+!$omp parallel do private(ngrid,ind_grid) &
+#if NDUST > 0
+!$omp & reduction(+:dM_dust_add) &
+#endif
+!$omp & schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid

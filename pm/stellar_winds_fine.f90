@@ -288,7 +288,12 @@ subroutine stellar_winds_fine(ilevel)
   end do
 
 !$omp parallel private(igrid,ig,ip,npart1,npart2,ipart,next_part,ok_star,ind_grid,ind_part,ind_grid_part) &
-!$omp & default(none) shared(active,ilevel,numbp,headp,nextp,typep,nchunk) reduction(+:dM_prod_SW)
+#if NDUST > 0
+!$omp & reduction(+:dM_prod_SW) &
+#else
+!$omp & shared(dM_prod_SW) &
+#endif
+!$omp & default(none) shared(active,ilevel,numbp,headp,nextp,typep,nchunk)
   ig=0
   ip=0
 !$omp do schedule(dynamic,nchunk)
