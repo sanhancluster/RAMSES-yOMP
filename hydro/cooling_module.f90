@@ -682,6 +682,7 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
            write(*,*)i,tau(ind(i)),T2(ind(i)),nH(ind(i)),i_nH(ind(i))
            write(*,*)zchem(ind(i), :)
            write(*,*)fdust(ind(i), :)
+           write(*,*)time(ind(i)),time_max(ind(i))
         end do
         STOP
      endif
@@ -1036,7 +1037,7 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
            jj1=1+(jj-1)*(dndsize+1)
            jj2=jj1+dndsize
            do ii=jj1,jj2
-              if(rhoZ0(ii).gt.0.0d0 .and. rhoD00(ii).gt.0.0d0)then
+              if(rhoZ0(ii)>0.0d0 .and. rhoD00(ii)>1.0d-20)then
                  wcool=MAX(wcool,oneovertdes(ii)*renorm &
                       &    ,oneovertacc(ii)*(1d0-rhoD00(ii)/rhoZ0(ii))*renorm &
                       &    ,oneovertsha(jj2)*fdust(ind(i),jj2)*renorm &
