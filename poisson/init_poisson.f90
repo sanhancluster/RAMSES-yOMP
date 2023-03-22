@@ -26,6 +26,7 @@ subroutine init_poisson
   allocate(rho_star (1:ncell))
   if(stellar_velocity_seed)then
      allocate(v_star (1:ncell,1:ndim))
+     v_star=0d0
   end if
   allocate(phi (1:ncell))
   allocate(phi_old (1:ncell))
@@ -33,7 +34,7 @@ subroutine init_poisson
   !allocate(fcg (1:ncell,1:10))
   allocate(addrl(1:ncell))
   allocate(nborl(1:ncell,1:twondim))
-  rho=0.0D0; rho_star=0d0; v_star=0d0; phi=0.0D0; f=0.0D0
+  rho=0.0D0; rho_star=0d0; phi=0.0D0; f=0.0D0
   if(cic_levelmax>0)then
      allocate(rho_top(1:ncell))
      rho_top=0d0
