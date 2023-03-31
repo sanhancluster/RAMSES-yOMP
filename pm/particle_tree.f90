@@ -295,7 +295,7 @@ subroutine check_tree(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   use amr_commons
   use pm_commons
   implicit none
-  integer::ng,np,ilevel
+  integer::ng,np,ilevel,nremove
   integer,dimension(1:nvector)::ind_grid
   integer,dimension(1:nvector)::ind_grid_part,ind_part
   !-----------------------------------------------------------------------
@@ -312,8 +312,8 @@ subroutine check_tree(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   integer ,dimension(1:nvector)::ind_father
   ! Particle-based arrays
   integer,dimension(1:nvector)::ind_son,igrid_son
-  integer,dimension(1:nvector)::list1,list2
-  logical,dimension(1:nvector)::ok
+  integer,dimension(1:nvector)::list1,list2,list3
+  logical,dimension(1:nvector)::ok,remove
   real(dp),dimension(1:3)::skip_loc
 
   ! Mesh spacing in that level
@@ -343,10 +343,16 @@ subroutine check_tree(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   error=.false.
   ind_son(1:np)=1
   ok(1:np)=.false.
+  remove(1:np)=.false.
+  do j=1,np
+     ! yOMP: sometimes tracers become 'corrupt' particles with no matching family id. (don't know why)
+     ! To fix this, we erase those particles every step.
+     remove(j) = .not. is_valid(typep(ind_part(j)))
+  end do
   do idim=1,ndim
      do j=1,np
         i=int((xp(ind_part(j),idim)/scale+skip_loc(idim)-x0(ind_grid_part(j),idim))/dx/2.0D0)
-        if(i<0.or.i>2)error=.true.
+        if((i<0.or.i>2).and.(.not. remove(j)))error=.true.
         ind_son(j)=ind_son(j)+i*3**(idim-1)
         ! Check if particle has escaped from its parent grid
         ok(j)=ok(j).or.i.ne.1
@@ -405,6 +411,18 @@ subroutine check_tree(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
         list2(j)=igrid_son(j)
      end if
   end do
+
+  if(remove_invalid_particle)then
+     nremove=0
+     do j=1,np
+        if(remove(j))then
+           list3(j)=ind_part(j)
+           nremove=nremove+1
+           write(*,*) "removed invalid particle", xp(ind_part(j)), x0(ind_part(j)), typep(ind_part(j))%family
+        end if
+     end do
+     call add_free(list3,nremove)
+  end if
 !$omp critical
   call remove_list(ind_part,list1,ok,np)
   call add_list(ind_part,list2,ok,np)

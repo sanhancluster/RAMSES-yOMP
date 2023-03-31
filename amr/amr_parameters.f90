@@ -98,6 +98,7 @@ module amr_parameters
   logical::aton=.false.       ! Enable ATON coarse grid radiation transfer
   logical::exact_timer=.false.! Measure exact timer for each routine using barriers
   real(dp)::part_univ_cost=0d0  ! Give this amount of extra cost weights to particle (regardless of level)
+  logical::remove_invalid_particle=.false. ! Remove particles with invalid family every step
 
   ! Mesh parameters
   integer::nx=1,ny=1,nz=1     ! Number of coarse cells in each dimension

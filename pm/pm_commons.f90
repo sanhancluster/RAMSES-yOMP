@@ -190,6 +190,11 @@ contains
     is_central_cloud = (typep%family == FAM_CLOUD) .and. (typep%tag == TAG_CLOUD_CENTRAL)
   end function is_central_cloud
 
+  elemental logical pure function is_valid(typep)
+    type(part_t), intent(in) :: typep
+    is_valid = (typep%family <= 5) .and. (typep%family >= -5)
+  end function is_valid
+
   elemental function part2int (part)
     ! Convert a particle into an integer
     ! This saves some space e.g. when communicating
