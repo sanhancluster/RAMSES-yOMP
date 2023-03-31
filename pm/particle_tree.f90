@@ -416,8 +416,8 @@ subroutine check_tree(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
      nremove=0
      do j=1,np
         if(remove(j))then
-           list3(j)=ind_part(j)
            nremove=nremove+1
+           list3(nremove)=ind_part(j)
            write(*,*) "removed invalid particle", xp(ind_part(j),:), x0(ind_part(j),:), typep(ind_part(j))%family
         end if
      end do
