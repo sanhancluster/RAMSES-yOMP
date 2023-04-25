@@ -518,7 +518,7 @@ recursive subroutine amr_step(ilevel,icount)
      end if
   end if
   ! Move tracer particles in the jet.
-  if (sink_AGN .and. MC_tracer) then
+  if (sink_AGN .and. MC_tracer .and. tracer_to_jet) then
                                 call timer('tracer','start')
      call MC_tracer_to_jet(ilevel)
   end if

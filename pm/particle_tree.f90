@@ -312,8 +312,8 @@ subroutine check_tree(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   integer ,dimension(1:nvector)::ind_father
   ! Particle-based arrays
   integer,dimension(1:nvector)::ind_son,igrid_son
-  integer,dimension(1:nvector)::list1,list2,list3
-  logical,dimension(1:nvector)::ok,remove
+  integer,dimension(1:nvector)::list1,list2,list3,list4
+  logical,dimension(1:nvector)::ok,remove,ok_true
   real(dp),dimension(1:3)::skip_loc
 
   ! Mesh spacing in that level
@@ -325,6 +325,7 @@ subroutine check_tree(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
   if(ndim>1)skip_loc(2)=dble(jcoarse_min)
   if(ndim>2)skip_loc(3)=dble(kcoarse_min)
   scale=boxlen/dble(nx_loc)
+  ok_true=.true.
 
   ! Lower left corner of 3x3x3 grid-cube
   do idim=1,ndim
@@ -385,8 +386,9 @@ subroutine check_tree(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
 
   ! If escaped particle sits in unrefined cell, leave it to its parent grid.
   ! For ilevel=levelmin, this should never happen.
+  ! (or particle is invalid, do not move it)
   do j=1,np
-     if(igrid_son(j)==0)ok(j)=.false.
+     if(igrid_son(j)==0 .or. (remove_invalid_particle .and. remove(j)))ok(j)=.false.
   end do
 
   ! Periodic box
@@ -417,10 +419,14 @@ subroutine check_tree(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
      do j=1,np
         if(remove(j))then
            nremove=nremove+1
+           list4(nremove)=ind_grid(ind_grid_part(j))
            list3(nremove)=ind_part(j)
            write(*,*) "removed invalid particle", xp(ind_part(j),:), x0(ind_part(j),:), typep(ind_part(j))%family
         end if
      end do
+!$omp critical
+     call remove_list(list3,list4,ok_true,nremove)
+!$omp end critical
      call add_free(list3,nremove)
   end if
 !$omp critical

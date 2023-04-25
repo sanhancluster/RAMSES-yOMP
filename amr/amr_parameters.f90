@@ -92,6 +92,7 @@ module amr_parameters
   logical::tracer  =.false.   ! Tracer particles activated
   ! PATCH MC Tracer !
   logical::MC_tracer = .false. ! Tracer using Monte Carlo
+  logical::tracer_to_jet = .true.
   ! =============== !
   logical::lightcone=.false.  ! Enable lightcone generation
   logical::clumpfind=.false.  ! Enable clump finder
