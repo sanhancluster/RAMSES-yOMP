@@ -336,7 +336,7 @@ contains
     ! Count the number of particles to send
     !------------------------------------------------------------
      npart_add = 0
-!$omp parallel do private(icell,ok,igrid,ipart,icpu) reduction(+:npart_add)
+!!$omp parallel do private(icell,ok,igrid,ipart,icpu) reduction(+:npart_add)
     do iAGN = 1, nAGN
        ! Select AGN in jet mode, with their cell at the current level
        icell = ind_blast(iAGN)
@@ -359,7 +359,7 @@ contains
        end if
     end do
 
-!$omp parallel do
+!!$omp parallel do
     do icpu = 1, ncpu
        reception(icpu, ilevel)%npart = npart_add(icpu)
        sendbuf(icpu) = npart_add(icpu)
@@ -403,7 +403,7 @@ contains
     !------------------------------------------------------------
     ! Fill communication buffer
     !------------------------------------------------------------
-!$omp parallel do private(ipcom,ip,icell,ok,igrid,ipart,next_ipart,ind_com,ind_part,ind_list)
+!!$omp parallel do private(ipcom,ip,icell,ok,igrid,ipart,next_ipart,ind_com,ind_part,ind_list)
     do icpu=1, ncpu
        ipcom = 0
        ip = 0
@@ -446,7 +446,7 @@ contains
 
     ! IMPORTANT
     ! Now reset ind_blast to prevent tracers to be sent at next step
-!$omp parallel do private(icell,igrid)
+!!$omp parallel do private(icell,igrid)
     do iAGN = 1, nAGN
        icell = ind_blast(iAGN)
        if (icell > 0) then
@@ -547,11 +547,11 @@ contains
     !------------------------------------------------------------
     ! Empty communication buffer
     !------------------------------------------------------------
-!$omp parallel private(ncache,npart1,ind_com)
+!!$omp parallel private(ncache,npart1,ind_com)
     do icpu = 1, ncpu
        ! Loop over particles by vector sweeps
        ncache = emission(icpu, ilevel)%npart
-!$omp do
+!!$omp do
        do ipart = 1, ncache, nvector
           npart1 = min(nvector, ncache-ipart+1)
           do ip = 1, npart1
@@ -559,9 +559,9 @@ contains
           end do
           call empty_tracer_comm(ind_com, npart1, ilevel, icpu, emission)
        end do
-!$omp end do nowait
+!!$omp end do nowait
     end do
-!$omp end parallel
+!!$omp end parallel
 
     ! Deallocate temporary communication buffers
     do icpu = 1, ncpu
