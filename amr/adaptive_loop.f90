@@ -99,6 +99,9 @@ subroutine adaptive_loop
   end do
   nstep_coarse_old=nstep_coarse
 
+  if(output_now)then ! for I/O consistency check
+      iout=iout+1
+  end if
   if(myid==1)write(*,*)'Starting time integration'
 
   do ! Main time loop
