@@ -80,6 +80,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
   if(ndim.ne.3)  return
   if(numbtot(1,ilevel)==0)return
   if(nstar_tot==0)return
+  if(snII_freq==0d0)return
 
 #ifndef WITHOUTMPI
   if(myid.eq.1) ttsta=MPI_WTIME(info)
