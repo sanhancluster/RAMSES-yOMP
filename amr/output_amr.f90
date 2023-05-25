@@ -17,8 +17,8 @@ subroutine dump_all
   character(LEN=80)::filename,filename_desc,filedir
   integer::ierr
 
-  if(nstep_coarse==nstep_coarse_old.and.nstep_coarse>0)return
-  if(nstep_coarse==0.and.nrestart>0)return
+  if(nstep_coarse==nstep_coarse_old.and.nstep_coarse>0.and.(.not.output_now))return
+  if(nstep_coarse==0.and.nrestart>0.and.(.not.output_now))return
   if(verbose)write(*,*)'Entering dump_all'
 
   call write_screen

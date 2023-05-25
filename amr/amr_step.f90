@@ -144,6 +144,7 @@ recursive subroutine amr_step(ilevel,icount)
 #endif
      if(mod(nstep_coarse,foutput)==0.or.aexp>=aout(iout).or.t>=tout(iout).or.output_now_all.EQV..true.)then
                                call timer('io','start')
+        if(verbose)write(*,*)'Entering io'
         if(.not.ok_defrag)then
            call defrag
         endif
