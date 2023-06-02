@@ -22,7 +22,7 @@ subroutine godunov_fine(ilevel)
 
   ! Loop over active grids by vector sweeps
   ncache=active(ilevel)%ngrid
-!$omp parallel do private(ngrid,ind_grid)
+!$omp parallel do default(none) shared(ncache,ilevel,active) private(ngrid,ind_grid)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -248,10 +248,11 @@ subroutine set_unew(ilevel)
   if(verbose)write(*,111)ilevel
 
   ! Set unew to uold for myid cells
-!$omp parallel private(iskip)
+!$omp parallel default(none) shared(ilevel,ncoarse,ngridmax,active,unew,uold,momentum_feedback,pstarnew,pressure_fix, &
+!$omp & divu,smallr,enew) private(d,u,v,w,e,iskip)
   do ind=1,twotondim
 	 iskip=ncoarse+(ind-1)*ngridmax
-!$omp do private(d,u,v,w,e) schedule(static)
+!$omp do schedule(static)
      do i=1,active(ilevel)%ngrid
         do ivar=1,nvar
            unew(active(ilevel)%igrid(i)+iskip,ivar) = uold(active(ilevel)%igrid(i)+iskip,ivar)
@@ -280,7 +281,8 @@ subroutine set_unew(ilevel)
   end do
 !$omp end parallel
   ! Set unew to 0 for virtual boundary cells
-!$omp parallel do private(iskip,d,u,v,w,e) schedule(static)
+!$omp parallel do default(none) shared(ilevel,ncpu,ncoarse,ngridmax,reception,unew,momentum_feedback,pstarnew, &
+!$omp & pressure_fix,divu,enew) private(iskip,d,u,v,w,e) schedule(static)
   do ind=1,twotondim
      do icpu=1,ncpu
         iskip=ncoarse+(ind-1)*ngridmax
@@ -346,10 +348,11 @@ subroutine set_uold(ilevel)
   endif
 
   ! Set uold to unew for myid cells
-!$omp parallel private(iskip)
+!$omp parallel default(none) shared(ilevel,ncoarse,ngridmax,active,uold,unew,momentum_feedback,pstarold,pstarnew,pressure_fix, &
+!$omp & smallr,enew,divu,dtnew,beta_fix,hexp,dx) private(iskip,ind_cell,d,u,v,w,e_kin,e_cons,e_prim,div,e_trunc)
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
-!$omp do private(ind_cell,d,u,v,w,e_kin,e_cons,e_prim,div,e_trunc) schedule(static)
+!$omp do schedule(static)
      do i=1,active(ilevel)%ngrid
         do ivar=1,nvar
               uold(active(ilevel)%igrid(i)+iskip,ivar) = unew(active(ilevel)%igrid(i)+iskip,ivar)
@@ -410,10 +413,11 @@ subroutine add_gravity_source_terms(ilevel)
   if(verbose)write(*,111)ilevel
 
   ! Add gravity source term at time t with half time step
-!$omp parallel private(iskip)
+!$omp parallel default(none) shared(ncoarse,ngridmax,active,ilevel,unew,smallr,uold,dtnew,f) &
+!$omp & private(iskip,ind_cell,d,u,v,w,e_kin,d_old,e_prim,fact)
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
-!$omp do private(ind_cell,d,u,v,w,e_kin,d_old,e_prim,fact) schedule(static)
+!$omp do schedule(static)
      do i=1,active(ilevel)%ngrid
         ind_cell=active(ilevel)%igrid(i)+iskip
         d=max(unew(ind_cell,1),smallr)
