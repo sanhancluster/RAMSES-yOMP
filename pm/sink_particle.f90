@@ -1635,7 +1635,7 @@ subroutine create_cloud_from_sink
 !$omp parallel private(ip,is_central,xrel,rr,xcloud,xtest,in_box,ind_sink)
    ip = 0
    is_central=.false.
-!$omp do collapse(3) schedule(dynamic,nchunk)
+!$omp do collapse(3) schedule(static,nchunk)
   do kk=-2*ir_cloud,2*ir_cloud
   do jj=-2*ir_cloud,2*ir_cloud
   do ii=-2*ir_cloud,2*ir_cloud
@@ -1899,7 +1899,7 @@ subroutine bondi_hoyle(ilevel)
      ig=0
      ip=0
      ! Loop over grids
-!$omp do schedule(dynamic,nchunk)
+!$omp do schedule(static,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -2016,7 +2016,7 @@ subroutine bondi_hoyle(ilevel)
      ig=0
      ip=0
      ! Loop over grids
-!$omp do schedule(dynamic,nchunk)
+!$omp do schedule(static,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -2841,7 +2841,7 @@ subroutine grow_bondi(ilevel)
      ip=0
      isink=0
      ! Loop over grids
-!$omp do schedule(dynamic,nchunk)
+!$omp do schedule(static,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -2962,7 +2962,7 @@ subroutine grow_bondi(ilevel)
 !$omp parallel private(igrid,npart1,ipart,next_part,isink)
   do icpu=1,ncpu
      ! Loop over grids
-!$omp do schedule(dynamic,nchunk)
+!$omp do schedule(static,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -4354,7 +4354,7 @@ subroutine rhostar_from_current_level(ilevel)
      ! Loop over grids
      ig=0
      ip=0
-!$omp do schedule(dynamic,nchunk)
+!$omp do schedule(static,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)

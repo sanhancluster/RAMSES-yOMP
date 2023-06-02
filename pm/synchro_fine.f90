@@ -29,7 +29,7 @@ subroutine synchro_fine(ilevel)
   ig=0
   ip=0
   ! Loop over grids
-!$omp do schedule(dynamic,nchunk)
+!$omp do schedule(static,nchunk)
   do jgrid=1,numbl(myid,ilevel)
      igrid=active(ilevel)%igrid(jgrid)
      npart1=numbp(igrid)  ! Number of particles in the grid

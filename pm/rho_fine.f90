@@ -316,7 +316,7 @@ subroutine rho_from_current_level(ilevel)
      ig=0
      ip=0
      ! Dynamic is faster
-!$omp do schedule(dynamic,nchunk)
+!$omp do schedule(static,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
