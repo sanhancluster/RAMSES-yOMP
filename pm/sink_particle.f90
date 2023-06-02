@@ -176,6 +176,8 @@ subroutine make_sink(ilevel)
 
   if(ns2_sink>0)then
      ds2_sink=ns_sink/scale_nH
+  else
+     ds2_sink=0d0
   end if
 
   d_star=0d0
@@ -5192,9 +5194,8 @@ subroutine AGN_feedback
 #endif
   !/AGNRT
 
-
   if(myid==1.and.nsink>0.and.sinkprops.and. (.not.finestep_AGN))then
-     if(.not.(nstep_coarse==nstep_coarse_old.and.nstep_coarse>0))then
+     if(.true.)then
      call title(nstep_coarse,nchar)
 
      filedir=sinkprops_dir
@@ -5624,12 +5625,14 @@ subroutine average_AGN(xAGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiveAGN,jAGN,vol_
   passiveAGN = 0
 
   ! Loop over levels
-!$omp parallel private(dx,dx_loc,vol_loc,iz,iy,ix,xc,ncache) &
-!$omp & private(ngrid,ind_grid,iskip,ind_cell,ok) &
-!$omp & private(x,y,z,dxx,dyy,dzz,dr_AGN,dr_cell) &
-!$omp & private(jtot,j_x,j_y,j_z,dzjet,d2,tmp_volume,psy,drjet,d,u,v,w,ekk,eint) &
-!$omp & private(box_origin,box_extents,capsule_r,capsule_start,capsule_end) &
-!$omp & reduction(+:vol_gas,psy_norm,mass_gas)
+!$omp parallel default(none)  private(dx,dx_loc,vol_loc,iz,iy,ix,xc,ncache)  &
+!$omp & private(ngrid,ind_grid,iskip,ind_cell,ok,x,y,z,dxx,dyy,dzz,dr_AGN,dr_cell, &
+!$omp & jtot,j_x,j_y,j_z,dzjet,d2,tmp_volume,psy,drjet,d,u,v,w,ekk,eint, &
+!$omp & box_origin,box_extents,capsule_r,capsule_start,capsule_end) &
+!$omp & reduction(+:vol_gas,psy_norm,mass_gas) &
+!$omp & shared(levelmin,nlevelmax,scale,active,ncoarse,ngridmax,son,xg,skip_loc,nAGN,xAGN,EsaveAGN,rmax2,uold, &
+!$omp & ind_blast,X_radio,X_floor,ok_blast_agn,jAGN,rmax,box_u,box_v,box_w,box,capsule,mAGN,mloadAGN,dMsmbh,vol_blast, &
+!$omp & smallr,dAGNcell,imetal,passiveAGN,mass_blast)
   do ilevel=levelmin,nlevelmax
      ! Computing local volume (important for averaging hydro quantities)
      dx=0.5D0**ilevel
@@ -6041,12 +6044,14 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
   EsaveAGN=0d0
   ! Loop over levels
 
-!$omp parallel private(dx,dx_loc,vol_loc,iz,iy,ix,xc,ncache) &
-!$omp & private(ngrid,ind_grid,iskip,ind_cell,ok) &
-!$omp & private(x,y,z,dxx,dyy,dzz,dr_AGN,ekk,d,etot,eint,T2_1,T2_2) &
-!$omp & private(jtot,j_x,j_y,j_z,dzjet,drjet,d2,tmp_volume,psy,u,v,w,ekkold,d_gas) &
-!$omp & private(box_origin,box_extents,capsule_r,capsule_start,capsule_end) &
-!$omp & reduction(+:EsaveAGN,vol_gas)
+!$omp parallel default(none) private(dx,dx_loc,vol_loc,iz,iy,ix,xc,ncache, &
+!$omp & ngrid,ind_grid,iskip,ind_cell,ok,x,y,z,dxx,dyy,dzz,dr_AGN,ekk,d,etot,eint,T2_1,T2_2, &
+!$omp & jtot,j_x,j_y,j_z,dzjet,drjet,d2,tmp_volume,psy,u,v,w,ekkold,d_gas, &
+!$omp & box_origin,box_extents,capsule_r,capsule_start,capsule_end) &
+!$omp & reduction(+:EsaveAGN,vol_gas) &
+!$omp & shared(levelmin,nlevelmax,scale,active,ncoarse,ngridmax,son,xg,skip_loc,nAGN,ok_save,rmax2,uold,smallr, &
+!$omp & gamma,scale_T2,T2maxAGNz,p_gas,ok_blast_agn,X_radio,jAGN,rmax,box_u,box_v,box_w,box,capsule,uBlast, &
+!$omp & xAGN,X_floor,mAGN,psy_norm,imetal,passiveAGN,vAGN)
   do ilevel=levelmin,nlevelmax
      ! Computing local volume (important for averaging hydro quantities)
      dx=0.5D0**ilevel
@@ -6313,7 +6318,7 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
   dx_loc=dx*scale
   vol_loc=dx_loc**ndim
 
-!$omp parallel do private(ekk,d,etot,eint,T2_1,T2_2,d_gas,u,v,w) schedule(static)
+!!$omp parallel do private(ekk,d,etot,eint,T2_1,T2_2,d_gas,u,v,w) schedule(static)
   do iAGN=1,nAGN
 
      if(ind_blast(iAGN)>0)then
@@ -6336,10 +6341,8 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
               eint=eint + EAGN(iAGN)/vol_blast(iAGN)
               T2_2=(gamma-1d0)*eint/d*scale_T2
               if(T2_2 .le. T2maxAGNz)then
-!$omp atomic update
                  uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+EAGN(iAGN)/vol_blast(iAGN)
               else
-!$omp atomic update
                  uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+T2maxAGNz/scale_T2/(gamma-1d0)*d
                  EsaveAGN(iAGN)=EsaveAGN(iAGN)+(T2_2-T2maxAGNz)/scale_T2/(gamma-1d0)*d*vol_loc
               endif
@@ -6364,10 +6367,10 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
               u=vAGN(iAGN,1)
               v=vAGN(iAGN,2)
               w=vAGN(iAGN,3)
-!$omp atomic update
+!!$omp atomic update
               uold(ind_blast(iAGN),1)=uold(ind_blast(iAGN),1)+d_gas
               do ivar= imetal, nvar
-!$omp atomic update
+!!$omp atomic update
                  uold(ind_blast(iAGN), ivar) = uold(ind_blast(iAGN),ivar) + passiveAGN(iAGN, ivar)*d_gas
               end do
               ekk=0d0
@@ -6382,10 +6385,10 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
                  eint=eint + EAGN(iAGN)/vol_blast(iAGN)
                  T2_2=(gamma-1d0)*eint/d*scale_T2
                  if(T2_2 .le. T2maxAGNz)then
-!$omp atomic update
+!!$omp atomic update
                     uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+EAGN(iAGN)/vol_blast(iAGN)
                  else
-!$omp atomic update
+!!$omp atomic update
                     uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+T2maxAGNz/scale_T2/(gamma-1d0)*d
                     EsaveAGN(iAGN)=EsaveAGN(iAGN)+(T2_2-T2maxAGNz)/scale_T2/(gamma-1d0)*d*vol_loc
                  endif
@@ -6409,10 +6412,10 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
                  eint=eint + EAGN(iAGN)/vol_blast(iAGN)
                  T2_2=(gamma-1d0)*eint/d*scale_T2
                  if(T2_2 .le. T2maxAGNz)then
-!$omp atomic update
+!!$omp atomic update
                     uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+EAGN(iAGN)/vol_blast(iAGN)
                  else
-!$omp atomic update
+!!$omp atomic update
                     uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+T2maxAGNz/scale_T2/(gamma-1d0)*d
                     EsaveAGN(iAGN)=EsaveAGN(iAGN)+(T2_2-T2maxAGNz)/scale_T2/(gamma-1d0)*d*vol_loc
                  endif
