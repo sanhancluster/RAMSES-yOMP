@@ -113,7 +113,7 @@ subroutine authorize_fine(ilevel)
   do icpu=1,ncpu
      ncache=reception(icpu,ilevel)%ngrid
      ! Loop over grids by vector sweeps
-!$omp do schedule(dynamic,nchunk)
+!$omp do schedule(static,nchunk)
      do igrid=1,ncache,nvector
         ! Gather nvector grids
         ngrid=MIN(nvector,ncache-igrid+1)
@@ -234,7 +234,7 @@ subroutine authorize_fine(ilevel)
      ! Initialize flag1 to 0 in virtual cells
      do icpu=1,ncpu
         ncache=reception(icpu,ilevel)%ngrid
-!$omp do schedule(dynamic,nchunk)
+!$omp do schedule(static,nchunk)
         do igrid=1,ncache,nvector
            ngrid=MIN(nvector,ncache-igrid+1)
            do i=1,ngrid
@@ -257,7 +257,7 @@ subroutine authorize_fine(ilevel)
      ! Count neighbors and set flag2 accordingly
      do icpu=1,ncpu
         ncache=reception(icpu,ilevel)%ngrid
-!$omp do schedule(dynamic,nchunk)
+!$omp do schedule(static,nchunk)
         do igrid=1,ncache,nvector
            ngrid=MIN(nvector,ncache-igrid+1)
            do i=1,ngrid
@@ -275,7 +275,7 @@ subroutine authorize_fine(ilevel)
      ! Set flag2=1 for cells with flag1=1
      do icpu=1,ncpu
         ncache=reception(icpu,ilevel)%ngrid
-!$omp do schedule(dynamic,nchunk)
+!$omp do schedule(static,nchunk)
         do igrid=1,ncache,nvector
            ngrid=MIN(nvector,ncache-igrid+1)
            do i=1,ngrid
@@ -411,7 +411,7 @@ subroutine make_virtual_fine_dp(xx,ilevel)
 !$omp end single nowait
 
   ! Gather emission array
-!$omp do collapse(2) schedule(dynamic,nchunk)
+!$omp do collapse(2) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (emission(icpu,ilevel)%ngrid>0) then
@@ -440,7 +440,7 @@ subroutine make_virtual_fine_dp(xx,ilevel)
 !$omp end single
 
   ! Scatter reception array
-!$omp do collapse(2) schedule(dynamic,nchunk)
+!$omp do collapse(2) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (reception(icpu,ilevel)%ngrid>0) then
@@ -503,7 +503,7 @@ subroutine make_virtual_fine_int(xx,ilevel)
 !$omp end single nowait
 
   ! Gather emission array
-!$omp do collapse(2) schedule(dynamic,nchunk)
+!$omp do collapse(2) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (emission(icpu,ilevel)%ngrid>0) then
@@ -532,7 +532,7 @@ subroutine make_virtual_fine_int(xx,ilevel)
 !$omp end single
 
   ! Scatter reception array
-!$omp do collapse(2) schedule(dynamic,nchunk)
+!$omp do collapse(2) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (reception(icpu,ilevel)%ngrid>0) then
@@ -641,7 +641,7 @@ subroutine make_virtual_reverse_dp(xx,ilevel)
 !$omp end single
 
   ! Scatter reception array
-!$omp do collapse(2) schedule(dynamic,nchunk)
+!$omp do collapse(2) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (emission(icpu,ilevel)%ngrid>0) then
@@ -672,7 +672,7 @@ subroutine make_virtual_reverse_dp(xx,ilevel)
 !$omp end single nowait
 
   ! Gather emission array
-!$omp do collapse(2) schedule(dynamic,nchunk)
+!$omp do collapse(2) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (reception(icpu,ilevel)%ngrid>0) then
@@ -755,7 +755,7 @@ subroutine make_virtual_reverse_int(xx,ilevel)
   if(ilevel.le.switchlevel) then
 
   ! Gather emission array
-!$$omp parallel do private(step,iskip,icell,ibuf) collapse(2) schedule(dynamic,nchunk)
+!$$omp parallel do private(step,iskip,icell,ibuf) collapse(2) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (reception(icpu,ilevel)%ngrid>0) then
@@ -811,7 +811,7 @@ subroutine make_virtual_reverse_int(xx,ilevel)
   end do
 
   ! Scatter reception array
-!$$omp parallel do private(step,iskip) collapse(2) schedule(dynamic,nchunk)
+!$$omp parallel do private(step,iskip) collapse(2) schedule(static,nchunk)
   do j=1,twotondim
      do icpu=1,ncpu
         if (emission(icpu,ilevel)%ngrid>0) then
