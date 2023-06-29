@@ -1494,7 +1494,9 @@ subroutine get_number_of_snIa (birth_time, dteff, id_star, mass0, nsnIa )
   nsnIa_tot = NINT(mass0 * A_snIa)
   localseed = -ABS(id_star)
   do i=1,nsnIa_tot
+!$omp critical
      xdum = ran1(localseed)
+!$omp end critical
      ydum = exp(xdum / A_DTD + log(t_ini))/1d6
      if(ydum.ge.age1.and.ydum.le.age2) nsnIa = nsnIa + 1
   end do
