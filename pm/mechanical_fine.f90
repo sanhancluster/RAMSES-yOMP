@@ -174,7 +174,7 @@ subroutine mechanical_feedback_fine(ilevel,icount)
 !$omp & ncoarse,ngridmax,son,vp,metal,dust,dust_chem,MC_tracer,tmpp,Zejecta_chem_II,ZDejecta_chem_II,dust_cond_eff,fsmall_ej,flarge_ej,nchunk)
      ip=0
      ! Loop over grids
-!$omp do schedule(static,nchunk)
+!$omp do schedule(dynamic,nchunk)
   do jgrid = 1, active(ilevel)%ngrid
      igrid=active(ilevel)%igrid(jgrid)
 

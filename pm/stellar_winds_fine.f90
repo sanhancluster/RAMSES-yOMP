@@ -248,7 +248,7 @@ subroutine stellar_winds_fine(ilevel)
   ! Reset tmpp array that contains the probability to be detached from the particle
   if (MC_tracer) then
      ! Loop over grids
-!$omp parallel do private(igrid,npart1,ipart) schedule(static,nchunk)
+!$omp parallel do private(igrid,npart1,ipart) schedule(dynamic,nchunk)
      do jgrid=1,active(ilevel)%ngrid
         igrid=active(ilevel)%igrid(jgrid)
         npart1=numbp(igrid)  ! Number of particles in the grid
@@ -296,7 +296,7 @@ subroutine stellar_winds_fine(ilevel)
 !$omp & default(none) shared(active,ilevel,numbp,headp,nextp,typep,nchunk)
   ig=0
   ip=0
-!$omp do schedule(static,nchunk)
+!$omp do schedule(dynamic,nchunk)
   do jgrid=1,active(ilevel)%ngrid
      igrid=active(ilevel)%igrid(jgrid)
      npart1=numbp(igrid)  ! Number of particles in the grid

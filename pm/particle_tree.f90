@@ -230,7 +230,7 @@ subroutine make_tree_fine(ilevel)
      ig=0
      ip=0
      ! Loop over grids
-!$omp do private(igrid,npart1,ipart,next_part) schedule(static,nchunk)
+!$omp do private(igrid,npart1,ipart,next_part) schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -485,7 +485,7 @@ subroutine kill_tree_fine(ilevel)
      ig=0
      ip=0
      ! Loop over grids
-!$omp do private(igrid,npart1,ipart,next_part) schedule(static,nchunk)
+!$omp do private(igrid,npart1,ipart,next_part) schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -1295,7 +1295,7 @@ subroutine reset_tracer_move_flag(ilevel)
   integer :: ipart, jpart, next_part, jgrid, npart1, igrid
 
   ! Loop over grids
-!$omp parallel do private(igrid,npart1,ipart,next_part) schedule(static,nchunk)
+!$omp parallel do private(igrid,npart1,ipart,next_part) schedule(dynamic,nchunk)
   do jgrid = 1, numbl(myid, ilevel)
      igrid=active(ilevel)%igrid(jgrid)
      npart1 = numbp(igrid)  ! Number of particles in the grid

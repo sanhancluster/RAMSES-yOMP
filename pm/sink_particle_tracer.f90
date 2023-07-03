@@ -141,7 +141,7 @@ contains
     ! Look on AGN (vectorized)
 !$omp parallel private(jj,ncache,iAGN,proba,ipart,i,ok,rand,j,ind_AGN,ind_part,buffer_j,buffer_pos)
     j = 0
-!$omp do schedule(static,nchunk)
+!$omp do schedule(dynamic,nchunk)
     do jj = 1, nAGN, nvector
        ncache = min(nvector, nAGN - jj + 1)
        do ii = 1, ncache

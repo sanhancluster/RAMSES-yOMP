@@ -144,7 +144,7 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
 !$omp & dust_cond_eff_Ia,fsmall_ej,flarge_ej)
      ! Loop over grids
   ip=0
-!$omp do schedule(static,nchunk)
+!$omp do schedule(dynamic,nchunk)
   do jgrid=1,active(ilevel)%ngrid
      igrid=active(ilevel)%igrid(jgrid)
 
