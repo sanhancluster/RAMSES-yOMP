@@ -145,7 +145,7 @@ subroutine make_sink(ilevel)
   ! OMP
   integer,dimension(1:IRandNumSize),save :: ompseed
   real(dp) :: rand
-!!$omp threadprivate(ompseed)
+!$omp threadprivate(ompseed)
 
   if(numbtot(1,ilevel)==0) return
   if(.not. hydro)return
@@ -223,17 +223,17 @@ subroutine make_sink(ilevel)
   end do
 
 #ifdef _OPENMP
-!!$omp parallel
+!$omp parallel
     ! Give slight offsets for each OMP threads
     ompseed=MOD(tracer_seed+omp_get_thread_num()+1,4096)
-!!$omp end parallel
+!$omp end parallel
 #else
     ompseed=MOD(tracer_seed+1,4096)
 #endif
     call ranf(tracer_seed,rand)
 
   ! Set new sink variables to old ones
-!!$omp parallel do
+!$omp parallel do
   do isink=1,nsinkmax
      xsink_new(isink,:)=0d0; msink_new(isink)=0d0; dMsmbh_new(isink)=0d0; Esave_new(isink)=0d0
      vsink_new(isink,:)=0d0; oksink_new(isink)=0d0; tsink_new(isink)=0d0; idsink_new(isink)=0
@@ -255,8 +255,8 @@ subroutine make_sink(ilevel)
   ! Convert hydro variables to primitive variables
   !------------------------------------------------
   ncache=active(ilevel)%ngrid
-!!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell) &
-!!$omp & private(d,u,v,w,e) schedule(static)
+!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell) &
+!$omp & private(d,u,v,w,e) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -313,8 +313,8 @@ subroutine make_sink(ilevel)
   ntot=0
   ! Loop over grids
   ncache=active(ilevel)%ngrid
-!!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell,ok) &
-!!$omp & private(d,x,y,z,star_ratio,temp,d_jeans,d_thres,dxx,dyy,dzz,dr_sink,rmax_sink2) reduction(+:ntot) schedule(static)
+!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell,ok) &
+!$omp & private(d,x,y,z,star_ratio,temp,d_jeans,d_thres,dxx,dyy,dzz,dr_sink,rmax_sink2) reduction(+:ntot) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -441,7 +441,7 @@ subroutine make_sink(ilevel)
   rmax_sink2 = rmax_sink**2
   ! Loop over grids
   ncache=active(ilevel)%ngrid
-!!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell,nnew,ninc_omp) schedule(static)
+!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell,nnew,ninc_omp) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -457,10 +457,10 @@ subroutine make_sink(ilevel)
         nnew=0
         do i=1,ngrid
            if (flag2(ind_cell(i))>0)then
-!!$omp atomic capture
+!$omp atomic capture
               ninc=ninc+1
               ninc_omp=ninc
-!!$omp end atomic
+!$omp end atomic
               x_tmp(izero_myid+ninc_omp,1)=(xg(ind_grid(i),1)+xc(ind,1)-skip_loc(1))*scale
               x_tmp(izero_myid+ninc_omp,2)=(xg(ind_grid(i),2)+xc(ind,2)-skip_loc(2))*scale
               x_tmp(izero_myid+ninc_omp,3)=(xg(ind_grid(i),3)+xc(ind,3)-skip_loc(3))*scale
@@ -481,7 +481,7 @@ subroutine make_sink(ilevel)
   flag_tmp=flag_tmp_all
   deallocate(x_tmp_all,dens_tmp_all,flag_tmp_all)
 #endif
-!!$omp parallel do private(x,y,z,dxx,dyy,dzz,dr_sink) schedule(static)
+!$omp parallel do private(x,y,z,dxx,dyy,dzz,dr_sink) schedule(static)
   do i=1,ntot_tmp
      if(flag_tmp(i).eq.1)then
         x=x_tmp(i,1);y=x_tmp(i,2);z=x_tmp(i,3)
@@ -514,10 +514,10 @@ subroutine make_sink(ilevel)
               if(dr_sink .le. rmax_sink2)then
                  ! Keep the largest gas density region
                  if(dens_tmp(i).ge.dens_tmp(j))then
-!!$omp atomic write
+!$omp atomic write
                     flag_tmp(j)=0
                  else
-!!$omp atomic write
+!$omp atomic write
                     flag_tmp(i)=0
                  endif
               endif
@@ -611,9 +611,9 @@ subroutine make_sink(ilevel)
 
   ! Loop over grids
   ncache=active(ilevel)%ngrid
-!!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell,nnew,ind_grid_new,ind_cell_new,ind_grid_cloud) &
-!!$omp private(ind_part_cloud,ind_cloud,itracer,np,ind_tracer,proba_part,ind_sink,xsink_loc) &
-!!$omp & private(d,u,v,w,e,x,y,z,temp,d_jeans,d_thres,proba,index_sink_omp,index_sink_tot_omp) schedule(static)
+!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell,nnew,ind_grid_new,ind_cell_new,ind_grid_cloud) &
+!$omp private(ind_part_cloud,ind_cloud,itracer,np,ind_tracer,proba_part,ind_sink,xsink_loc) &
+!$omp & private(d,u,v,w,e,x,y,z,temp,d_jeans,d_thres,proba,index_sink_omp,index_sink_tot_omp) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -639,14 +639,14 @@ subroutine make_sink(ilevel)
 
         ! Create new sink particles
         do i=1,nnew
-!!$omp atomic capture
+!$omp atomic capture
            index_sink=index_sink+1
            index_sink_omp=index_sink
-!!$omp end atomic
-!!$omp atomic capture
+!$omp end atomic
+!$omp atomic capture
            index_sink_tot=index_sink_tot+1
            index_sink_tot_omp=index_sink_tot
-!!$omp end atomic
+!$omp end atomic
 
            ! Get gas variables
            d=max(uold(ind_cell_new(i),1), smallr)
@@ -768,8 +768,8 @@ subroutine make_sink(ilevel)
   ! Convert hydro variables back to conservative variables
   !---------------------------------------------------------
   ncache=active(ilevel)%ngrid
-!!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell) &
-!!$omp & private(d,u,v,w,e) schedule(static)
+!$omp parallel do private(ngrid,ind_grid,iskip,ind_cell) &
+!$omp & private(d,u,v,w,e) schedule(static)
   do igrid=1,ncache,nvector
      ngrid=MIN(nvector,ncache-igrid+1)
      do i=1,ngrid
@@ -856,7 +856,7 @@ subroutine make_sink(ilevel)
   end if
   !/Particles dynamical friction (HP)
 #endif
-!!$omp parallel do private(isink,itype,idim) schedule(static)
+!$omp parallel do private(isink,itype,idim) schedule(static)
   do isink=1,nsink
      if(oksink_all(isink)==1)then
         tsink(isink) =tsink_all(isink)
@@ -958,7 +958,7 @@ subroutine merge_sink(ilevel)
   !-------------------------------
   ! Merge sinks using FOF
   !-------------------------------
-!!$omp parallel do
+!$omp parallel do
   do isink=1,nsink
      psink(isink)=isink
      gsink(isink)=0
@@ -1054,21 +1054,21 @@ subroutine merge_sink(ilevel)
   !----------------------------------------------------
   ! Compute group centre of mass and average velocity
   !----------------------------------------------------
-!!$omp parallel do
+!$omp parallel do
   do isink=1,nsinkmax
      xsink_new(isink,:)=0d0; vsink_new(isink,:)=0d0
      msink_new(isink)=0d0; dMsmbh_new(isink)=0d0; Esave_new(isink)=0d0;idsink_new(isink)=0
      oksink_all(isink)=0d0; oksink_new(isink)=0d0; tsink_new(isink)=0d0
      bhspin_new(isink,:)=0d0; spinmag_new(isink)=0d0
   end do
-!!$omp parallel do
+!$omp parallel do
   do isink=1,nsink
      rank_old(isink)=0; idsink_old(isink)=0; tsink_old(isink)=0
   end do
 
   ! Particles dynamical friction (HP)
   if (drag_part) then
-!!$omp parallel do private(isink)
+!$omp parallel do private(isink)
      do isink=1,nsinkmax
         v_DFnew_all(isink,:,:,:) = 0d0; mass_DFnew_all(isink,:,:) = 0d0; n_partnew_all(isink,:,:)=0
         mass_lowspeednew_all(isink,:,:)=0d0; fact_fastnew_all(isink,:,:)=0d0
@@ -1078,10 +1078,10 @@ subroutine merge_sink(ilevel)
   !/Particles dynamical friction (HP)
 
 ! TODO: deal with duplicate igrp b/w loops, which causes race condition.
-!!!$omp parallel do private(isink,igrp) &
-!!!$omp & private(M1,M2,a1,a2,ax1,ay1,az1,ax2,ay2,az2,xx1,yy1,zz1,xx2,yy2,zz2,vvx1,vvy1,vvz1,vvx2,vvy2,vvz2) &
-!!!$omp & private(q,mu,a1mod,a2mod,a1a2,xx,yy,zz,xc,yc,zc,vxc,vyc,vzc,x1,y1,z1,x2,y2,z2,vx1,vy1,vz1,vx2,vy2,vz2,Lx1,Ly1,Lz1,Lx2,Ly2,Lz2,Lx,Ly,Lz,Lmod) &
-!!!$omp & private(a1L,a2L,Lmodana,af,ii,itype) schedule(static)
+!!$omp parallel do private(isink,igrp) &
+!!$omp & private(M1,M2,a1,a2,ax1,ay1,az1,ax2,ay2,az2,xx1,yy1,zz1,xx2,yy2,zz2,vvx1,vvy1,vvz1,vvx2,vvy2,vvz2) &
+!!$omp & private(q,mu,a1mod,a2mod,a1a2,xx,yy,zz,xc,yc,zc,vxc,vyc,vzc,x1,y1,z1,x2,y2,z2,vx1,vy1,vz1,vx2,vy2,vz2,Lx1,Ly1,Lz1,Lx2,Ly2,Lz2,Lx,Ly,Lz,Lmod) &
+!!$omp & private(a1L,a2L,Lmodana,af,ii,itype) schedule(static)
   do isink=1,nsink
      igrp=gsink(isink)
 
@@ -1322,8 +1322,8 @@ subroutine merge_sink(ilevel)
   end do
   ! End loop over sinks
   nsink=new_sink
-!!$omp parallel
-!!$omp do
+!$omp parallel
+!$omp do
   do isink=1,new_sink
      xsink_new(isink,1)=xsink_new(isink,1)/msink_new(isink)+xsink(int(oksink_new(isink)),1)
      vsink_new(isink,1)=vsink_new(isink,1)/msink_new(isink)
@@ -1336,7 +1336,7 @@ subroutine merge_sink(ilevel)
      vsink_new(isink,3)=vsink_new(isink,3)/msink_new(isink)
 #endif
   end do
-!!$omp do
+!$omp do
   do isink=1,nsink
      msink (isink)=msink_new (isink)
      dMsmbh(isink)=dMsmbh_new(isink)
@@ -1358,7 +1358,7 @@ subroutine merge_sink(ilevel)
      !/Particles dynamical friction (HP)
   end do
   ! Periodic boundary conditions
-!!$omp do private(xx,yy,zz)
+!$omp do private(xx,yy,zz)
   do isink=1,nsink
      xx=xsink(isink,1)
      if(xx<-scale*skip_loc(1))then
@@ -1389,19 +1389,19 @@ subroutine merge_sink(ilevel)
      xsink(isink,3)=zz
 #endif
   enddo
-!!$omp end parallel
+!$omp end parallel
   deallocate(rank_old,idsink_old,tsink_old)
 
   !-----------------------------------------------------
   ! Remove sink particles that are part of a FOF group.
   !-----------------------------------------------------
   ! Loop over cpus
-!!$omp parallel private(ig,ip,ind_part,ind_grid_part,igrid,npart1,npart2,ipart,next_part,ind_grid,isink_old,isink_new)
+!$omp parallel private(ig,ip,ind_part,ind_grid_part,igrid,npart1,npart2,ipart,next_part,ind_grid,isink_old,isink_new)
   do icpu=1,ncpu
      ig=0
      ip=0
      ! Loop over grids
-!!$omp do schedule(static)
+!$omp do schedule(static)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -1456,7 +1456,7 @@ subroutine merge_sink(ilevel)
            ! End loop over particles
         end if
      end do
-!!$omp end do nowait
+!$omp end do nowait
      ! End loop over grids
      if(ip>0)call kill_sink(ind_part,ind_grid_part,ip)
   end do
@@ -1464,14 +1464,14 @@ subroutine merge_sink(ilevel)
   !-----------------------------------------------------
   ! Take care of the tracer particles
   !-----------------------------------------------------
-!!$omp barrier
+!$omp barrier
 
   if (MC_tracer) then
      do icpu=1,ncpu
         ig=0
         ip=0
         ! Loop over grids
-!!$omp do schedule(static)
+!$omp do schedule(static)
         do jgrid=1,numbl(icpu,ilevel)
            if(icpu==myid)then
               igrid=active(ilevel)%igrid(jgrid)
@@ -1518,11 +1518,11 @@ subroutine merge_sink(ilevel)
               ! End loop over particles
            end if
         end do
-!!$omp end do nowait
+!$omp end do nowait
      end do
      ! End loop over cpus
   end if
-!!$omp end parallel
+!$omp end parallel
 
   deallocate(psink,gsink)
 
@@ -1632,10 +1632,10 @@ subroutine create_cloud_from_sink
   rmass=dble(ir_cloud_massive)*dx_min
 
   ! Create cloud
-!!$omp parallel private(ip,is_central,xrel,rr,xcloud,xtest,in_box,ind_sink)
+!$omp parallel private(ip,is_central,xrel,rr,xcloud,xtest,in_box,ind_sink)
    ip = 0
    is_central=.false.
-!!!$omp do collapse(3) schedule(dynamic,nchunk)
+!$omp do collapse(3) schedule(dynamic,nchunk)
   do kk=-2*ir_cloud,2*ir_cloud
   do jj=-2*ir_cloud,2*ir_cloud
   do ii=-2*ir_cloud,2*ir_cloud
@@ -1668,12 +1668,12 @@ subroutine create_cloud_from_sink
   end do
   end do
   end do
-!!$omp end do nowait
+!$omp end do nowait
 
   if(ip>0) then
      call create_cloud(xtest,ind_sink,ind_grid,is_central,ip)
   end if
-!!$omp end parallel
+!$omp end parallel
 
 #endif
 end subroutine create_cloud_from_sink
@@ -1751,7 +1751,7 @@ subroutine kill_entire_cloud(ilevel)
 
   ! Gather sink and cloud particles.
   ! Loop over cpus
-!!$omp parallel private(ig,ip,ncache,ind_part,ind_grid_part,igrid,npart1,npart2,ipart,next_part,ind_grid)
+!$omp parallel private(ig,ip,ncache,ind_part,ind_grid_part,igrid,npart1,npart2,ipart,next_part,ind_grid)
   do icpu=1,ncpu+nboundary
      if(icpu<=ncpu)then
         ncache=numbl(icpu,ilevel)
@@ -1761,7 +1761,7 @@ subroutine kill_entire_cloud(ilevel)
      ig=0
      ip=0
      ! Loop over grids
-!!$omp do schedule(static)
+!$omp do schedule(static)
      do jgrid=1,ncache
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -1818,7 +1818,7 @@ subroutine kill_entire_cloud(ilevel)
           ! End loop over particles
         end if
      end do
-!!$omp end do nowait
+!$omp end do nowait
      ! End loop over grids
      if(ip>0)then
         call remove_list(ind_part,ind_grid_part,ok,ip)
@@ -1826,7 +1826,7 @@ subroutine kill_entire_cloud(ilevel)
      end if
   end do
   ! End loop over cpus
-!!$omp end parallel
+!$omp end parallel
 
 111 format('   Entering kill_cloud for level ',I2)
 end subroutine kill_entire_cloud
@@ -1860,7 +1860,7 @@ subroutine bondi_hoyle(ilevel)
   ! OMP
   integer,dimension(1:IRandNumSize),save :: ompseed
   real(dp) :: rand
-!!$omp threadprivate(ompseed)
+!$omp threadprivate(ompseed)
 
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
@@ -1872,10 +1872,10 @@ subroutine bondi_hoyle(ilevel)
   end if
 
 #ifdef _OPENMP
-!!$omp parallel
+!$omp parallel
   ! Give slight offsets for each OMP threads
   ompseed=MOD(localseed+omp_get_thread_num()+1,4096)
-!!$omp end parallel
+!$omp end parallel
 #else
   ompseed=MOD(localseed+1,4096)
 #endif
@@ -1894,12 +1894,12 @@ subroutine bondi_hoyle(ilevel)
   ! Reset new sink variables
   v2sink_new=0d0; c2sink_new=0d0; oksink_new=0d0
 
-!!$omp parallel private(ig,ip,ind_part,ind_grid,ind_grid_part,igrid,npart1,npart2,ipart,next_part,isink,r2)
+!$omp parallel private(ig,ip,ind_part,ind_grid,ind_grid_part,igrid,npart1,npart2,ipart,next_part,isink,r2)
   do icpu=1,ncpu
      ig=0
      ip=0
      ! Loop over grids
-!!!$omp do schedule(dynamic,nchunk)
+!$omp do schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -1969,12 +1969,12 @@ subroutine bondi_hoyle(ilevel)
            ! End loop over particles
         end if
      end do
-!!$omp end do nowait
+!$omp end do nowait
      ! End loop over grids
      if(ip>0)call bondi_velocity(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
   end do
   ! End loop over cpus
-!!$omp end parallel
+!$omp end parallel
 
   if(nsink>0)then
 #ifndef WITHOUTMPI
@@ -1988,7 +1988,7 @@ subroutine bondi_hoyle(ilevel)
 #endif
   endif
 
-!!$omp parallel do schedule(static)
+!$omp parallel do schedule(static)
   do isink=1,nsink
      if(oksink_all(isink)==1d0)then
         c2sink(isink)=c2sink_all(isink)
@@ -2011,12 +2011,12 @@ subroutine bondi_hoyle(ilevel)
   wdens=0d0; wvol =0d0; wc2=0d0; wmom=0d0; jsink_new=0d0
 
 
-!!$omp parallel private(ig,ip,ind_part,ind_grid,ind_grid_part,igrid,npart1,npart2,ipart,next_part)
+!$omp parallel private(ig,ip,ind_part,ind_grid,ind_grid_part,igrid,npart1,npart2,ipart,next_part)
   do icpu=1,ncpu
      ig=0
      ip=0
      ! Loop over grids
-!!!$omp do schedule(dynamic,nchunk)
+!$omp do schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -2073,17 +2073,17 @@ subroutine bondi_hoyle(ilevel)
         end if
 
      end do
-!!$omp end do nowait
+!$omp end do nowait
      ! End loop over grids
      if(ip>0)call average_density(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
      if(ip>0 .and.(.not.random_jet)) call jet_AGN(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel)
   end do
   ! End loop over cpus
-!!$omp end parallel
+!$omp end parallel
 
   if(random_jet)then
      if(myid==1)then
-!!$omp parallel do private(SS,phi,UU,Rrand,CC) schedule(static)
+!$omp parallel do private(SS,phi,UU,Rrand,CC) schedule(static)
         do isink=1,nsink
            ! Random directions
            call ranf(ompseed,RandNum)
@@ -2117,7 +2117,7 @@ subroutine bondi_hoyle(ilevel)
 #endif
   endif
 
-!!$omp parallel do
+!$omp parallel do
   do isink=1,nsink
      weighted_density(isink,ilevel)=wdens_new(isink)
      weighted_volume (isink,ilevel)=wvol_new (isink)
@@ -2640,17 +2640,17 @@ subroutine average_density(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
         r2=r2+(xp(ind_part(j),idim)-xsink(isink,idim))**2
      end do
      weight=EXP(-r2/r2k(isink))
-!!$omp atomic update
+!$omp atomic update
      wdens(isink)=wdens(isink)+weight*dgas(j)
-!!$omp atomic update
+!$omp atomic update
      wmom(isink,1)=wmom(isink,1)+weight*ugas(j)
-!!$omp atomic update
+!$omp atomic update
      wmom(isink,2)=wmom(isink,2)+weight*vgas(j)
-!!$omp atomic update
+!$omp atomic update
      wmom(isink,3)=wmom(isink,3)+weight*wgas(j)
-!!$omp atomic update
+!$omp atomic update
      wc2  (isink)=wc2  (isink)+weight*c2gas(j)
-!!$omp atomic update
+!$omp atomic update
      wvol (isink)=wvol (isink)+weight
   end do
 
@@ -2696,7 +2696,7 @@ subroutine grow_bondi(ilevel)
   ! OMP
   integer,dimension(1:IRandNumSize),save :: ompseed
   real(dp) :: rand
-!!$omp threadprivate(ompseed)
+!$omp threadprivate(ompseed)
 
   if(numbtot(1,ilevel)==0)return
   if(verbose)write(*,111)ilevel
@@ -2714,10 +2714,10 @@ subroutine grow_bondi(ilevel)
   prefact=fourpi*6.67d-8*scale_m*1.66d-24/(6.652d-25*3d10)/(scale_m/scale_t)
 
 #ifdef _OPENMP
-!!$omp parallel
+!$omp parallel
     ! Give slight offsets for each OMP threads
     ompseed=MOD(tracer_seed+omp_get_thread_num()+1,4096)
-!!$omp end parallel
+!$omp end parallel
 #else
     ompseed=MOD(tracer_seed+1,4096)
 #endif
@@ -2733,7 +2733,7 @@ subroutine grow_bondi(ilevel)
 
   ! Set unew to uold for myid cells
   ! Need unew to get initial density before Bondi accreting mass
-!!$omp parallel do private(i,ind,iskip,ivar) schedule(static)
+!$omp parallel do private(i,ind,iskip,ivar) schedule(static)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
@@ -2748,7 +2748,7 @@ subroutine grow_bondi(ilevel)
   ! From km/s to user units: assume a 10 km/s vel disp in the ISM
   sigmav2=(sigmav_max*1d5/scale_v)**2d0
 
-!!$omp parallel do
+!$omp parallel do
   do isink=1,nsinkmax
      c_avgptr(isink)=0d0
      v_avgptr(isink)=0d0
@@ -2756,7 +2756,7 @@ subroutine grow_bondi(ilevel)
   end do
 
   ! Compute Bondi-Hoyle accretion rate
-!!$omp parallel do private(density,c2mean,velocity,volume,v2mean,alpha,ZZ1,ZZ2,r_lso,epsilon_r,r_bondi,r_acc)
+!$omp parallel do private(density,c2mean,velocity,volume,v2mean,alpha,ZZ1,ZZ2,r_lso,epsilon_r,r_bondi,r_acc)
   do isink=1,nsink
      density=0d0
      c2mean=0d0
@@ -2835,13 +2835,13 @@ subroutine grow_bondi(ilevel)
   end do
 
 
-!!$omp parallel private(ig,ip,ind_part,ind_grid,ind_grid_part,igrid,npart1,npart2,ipart,next_part,isink,counter)
+!$omp parallel private(ig,ip,ind_part,ind_grid,ind_grid_part,igrid,npart1,npart2,ipart,next_part,isink,counter)
   do icpu=1,ncpu
      ig=0
      ip=0
      isink=0
      ! Loop over grids
-!!!$omp do schedule(dynamic,nchunk)
+!$omp do schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -2905,12 +2905,12 @@ subroutine grow_bondi(ilevel)
            end if
         end if
      end do
-!!$omp end do nowait
+!$omp end do nowait
      ! End loop over grids
      if(ip>0)call accrete_bondi(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,ompseed,isink)
   end do
   ! End loop over cpus
-!!$omp end parallel
+!$omp end parallel
 
   if(exact_timer) call timer('mpi','start')
   if(nsink>0)then
@@ -2941,7 +2941,7 @@ subroutine grow_bondi(ilevel)
   DF_factor = DF_factor + DF_factor_all
   if(exact_timer) call timer('sinks - grow','start')
 
-!!$omp parallel do
+!$omp parallel do
   do isink=1,nsink
      if(.not.fix_smbh_position)then
         vsink(isink,1:ndim)=vsink(isink,1:ndim)*msink(isink)+vsink_all(isink,1:ndim)
@@ -2959,7 +2959,7 @@ subroutine grow_bondi(ilevel)
   end do
 
 ! Update the velocity of cloud particles
-!!$omp parallel private(igrid,npart1,ipart,next_part,isink)
+!$omp parallel private(igrid,npart1,ipart,next_part,isink)
   do icpu=1,ncpu
      ! Loop over grids
 !$omp do schedule(dynamic,nchunk)
@@ -2990,11 +2990,11 @@ subroutine grow_bondi(ilevel)
            end do
         endif
      end do
-!!$omp end do nowait
+!$omp end do nowait
      ! End loop over grids
   end do
   ! End loop over cpus
-!!$omp end parallel
+!$omp end parallel
 
   ! YDspin
   if(spin_bh)call growspin
@@ -3516,19 +3516,19 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
      end if
   end if
 
-!!$omp atomic update
+!$omp atomic update
   dMBH_coarse_new(isink)=dMBH_coarse_new(isink)+dMBH_coarse_add
-!!$omp atomic update
+!$omp atomic update
   dMEd_coarse_new(isink)=dMEd_coarse_new(isink)+dMEd_coarse_add
-!!$omp atomic update
+!$omp atomic update
   dMsmbh_new(isink)=dMsmbh_new(isink)+dMsmbh_add
-!!$omp atomic update
+!$omp atomic update
   msink_new(isink)=msink_new(isink)+msink_add
   do idim=1,ndim
-!!$omp atomic update
+!$omp atomic update
      vsink_new(isink,idim)=vsink_new(isink,idim)+vsink_add(idim)
   end do
-!!$omp atomic update
+!$omp atomic update
   DF_factor_new(isink,1)=DF_factor_new(isink,1)+DF_factor_add
 
 end subroutine accrete_bondi
@@ -4176,11 +4176,11 @@ subroutine jet_AGN(ind_grid,ind_part,ind_grid_part,ng,np,ilevel)
         wc =w-vsink(isink,3)
 
         !j_sp= d_x*uc + d_y*vc + d_z*wc
-!!$omp atomic update
+!$omp atomic update
         jsink_new(isink,1)=jsink_new(isink,1) + (d_y*wc-d_z*vc)*d*vol_loc
-!!$omp atomic update
+!$omp atomic update
         jsink_new(isink,2)=jsink_new(isink,2) + (d_z*uc-d_x*wc)*d*vol_loc
-!!$omp atomic update
+!$omp atomic update
         jsink_new(isink,3)=jsink_new(isink,3) + (d_x*vc-d_y*uc)*d*vol_loc
 
      endif
@@ -4226,7 +4226,7 @@ subroutine get_rho_star(ilevel)
   !--------------------------
   ! Initialize rho_star to zero
   !--------------------------
-!!$omp parallel do private(i,ind,iskip) schedule(static)
+!$omp parallel do private(i,ind,iskip) schedule(static)
   do i=1,active(ilevel)%ngrid
      do ind=1,twotondim
         iskip=ncoarse+(ind-1)*ngridmax
@@ -4242,7 +4242,7 @@ subroutine get_rho_star(ilevel)
   !-------------------------------------------------------
   ! Initialize rho_star to zero in virtual boundaries
   !-------------------------------------------------------
-!!$omp parallel do private(iskip) collapse(2) schedule(static)
+!$omp parallel do private(iskip) collapse(2) schedule(static)
   do ind=1,twotondim
      do icpu=1,ncpu
         iskip=ncoarse+(ind-1)*ngridmax
@@ -4274,7 +4274,7 @@ subroutine get_rho_star(ilevel)
   !----------------------------------------------------
   ! Reset rho_star in physical boundaries
   !----------------------------------------------------
-!!$omp parallel do private(iskip)
+!$omp parallel do private(iskip)
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
      do ibound=1,nboundary
@@ -4349,12 +4349,12 @@ subroutine rhostar_from_current_level(ilevel)
   end if
 
   ! Loop over cpus
-!!$omp parallel private(ig,ip,ind_cell,ind_part,ind_grid,ind_grid_part,x0,igrid,npart1,ipart,local_count,ok_star)
+!$omp parallel private(ig,ip,ind_cell,ind_part,ind_grid,ind_grid_part,x0,igrid,npart1,ipart,local_count,ok_star)
   do icpu=1,ncpu
      ! Loop over grids
      ig=0
      ip=0
-!!$omp do schedule(dynamic,nchunk)
+!$omp do schedule(dynamic,nchunk)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -4423,7 +4423,7 @@ subroutine rhostar_from_current_level(ilevel)
            end if
         end if
      end do
-!!$omp end do nowait
+!$omp end do nowait
      ! End loop over grids
 
      if(ip>0)then
@@ -4439,7 +4439,7 @@ subroutine rhostar_from_current_level(ilevel)
         call cic_star(ind_cell,ind_part,ind_grid_part,x0,ig,ip,ilevel)
      end if
   end do
-!!$omp end parallel
+!$omp end parallel
   ! End loop over cpus
 
 end subroutine rhostar_from_current_level
@@ -4694,12 +4694,12 @@ subroutine cic_star(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel)
             do ind2=1,threetondim
                do ind=1,twotondim
                   if(indp_nb(ind2,ind)>0 .and. rho_star_add(ind2,ind)>0d0) then
-!!$omp atomic update
+!$omp atomic update
                      rho_star(indp_nb(ind2,ind))=rho_star(indp_nb(ind2,ind))+rho_star_add(ind2,ind)
                      if (stellar_velocity_seed) then
                         ! Store stellar velocity field in temporal array f
                         do idim=1,ndim
-!!$omp atomic update
+!$omp atomic update
                            v_star(indp_nb(ind2,ind),idim)=v_star(indp_nb(ind2,ind),idim)+v_star_add(ind2,ind,idim)
                         end do
                      end if
@@ -4741,12 +4741,12 @@ subroutine cic_star(ind_cell,ind_part,ind_grid_part,x0,ng,np,ilevel)
       do ind2=1,threetondim
          do ind=1,twotondim
             if(indp_nb(ind2,ind)>0 .and. rho_star_add(ind2,ind)>0d0) then
-!!$omp atomic update
+!$omp atomic update
                rho_star(indp_nb(ind2,ind))=rho_star(indp_nb(ind2,ind))+rho_star_add(ind2,ind)
                if (stellar_velocity_seed) then
                   ! Store stellar velocity field
                   do idim=1,ndim
-!!$omp atomic update
+!$omp atomic update
                      v_star(indp_nb(ind2,ind),idim)=v_star(indp_nb(ind2,ind),idim)+v_star_add(ind2,ind,idim)
                   end do
                end if
@@ -4800,8 +4800,8 @@ subroutine quenching(ilevel)
   ! Gather star particles only.
 
   ! Loop over grids
-!!$omp parallel do private(igrid,npart1,npart2,str_d,tot_m,ave_u,ave_v,ave_w,sig_u,sig_v,sig_w, &
-!!$omp & ipart,next_part,iskip,ind_cell,sig_tot)
+!$omp parallel do private(igrid,npart1,npart2,str_d,tot_m,ave_u,ave_v,ave_w,sig_u,sig_v,sig_w, &
+!$omp & ipart,next_part,iskip,ind_cell,sig_tot)
   do i=1,active(ilevel)%ngrid
      igrid=active(ilevel)%igrid(i)
      ! Number of particles in the grid
@@ -4915,9 +4915,9 @@ subroutine growspin
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
   scale_m=scale_d*scale_l**3
 
-!!$omp parallel do private(isink,mdisc,dm,chi,dmcoarse,dmini,mbh,ax2,ay2,az2,jsinknorm) &
-!!$omp & private(amod,ZZ1,ZZ2,r_lso,epsilon_r,chieps,mass_8,t_nu1,rwarp,rsg,msg,dmacc,ax1,ay1,az1,bhspinnorm,theta,aac) &
-!!$omp & private(jbh,jd,amod2,dmdeplete,mbh2,spinup,dm2) schedule(static)
+!$omp parallel do private(isink,mdisc,dm,chi,dmcoarse,dmini,mbh,ax2,ay2,az2,jsinknorm) &
+!$omp & private(amod,ZZ1,ZZ2,r_lso,epsilon_r,chieps,mass_8,t_nu1,rwarp,rsg,msg,dmacc,ax1,ay1,az1,bhspinnorm,theta,aac) &
+!$omp & private(jbh,jd,amod2,dmdeplete,mbh2,spinup,dm2) schedule(static)
   do isink=1,nsink
 
      mdisc=0d0
@@ -5376,7 +5376,7 @@ subroutine AGN_feedback
 #endif
   !/AGNRT
 
-!!$omp parallel do private(isort)
+!$omp parallel do private(isort)
   do iAGN=1,nAGN
      isort=itemp(iAGN)
      iAGN_myid(iAGN)=isort
@@ -5411,7 +5411,7 @@ subroutine AGN_feedback
 
   ! Check if AGN goes into jet mode
   ok_blast_agn(1:nAGN)=.false.
-!!$omp parallel do private(Mfrac)
+!$omp parallel do private(Mfrac)
   do iAGN=1,nAGN
      if (dMEd_AGN(iAGN) == 0) then
         X_radio(iAGN) = huge(X_radio(iAGN))
@@ -5430,7 +5430,7 @@ subroutine AGN_feedback
        & ,mass_blast,ind_blast,nAGN,iAGN_myid,ok_blast_agn,EsaveAGN,X_radio)
 
   ! Check if AGN goes into thermal blast wave mode
-!!$omp parallel do private(temp_blast)
+!$omp parallel do private(temp_blast)
   do iAGN=1,nAGN
      if(X_radio(iAGN) .ge. X_floor .and. EsaveAGN(iAGN).eq.0d0)then
         ! Compute estimated average temperature in the blast
@@ -5461,7 +5461,7 @@ subroutine AGN_feedback
   end if
 
   ! Reset total accreted mass if AGN input has been done
-!!$omp parallel do private(isort)
+!$omp parallel do private(isort)
   do iAGN=1,nAGN
      if(ok_blast_agn(iAGN))then
         isort=iAGN_myid(iAGN)
@@ -5484,7 +5484,7 @@ subroutine AGN_feedback
   ! Important: save the energy for the next time step that has not been put in the current time step
 #ifndef WITHOUTMPI
   Esave_new=0d0
-!!$omp parallel do private(isink)
+!$omp parallel do private(isink)
   do iAGN=1,nAGN
      isink=iAGN_myid(iAGN)
      Esave_new(isink)=EsaveAGN(iAGN)
@@ -5625,14 +5625,14 @@ subroutine average_AGN(xAGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiveAGN,jAGN,vol_
   passiveAGN = 0
 
   ! Loop over levels
-!!$omp parallel default(none)  private(dx,dx_loc,vol_loc,iz,iy,ix,xc,ncache)  &
-!!$omp & private(ngrid,ind_grid,iskip,ind_cell,ok,x,y,z,dxx,dyy,dzz,dr_AGN,dr_cell, &
-!!$omp & jtot,j_x,j_y,j_z,dzjet,d2,tmp_volume,psy,drjet,d,u,v,w,ekk,eint, &
-!!$omp & box_origin,box_extents,capsule_r,capsule_start,capsule_end) &
-!!$omp & reduction(+:vol_gas,psy_norm,mass_gas) &
-!!$omp & shared(levelmin,nlevelmax,scale,active,ncoarse,ngridmax,son,xg,skip_loc,nAGN,xAGN,EsaveAGN,rmax2,uold, &
-!!$omp & ind_blast,X_radio,X_floor,ok_blast_agn,jAGN,rmax,box_u,box_v,box_w,box,capsule,mAGN,mloadAGN,dMsmbh,vol_blast, &
-!!$omp & smallr,dAGNcell,imetal,passiveAGN,mass_blast)
+!$omp parallel default(none)  private(dx,dx_loc,vol_loc,iz,iy,ix,xc,ncache)  &
+!$omp & private(ngrid,ind_grid,iskip,ind_cell,ok,x,y,z,dxx,dyy,dzz,dr_AGN,dr_cell, &
+!$omp & jtot,j_x,j_y,j_z,dzjet,d2,tmp_volume,psy,drjet,d,u,v,w,ekk,eint, &
+!$omp & box_origin,box_extents,capsule_r,capsule_start,capsule_end) &
+!$omp & reduction(+:vol_gas,psy_norm,mass_gas) &
+!$omp & shared(levelmin,nlevelmax,scale,active,ncoarse,ngridmax,son,xg,skip_loc,nAGN,xAGN,EsaveAGN,rmax2,uold, &
+!$omp & ind_blast,X_radio,X_floor,ok_blast_agn,jAGN,rmax,box_u,box_v,box_w,box,capsule,mAGN,mloadAGN,dMsmbh,vol_blast, &
+!$omp & smallr,dAGNcell,imetal,passiveAGN,mass_blast)
   do ilevel=levelmin,nlevelmax
      ! Computing local volume (important for averaging hydro quantities)
      dx=0.5D0**ilevel
@@ -5650,7 +5650,7 @@ subroutine average_AGN(xAGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiveAGN,jAGN,vol_
 
      ! Loop over grids
      ncache=active(ilevel)%ngrid
-!!$omp do
+!$omp do
      do igrid=1,ncache,nvector
         ngrid=MIN(nvector,ncache-igrid+1)
         do i=1,ngrid
@@ -5826,17 +5826,17 @@ subroutine average_AGN(xAGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiveAGN,jAGN,vol_
         end do
         ! End loop over cells
      end do
-!!$omp end do
+!$omp end do
      ! End loop over grids
   end do
   ! End loop over levels
-!!$omp end parallel
+!$omp end parallel
   !################################################################
 #ifndef WITHOUTMPI
   vol_gas_mpi=0d0; mass_gas_mpi=0d0; mAGN_mpi=0d0; psy_norm_mpi=0d0
   passiveAGN_mpi = 0._dp
   ! Put the nAGN size arrays into nsink size arrays to synchronize processors
-!!$omp parallel do private(iAGN,isink,ivar) schedule(static)
+!$omp parallel do private(iAGN,isink,ivar) schedule(static)
   do iAGN=1,nAGN
      isink=iAGN_myid(iAGN)
      vol_gas_mpi (isink)=vol_gas (iAGN)
@@ -5859,7 +5859,7 @@ subroutine average_AGN(xAGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiveAGN,jAGN,vol_
   passiveAGN_mpi = passiveAGN_all
   psy_norm_mpi=psy_norm_all
   ! Put the nsink size arrays into nAGN size arrays
-!!$omp parallel do private(iAGN,isink) schedule(static)
+!$omp parallel do private(iAGN,isink) schedule(static)
   do iAGN=1,nAGN
      isink=iAGN_myid(iAGN)
      vol_gas (iAGN)=vol_gas_mpi (isink)
@@ -5986,7 +5986,7 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
 
   uBlast=0d0
   ok_save=.false.
-!!$omp parallel do private(epsilon_r,eff_mad)
+!$omp parallel do private(epsilon_r,eff_mad)
   do iAGN=1,nAGN
      if(EsaveAGN(iAGN).gt.0d0)then
         ok_save(iAGN)=.true.
@@ -6044,14 +6044,14 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
   EsaveAGN=0d0
   ! Loop over levels
 
-!!$omp parallel default(none) private(dx,dx_loc,vol_loc,iz,iy,ix,xc,ncache, &
-!!$omp & ngrid,ind_grid,iskip,ind_cell,ok,x,y,z,dxx,dyy,dzz,dr_AGN,ekk,d,etot,eint,T2_1,T2_2, &
-!!$omp & jtot,j_x,j_y,j_z,dzjet,drjet,d2,tmp_volume,psy,u,v,w,ekkold,d_gas, &
-!!$omp & box_origin,box_extents,capsule_r,capsule_start,capsule_end) &
-!!$omp & reduction(+:EsaveAGN,vol_gas) &
-!!$omp & shared(levelmin,nlevelmax,scale,active,ncoarse,ngridmax,son,xg,skip_loc,nAGN,ok_save,rmax2,uold,smallr, &
-!!$omp & gamma,scale_T2,T2maxAGNz,p_gas,ok_blast_agn,X_radio,jAGN,rmax,box_u,box_v,box_w,box,capsule,uBlast, &
-!!$omp & xAGN,X_floor,mAGN,psy_norm,imetal,passiveAGN,vAGN)
+!$omp parallel default(none) private(dx,dx_loc,vol_loc,iz,iy,ix,xc,ncache, &
+!$omp & ngrid,ind_grid,iskip,ind_cell,ok,x,y,z,dxx,dyy,dzz,dr_AGN,ekk,d,etot,eint,T2_1,T2_2, &
+!$omp & jtot,j_x,j_y,j_z,dzjet,drjet,d2,tmp_volume,psy,u,v,w,ekkold,d_gas, &
+!$omp & box_origin,box_extents,capsule_r,capsule_start,capsule_end) &
+!$omp & reduction(+:EsaveAGN,vol_gas) &
+!$omp & shared(levelmin,nlevelmax,scale,active,ncoarse,ngridmax,son,xg,skip_loc,nAGN,ok_save,rmax2,uold,smallr, &
+!$omp & gamma,scale_T2,T2maxAGNz,p_gas,ok_blast_agn,X_radio,jAGN,rmax,box_u,box_v,box_w,box,capsule,uBlast, &
+!$omp & xAGN,X_floor,mAGN,psy_norm,imetal,passiveAGN,vAGN)
   do ilevel=levelmin,nlevelmax
      ! Computing local volume (important for averaging hydro quantities)
      dx=0.5D0**ilevel
@@ -6069,7 +6069,7 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
 
      ! Loop over grids
      ncache=active(ilevel)%ngrid
-!!$omp do
+!$omp do
      do igrid=1,ncache,nvector
         ngrid=MIN(nvector,ncache-igrid+1)
         do i=1,ngrid
@@ -6309,16 +6309,16 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
         ! End loop over cells
      end do
      ! End loop over grids
-!!$omp end do nowait
+!$omp end do nowait
   end do
   ! End loop over levels
-!!$omp end parallel
+!$omp end parallel
 
   dx=0.5D0**nlevelmax
   dx_loc=dx*scale
   vol_loc=dx_loc**ndim
 
-!!!$omp parallel do private(ekk,d,etot,eint,T2_1,T2_2,d_gas,u,v,w) schedule(static)
+!!$omp parallel do private(ekk,d,etot,eint,T2_1,T2_2,d_gas,u,v,w) schedule(static)
   do iAGN=1,nAGN
 
      if(ind_blast(iAGN)>0)then
@@ -6367,10 +6367,10 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
               u=vAGN(iAGN,1)
               v=vAGN(iAGN,2)
               w=vAGN(iAGN,3)
-!!!$omp atomic update
+!!$omp atomic update
               uold(ind_blast(iAGN),1)=uold(ind_blast(iAGN),1)+d_gas
               do ivar= imetal, nvar
-!!!$omp atomic update
+!!$omp atomic update
                  uold(ind_blast(iAGN), ivar) = uold(ind_blast(iAGN),ivar) + passiveAGN(iAGN, ivar)*d_gas
               end do
               ekk=0d0
@@ -6385,10 +6385,10 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
                  eint=eint + EAGN(iAGN)/vol_blast(iAGN)
                  T2_2=(gamma-1d0)*eint/d*scale_T2
                  if(T2_2 .le. T2maxAGNz)then
-!!!$omp atomic update
+!!$omp atomic update
                     uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+EAGN(iAGN)/vol_blast(iAGN)
                  else
-!!!$omp atomic update
+!!$omp atomic update
                     uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+T2maxAGNz/scale_T2/(gamma-1d0)*d
                     EsaveAGN(iAGN)=EsaveAGN(iAGN)+(T2_2-T2maxAGNz)/scale_T2/(gamma-1d0)*d*vol_loc
                  endif
@@ -6412,10 +6412,10 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
                  eint=eint + EAGN(iAGN)/vol_blast(iAGN)
                  T2_2=(gamma-1d0)*eint/d*scale_T2
                  if(T2_2 .le. T2maxAGNz)then
-!!!$omp atomic update
+!!$omp atomic update
                     uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+EAGN(iAGN)/vol_blast(iAGN)
                  else
-!!!$omp atomic update
+!!$omp atomic update
                     uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+T2maxAGNz/scale_T2/(gamma-1d0)*d
                     EsaveAGN(iAGN)=EsaveAGN(iAGN)+(T2_2-T2maxAGNz)/scale_T2/(gamma-1d0)*d*vol_loc
                  endif
@@ -6492,9 +6492,9 @@ subroutine getAGNonmyid(isink_myid,nsink_myid)
   !-----------------------
   isink_myid=0
   ii=0
-!!$omp parallel do private(cpu_read,xxmin,yymin,zzmin,xxmax,yymax,zzmax,dmax,ilevel,dx,lmin,bit_length,maxdom) &
-!!$omp & private(imin,imax,jmin,jmax,kmin,kmax,dkey,ndom,idom,jdom,kdom,order_min,bounding_min,bounding_max,cpu_min,cpu_max) &
-!!$omp & private(ncpu_read,cpu_list,i,j,k,icpu,ii_omp)
+!$omp parallel do private(cpu_read,xxmin,yymin,zzmin,xxmax,yymax,zzmax,dmax,ilevel,dx,lmin,bit_length,maxdom) &
+!$omp & private(imin,imax,jmin,jmax,kmin,kmax,dkey,ndom,idom,jdom,kdom,order_min,bounding_min,bounding_max,cpu_min,cpu_max) &
+!$omp & private(ncpu_read,cpu_list,i,j,k,icpu,ii_omp)
   do isink=1,nsink
 
      cpu_read=.false.
@@ -6585,10 +6585,10 @@ subroutine getAGNonmyid(isink_myid,nsink_myid)
      do k=1,ncpu_read
         icpu=cpu_list(k)
         if(icpu==myid)then
-!!$omp atomic capture
+!$omp atomic capture
            ii=ii+1
            ii_omp=ii
-!!$omp end atomic
+!$omp end atomic
            isink_myid(ii_omp)=isink
         endif
      enddo
@@ -6631,7 +6631,7 @@ subroutine update_sink_position_velocity
 #endif
 
   if(myid==1.and.debug)write(*,*)"NCLOUD first sink in update_sink_position_velocity:",sum(sink_stat_all(1,levelmin:nlevelmax,7))
-!!$omp parallel do private(ncloud,vdum)
+!$omp parallel do private(ncloud,vdum)
   do isink=1,nsink
      ncloud = sum(sink_stat_all(isink,levelmin:nlevelmax,ndim*2+1))
      if(ncloud>1)then
@@ -6868,9 +6868,9 @@ subroutine get_drag_part(ilevel)
   m_background(1:nsink, 1:2) = tiny(0d0)
 
   ! Must be sequencial!
-!!$omp parallel private(isink, itype, idim)
+!$omp parallel private(isink, itype, idim)
   do ii = levelmin, nlevelmax
-!!$omp do collapse(2)
+!$omp do collapse(2)
      do isink = 1,nsink
         do itype = 1, 2
            do idim = 1, ndim
@@ -6885,11 +6885,11 @@ subroutine get_drag_part(ilevel)
            end do
         end do
      end do
-!!$omp end do
+!$omp end do
   end do
-!!$omp end parallel
+!$omp end parallel
 
-!!$omp parallel do
+!$omp parallel do
   do isink = 1, nsink
      vrel_sink (isink, 1:ndim, 1:2) = 0d0
      vrel_sink_norm(isink, 1:2) = tiny(0d0)
@@ -6901,7 +6901,7 @@ subroutine get_drag_part(ilevel)
      n_partnew(isink, 1:2) = 0
   end do
 
-!!$omp parallel do private(isink, itype, idim)
+!$omp parallel do private(isink, itype, idim)
   do isink = 1, nsink
      do itype = 1, 2
         do idim = 1, ndim
@@ -6919,10 +6919,10 @@ subroutine get_drag_part(ilevel)
   !mass-weight between CPUS
 
   ! Loop over cpus
-!!$omp parallel reduction(+:v_DFnew,mass_DFnew,mass_lowspeednew,fact_fastnew,n_partnew)
+!$omp parallel reduction(+:v_DFnew,mass_DFnew,mass_lowspeednew,fact_fastnew,n_partnew)
   do icpu=1, ncpu
      ! Loop over grids
-!!$omp do private(igrid,npart1,ipart,next_part,xc,yc,zc,isink,dx,d2_sink_part,nsink_cell,sink_cell,vrel_part_norm)
+!$omp do private(igrid,npart1,ipart,next_part,xc,yc,zc,isink,dx,d2_sink_part,nsink_cell,sink_cell,vrel_part_norm)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -7050,11 +7050,11 @@ subroutine get_drag_part(ilevel)
           end do
        endif
     end do
-!!$omp end do nowait
+!$omp end do nowait
     ! End loop over grids
   end do
   ! End loop over cpus
-!!$omp end parallel
+!$omp end parallel
 
 
   !We gather all the quantities: mass, mass moving slow etc... from all CPUs
@@ -7081,7 +7081,7 @@ subroutine get_drag_part(ilevel)
   !   3) we remove the momentum due to matter which is at THIS level
   !   using eq. (6) and (7) from Antonini+11
 
-!!$omp parallel do private(isink,itype,b90,Rsh,bmin,CoulombLog,volume,factor,alpha) schedule(static)
+!$omp parallel do private(isink,itype,b90,Rsh,bmin,CoulombLog,volume,factor,alpha) schedule(static)
   do isink = 1 ,nsink
      do itype = 1,2
         mass_DF(isink, ilevel, itype)       = mass_DFall(isink, itype)
@@ -7126,10 +7126,10 @@ subroutine get_drag_part(ilevel)
   ! We remove momentum from cloud particles from this level
   ! Loop over cpus
 
-!!$omp parallel
+!$omp parallel
   do icpu=1, ncpu
      ! Loop over grids
-!!$omp do private(igrid,npart1,ipart,next_part,isink,b90,Rsh,bmin,CoulombLog,volume,factor,alpha)
+!$omp do private(igrid,npart1,ipart,next_part,isink,b90,Rsh,bmin,CoulombLog,volume,factor,alpha)
      do jgrid=1,numbl(icpu,ilevel)
         if(icpu==myid)then
            igrid=active(ilevel)%igrid(jgrid)
@@ -7187,11 +7187,11 @@ subroutine get_drag_part(ilevel)
            end do
         endif
      end do
-!!$omp end do nowait
+!$omp end do nowait
      ! End loop over grids
   end do
   ! End loop over cpus
-!!$omp end parallel
+!$omp end parallel
 
 end subroutine get_drag_part
 
