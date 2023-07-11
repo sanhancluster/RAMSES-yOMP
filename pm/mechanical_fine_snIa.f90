@@ -130,21 +130,21 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
 #endif
 
   ! Loop over cpus
-!$omp parallel private(ip,ind_grid,ind_pos_cell,nSNe,mSNe,pSNe,nphSNe,mchSNe,mdchSNe,mZSNe,mZdSNe,igrid,npart1,npart2,ipart,next_part, &
-!$omp & x0,m8,mz8,mzd8,p8,n8,nph8,mch8,mdch8,ind_son,ind,iskip,ind_cell,mejecta,mass0,ok_star,nsnIa_star,Zejecta,Dejecta) &
-!$omp & reduction(+:nSNc,nsnIa_tot) default(none) &
+!!$omp parallel private(ip,ind_grid,ind_pos_cell,nSNe,mSNe,pSNe,nphSNe,mchSNe,mdchSNe,mZSNe,mZdSNe,igrid,npart1,npart2,ipart,next_part, &
+!!$omp & x0,m8,mz8,mzd8,p8,n8,nph8,mch8,mdch8,ind_son,ind,iskip,ind_cell,mejecta,mass0,ok_star,nsnIa_star,Zejecta,Dejecta) &
+!!$omp & reduction(+:nSNc,nsnIa_tot) default(none) &
 #if NDUST > 0
-!$omp & reduction(+:dM_prod_Ia) &
+!!$omp & reduction(+:dM_prod_Ia) &
 #else
-!$omp & shared(dM_prod_Ia) &
+!!$omp & shared(dM_prod_Ia) &
 #endif
-!$omp & shared(ncpu,numbl,ilevel,myid,active,reception,numbp,xg,dx,skip_loc,headp,nextp,typep,use_initial_mass,mp0, &
-!$omp & scale_msun,mp,sn2_real_delay,tp,snII_Zdep_yield,zp,snII_freq,yield,dteff,idp,xp,scale, &
-!$omp & ncoarse,ngridmax,son,vp,metal,dust,dust_chem,MC_tracer,tmpp,eta_sn,mejecta_Ia,Zejecta_chem_Ia,ZDejecta_chem_Ia,nchunk, &
-!$omp & dust_cond_eff_Ia,fsmall_ej,flarge_ej)
+!!$omp & shared(ncpu,numbl,ilevel,myid,active,reception,numbp,xg,dx,skip_loc,headp,nextp,typep,use_initial_mass,mp0, &
+!!$omp & scale_msun,mp,sn2_real_delay,tp,snII_Zdep_yield,zp,snII_freq,yield,dteff,idp,xp,scale, &
+!!$omp & ncoarse,ngridmax,son,vp,metal,dust,dust_chem,MC_tracer,tmpp,eta_sn,mejecta_Ia,Zejecta_chem_Ia,ZDejecta_chem_Ia,nchunk, &
+!!$omp & dust_cond_eff_Ia,fsmall_ej,flarge_ej)
      ! Loop over grids
   ip=0
-!$omp do schedule(dynamic,nchunk)
+!!$omp do schedule(dynamic,nchunk)
   do jgrid=1,active(ilevel)%ngrid
      igrid=active(ilevel)%igrid(jgrid)
 
@@ -280,23 +280,23 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
               nSNc=nSNc+1
               nsnIa_tot=nsnIa_tot+n8(ind)
               if(ip==nvector)then
-!$omp critical(omp_sn)
+!!$omp critical(omp_sn)
                  call mech_fine_snIa(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,mZdSNe,nphSNe,mchSNe,mdchSNe)
-!$omp end critical(omp_sn)
+!!$omp end critical(omp_sn)
                  ip=0
               endif
            endif
         enddo
      end if
   end do ! End loop over grids
-!$omp end do nowait
+!!$omp end do nowait
   if (ip>0) then
-!$omp critical(omp_sn)
+!!$omp critical(omp_sn)
      call mech_fine_snIa(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,mZdSNe,nphSNe,mchSNe,mdchSNe)
-!$omp end critical(omp_sn)
+!!$omp end critical(omp_sn)
      ip=0
   endif
-!$omp end parallel
+!!$omp end parallel
 
   if (MC_tracer) then
      ! MC Tracer =================================================
@@ -1494,9 +1494,9 @@ subroutine get_number_of_snIa (birth_time, dteff, id_star, mass0, nsnIa )
   nsnIa_tot = NINT(mass0 * A_snIa)
   localseed = -ABS(id_star)
   do i=1,nsnIa_tot
-!$omp critical
+!!$omp critical
      xdum = ran1(localseed)
-!$omp end critical
+!!$omp end critical
      ydum = exp(xdum / A_DTD + log(t_ini))/1d6
      if(ydum.ge.age1.and.ydum.le.age2) nsnIa = nsnIa + 1
   end do
