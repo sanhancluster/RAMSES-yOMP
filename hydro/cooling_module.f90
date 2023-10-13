@@ -677,12 +677,22 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
 
      iter=iter+1
      if (iter > 5000) then
+        write(*,*) 'Warn: >5000 iterations in solve_cooling',iter,n
+        do i=1,n
+           write(*,*)i,tau(ind(i)),T2(ind(i)),nH(ind(i)),i_nH(ind(i))
+           write(*,*)zchem(ind(i), :)
+           write(*,*)fdust(ind(i), :)
+           write(*,*)time(ind(i)),time_max(ind(i)),1d0/wcool
+        end do
+     endif
+
+     if (iter > 50000) then
         write(*,*) 'Too many iterations in solve_cooling',iter,n
         do i=1,n
            write(*,*)i,tau(ind(i)),T2(ind(i)),nH(ind(i)),i_nH(ind(i))
            write(*,*)zchem(ind(i), :)
            write(*,*)fdust(ind(i), :)
-           write(*,*)time(ind(i)),time_max(ind(i))
+           write(*,*)time(ind(i)),time_max(ind(i)),1d0/wcool
         end do
         STOP
      endif
