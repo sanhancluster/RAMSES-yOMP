@@ -6124,7 +6124,7 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
                              if(T2_2 .le. T2maxAGNz)then
                                 uold(ind_cell(i),5)=uold(ind_cell(i),5)+p_gas(iAGN)*d
                              else
-                                uold(ind_cell(i),5)=uold(ind_cell(i),5)+T2maxAGNz/scale_T2/(gamma-1d0)*d
+                                uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+(T2maxAGNz-T2_1)/scale_T2/(gamma-1d0)*d
                                 EsaveAGN(iAGN)=EsaveAGN(iAGN)+(T2_2-T2maxAGNz)/scale_T2/(gamma-1d0)*d*vol_loc
                              endif
                           else
@@ -6288,7 +6288,7 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
                                 if(T2_2 .le. T2maxAGNz)then
                                    uold(ind_cell(i),5)=uold(ind_cell(i),5)+p_gas(iAGN)*d
                                 else
-                                   uold(ind_cell(i),5)=uold(ind_cell(i),5)+T2maxAGNz/scale_T2/(gamma-1d0)*d
+                                   uold(ind_cell(i),5)=uold(ind_cell(i),5)+(T2maxAGNz-T2_1)/scale_T2/(gamma-1d0)*d
                                    EsaveAGN(iAGN)=EsaveAGN(iAGN)+(T2_2-T2maxAGNz)/scale_T2/(gamma-1d0)*d*vol_loc
                                 endif
                              else
@@ -6343,7 +6343,7 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
               if(T2_2 .le. T2maxAGNz)then
                  uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+EAGN(iAGN)/vol_blast(iAGN)
               else
-                 uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+T2maxAGNz/scale_T2/(gamma-1d0)*d
+                 uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+(T2maxAGNz-T2_1)/scale_T2/(gamma-1d0)*d
                  EsaveAGN(iAGN)=EsaveAGN(iAGN)+(T2_2-T2maxAGNz)/scale_T2/(gamma-1d0)*d*vol_loc
               endif
            else
@@ -6389,7 +6389,7 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
                     uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+EAGN(iAGN)/vol_blast(iAGN)
                  else
 !!$omp atomic update
-                    uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+T2maxAGNz/scale_T2/(gamma-1d0)*d
+                    uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+(T2maxAGNz-T2_1)/scale_T2/(gamma-1d0)*d
                     EsaveAGN(iAGN)=EsaveAGN(iAGN)+(T2_2-T2maxAGNz)/scale_T2/(gamma-1d0)*d*vol_loc
                  endif
               else
@@ -6416,7 +6416,7 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
                     uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+EAGN(iAGN)/vol_blast(iAGN)
                  else
 !!$omp atomic update
-                    uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+T2maxAGNz/scale_T2/(gamma-1d0)*d
+                    uold(ind_blast(iAGN),5)=uold(ind_blast(iAGN),5)+(T2maxAGNz-T2_1)/scale_T2/(gamma-1d0)*d
                     EsaveAGN(iAGN)=EsaveAGN(iAGN)+(T2_2-T2maxAGNz)/scale_T2/(gamma-1d0)*d*vol_loc
                  endif
               else
