@@ -1460,7 +1460,7 @@ subroutine get_number_of_snIa (birth_time, dteff, id_star, mass0, nsnIa )
 !-------------------------------------------------------------
   real(dp)::A_DTD,t_ini,t_fin,xdum,ydum,age1,age2
   integer ::localseed,i,nsnIa_tot
-  real(dp),external::ran1
+  real(dp),external::ran1_ts
 
 
 !  DTD = A_DTD* t^-1
@@ -1494,9 +1494,7 @@ subroutine get_number_of_snIa (birth_time, dteff, id_star, mass0, nsnIa )
   nsnIa_tot = NINT(mass0 * A_snIa)
   localseed = -ABS(id_star)
   do i=1,nsnIa_tot
-!!$omp critical
-     xdum = ran1(localseed)
-!!$omp end critical
+     xdum = ran1_ts(localseed)
      ydum = exp(xdum / A_DTD + log(t_ini))/1d6
      if(ydum.ge.age1.and.ydum.le.age2) nsnIa = nsnIa + 1
   end do
