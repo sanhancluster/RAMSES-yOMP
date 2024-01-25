@@ -459,13 +459,13 @@ subroutine coolfine1(ind_grid,ngrid,ilevel,dM_dust_add)
      endif
 
      sigma(1:nvector)=0.0d0
-     if(sticking_coef=='subgrid')then
+     if(dust .and. sticking_coef=='subgrid')then
         do i=1,nleaf
            if(nH(i).ge.0.1d0)then
               call cmp_sigma_turb(ind_leaf(i),sigma2,ilevel)
               sigma(i)=sqrt(sigma2)*scale_v
            endif
-           if(nvar>idust+ndust-1)uold(ind_leaf(i),nvar)=uold(ind_leaf(i),1)*sigma(i)/scale_v
+           if(nvar>idust+ndust-1 .and. nvar /= ivar_refine)uold(ind_leaf(i),nvar)=uold(ind_leaf(i),1)*sigma(i)/scale_v
         enddo
      endif
 
