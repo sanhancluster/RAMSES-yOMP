@@ -6051,7 +6051,7 @@ subroutine AGN_blast(xAGN,vAGN,dMsmbh_AGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiv
 !$omp & reduction(+:EsaveAGN,vol_gas) &
 !$omp & shared(levelmin,nlevelmax,scale,active,ncoarse,ngridmax,son,xg,skip_loc,nAGN,ok_save,rmax2,uold,smallr, &
 !$omp & gamma,scale_T2,T2maxAGNz,p_gas,ok_blast_agn,X_radio,jAGN,rmax,box_u,box_v,box_w,box,capsule,uBlast, &
-!$omp & xAGN,X_floor,mAGN,psy_norm,imetal,passiveAGN,vAGN)
+!$omp & xAGN,X_floor,mAGN,psy_norm,imetal,passiveAGN,vAGN,ind_blast)
   do ilevel=levelmin,nlevelmax
      ! Computing local volume (important for averaging hydro quantities)
      dx=0.5D0**ilevel
