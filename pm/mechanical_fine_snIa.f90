@@ -383,14 +383,14 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
   real(dp)::d,u,v,w,e,z,eth,ekk,Tk,d0,u0,v0,w0,dteff,eadd
   real(dp)::dx,dx_loc,scale,vol_loc,nH_cen,fleftSN
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_kms
-  real(dp)::scale_msun,msun2g=1.989d33
+  real(dp)::scale_msun,msun2g
   real(dp)::skip_loc(1:3),Tk0,ekk0,eth0,etot0,T2min
   real(dp),dimension(1:twotondim,1:ndim)::xc
   ! Grid based arrays
   real(dp),dimension(1:ndim,1:nvector)::xc2
   real(dp),dimension(1:nvector,1:nSNnei)::p_solid,ek_solid
   real(dp)::d_nei,Z_nei,Z_neisol,dm_ejecta,vol_nei,sum_udust !!Z_nei :part of dust in gas !!$dust_dev
-  real(dp)::mload,vload,Zload=0d0,f_esn2
+  real(dp)::mload,vload,Zload,f_esn2
   real(dp)::num_sn,nH_nei,f_w_cell,f_w_crit
   real(dp)::t_rad,r_rad,r_shell,m_cen,ekk_ej
   real(dp)::uavg,vavg,wavg,ul,vl,wl,ur,vr,wr
@@ -402,7 +402,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
   logical, dimension(1:nvector,1:nSNnei) ::snowplough
   real(dp),dimension(1:nvector)::rStrom ! in pc
   real(dp)::dx_loc_pc,psn_tr,chi_tr,psn_thor98,psn_geen15,fthor
-  real(dp)::km2cm=1d5,M_SNIa_var,vload_rad
+  real(dp)::km2cm,M_SNIa_var,vload_rad
   ! chemical abundance
   real(dp),dimension(1:nchem)::chload,z_ch
   real(dp)::MS100,Mgas,dble_NSN  ! Dust (YD)
@@ -416,6 +416,8 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
   real(dp),dimension(1:ndust)::mmet
   ! temporal arrays for OMP
   real(dp),dimension(1:nvector,0:nSNnei)::umul,uadd ! product, addition. 0 indicates central cell
+
+  msun2g=1.989d33; Zload=0d0; km2cm=1d5;
 
   umul(:) = 1.
   uadd(:) = 0.
