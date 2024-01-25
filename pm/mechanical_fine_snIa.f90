@@ -280,20 +280,16 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
               nSNc=nSNc+1
               nsnIa_tot=nsnIa_tot+n8(ind)
               if(ip==nvector)then
-!!$omp critical(omp_sn)
                  call mech_fine_snIa(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,mZdSNe,nphSNe,mchSNe,mdchSNe)
-!!$omp end critical(omp_sn)
                  ip=0
               endif
            endif
         enddo
      end if
   end do ! End loop over grids
-!!$omp end do nowait
+!$omp end do nowait
   if (ip>0) then
-!!$omp critical(omp_sn)
      call mech_fine_snIa(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,mZdSNe,nphSNe,mchSNe,mdchSNe)
-!!$omp end critical(omp_sn)
      ip=0
   endif
 !$omp end parallel
