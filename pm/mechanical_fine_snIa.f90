@@ -405,7 +405,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
   real(dp)::km2cm,M_SNIa_var,vload_rad
   ! chemical abundance
   real(dp),dimension(1:nchem)::chload,z_ch
-  real(dp)::MS100,Mgas,dble_NSN  ! Dust (YD)
+  real(dp)::MS100,Mgas,dble_NSN,dfdust  ! Dust (YD)
   real(dp),dimension(1:ndust)::zd,Mdust,dMdust,newMdust !!$dust_dev
   ! fractional abundances ; for ionisation fraction and ref, etc
   real(dp),dimension(1:NVAR)::fractions ! not compatible with delayed cooling
@@ -415,12 +415,12 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
   integer::ilow,ihigh
   real(dp),dimension(1:ndust)::mmet
   ! temporal arrays for OMP
-  real(dp),dimension(1:nvector,0:nSNnei)::umul,uadd ! product, addition. 0 indicates central cell
+  real(dp),dimension(1:nvector,0:nSNnei,1:nvarMHD)::umul,uadd ! product, addition. 0 indicates central cell
 
   msun2g=1.989d33; Zload=0d0; km2cm=1d5;
 
-  umul(:) = 1.
-  uadd(:) = 0.
+  umul = 1d0
+  uadd = 0d0
 
   ! starting index for passive variables except for imetal and chem
   i_fractions = ichem+nchem
@@ -510,7 +510,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
      T2min=T2_star*(d*scale_nH/n_star)**(g_star-1.0)
      if(Tk<T2min)then
         eadd = (T2min-Tk)*d/scale_T2/(gamma-1.0)*1.2195
-        uadd(0,5) = uadd(0,5) + eadd
+        uadd(i,0,5) = uadd(i,0,5) + eadd
 #if NENER>0
         do irad=1,nener
            uold(icell,5) = uold(icell,5) + uold(icell,ndim+2+irad)
@@ -702,10 +702,10 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
                  Mdust (ii)=uold(icell,idust-1+ii)
                  !! OMPNOTE: replaced to fractional difference
                  dfdust = -(1d0-(1d0-MIN(1-exp(-dust_SNdest_eff*0.1/asize(ii)),1.0d0)*MIN(MS100/Mgas,1.0d0))**dble_NSN)
-                 umul(0,idust-1+ii) = umul(0,idust-1+ii) * (1+dfdust)
-                 uadd(0,idust-1+ii) = uadd(0,idust-1+ii) * (1+dfdust)
+                 umul(i,0,idust-1+ii) = umul(i,0,idust-1+ii) * (1+dfdust)
+                 uadd(i,0,idust-1+ii) = uadd(i,0,idust-1+ii) * (1+dfdust)
 
-                 dMdust(ii) = Mdust(ii)*dfdust(ii) !!(eqn 13 Granato,2021)+size dependance like thermal sputtering
+                 dMdust(ii) = Mdust(ii)*dfdust !!(eqn 13 Granato,2021)+size dependance like thermal sputtering
                  newMdust(ii) = MAX(Mdust(ii)+dMdust(ii),1d-5*mmet(ii)) !!new dust mass after dest
                  if(log_mfb) write(*,'(A,i3,A,5e15.8,I9)')'(1) for bin : Mshock,Mgas,Mdust,dMdust,nSN' &
                       &, ii, ':',MS100*scale_msun*vol_loc,Mgas*scale_msun*vol_loc,Mdust(ii)*scale_msun*vol_loc &
@@ -755,15 +755,15 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 
      ! update the hydro variable
      fleftSN = 1d0 - floadSN(i)
-     umul(0,1) = umul(0,1)*fleftSN
-     umul(0,2) = umul(0,2)*fleftSN  ! rho*v, not v
-     umul(0,3) = umul(0,3)*fleftSN
-     umul(0,4) = umul(0,4)*fleftSN
+     umul(i,0,1) = umul(i,0,1)*fleftSN
+     umul(i,0,2) = umul(i,0,2)*fleftSN  ! rho*v, not v
+     umul(i,0,3) = umul(i,0,3)*fleftSN
+     umul(i,0,4) = umul(i,0,4)*fleftSN
 
-     uadd(0,1) = uadd(0,1)*fleftSN + mSN(i)  /vol_loc*f_LEFT
-     uadd(0,2) = uadd(0,2)*fleftSN + pSN(i,1)/vol_loc*f_LEFT  ! rho*v, not v
-     uadd(0,3) = uadd(0,3)*fleftSN + pSN(i,2)/vol_loc*f_LEFT
-     uadd(0,4) = uadd(0,4)*fleftSN + pSN(i,3)/vol_loc*f_LEFT
+     uadd(i,0,1) = uadd(i,0,1)*fleftSN + mSN(i)  /vol_loc*f_LEFT
+     uadd(i,0,2) = uadd(i,0,2)*fleftSN + pSN(i,1)/vol_loc*f_LEFT  ! rho*v, not v
+     uadd(i,0,3) = uadd(i,0,3)*fleftSN + pSN(i,2)/vol_loc*f_LEFT
+     uadd(i,0,4) = uadd(i,0,4)*fleftSN + pSN(i,3)/vol_loc*f_LEFT
 
      !uold(icell,1) = uold(icell,1)*fleftSN + mSN(i)  /vol_loc*f_LEFT
      !uold(icell,2) = uold(icell,2)*fleftSN + pSN(i,1)/vol_loc*f_LEFT  ! rho*v, not v
@@ -771,28 +771,28 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
      !uold(icell,4) = uold(icell,4)*fleftSN + pSN(i,3)/vol_loc*f_LEFT
 
      if(metal)then
-        umul(0,imetal) = umul(0,imetal) * fleftSN
-        uadd(0,imetal) = uadd(0,imetal) * fleftSN + mZSN(i)/vol_loc*f_LEFT
+        umul(i,0,imetal) = umul(i,0,imetal) * fleftSN
+        uadd(i,0,imetal) = uadd(i,0,imetal) * fleftSN + mZSN(i)/vol_loc*f_LEFT
         !uold(icell,imetal) = mZSN(i)/vol_loc*f_LEFT + d*z*fleftSN
      endif
     if(dust)then
         do ii=1,ndust
-           umul(0,idust-1+ii) = umul(0,idust-1+ii) * fleftSN
-           uadd(0,idust-1+ii) = umul(0,idust-1+ii) * fleftSN
+           umul(i,0,idust-1+ii) = umul(i,0,idust-1+ii) * fleftSN
+           uadd(i,0,idust-1+ii) = umul(i,0,idust-1+ii) * fleftSN
            !uold(icell,idust-1+ii)=d*zd(ii)*fleftSN
         enddo
         if(dust_chem)then
 #if NDUST==2
            do ii=1,ndust
-              uadd(0,idust-1+ii) = uadd(0,idust-1+ii) + mdchSN(i,ii)/vol_loc*f_LEFT
+              uadd(i,0,idust-1+ii) = uadd(i,0,idust-1+ii) + mdchSN(i,ii)/vol_loc*f_LEFT
               !uold(icell,idust-1+ii)=uold(icell,idust-1+ii)+mdchSN(i,ii)/vol_loc*f_LEFT
            enddo
 #endif
 #if NDUST==4
-           uadd(0,idust  )=uadd(0,idust  )+fsmall_ej*mdchSN(i,1)/vol_loc*f_LEFT ! carbon   (small size)
-           uadd(0,idust+1)=uadd(0,idust+1)+flarge_ej*mdchSN(i,1)/vol_loc*f_LEFT ! carbon   (large size)
-           uadd(0,idust+2)=uadd(0,idust+2)+fsmall_ej*mdchSN(i,2)/vol_loc*f_LEFT ! silicate (small size)
-           uadd(0,idust+3)=uadd(0,idust+3)+flarge_ej*mdchSN(i,2)/vol_loc*f_LEFT ! silicate (large size)
+           uadd(i,0,idust  )=uadd(i,0,idust  )+fsmall_ej*mdchSN(i,1)/vol_loc*f_LEFT ! carbon   (small size)
+           uadd(i,0,idust+1)=uadd(i,0,idust+1)+flarge_ej*mdchSN(i,1)/vol_loc*f_LEFT ! carbon   (large size)
+           uadd(i,0,idust+2)=uadd(i,0,idust+2)+fsmall_ej*mdchSN(i,2)/vol_loc*f_LEFT ! silicate (small size)
+           uadd(i,0,idust+3)=uadd(i,0,idust+3)+flarge_ej*mdchSN(i,2)/vol_loc*f_LEFT ! silicate (large size)
            !uold(icell,idust  )=uold(icell,idust  )+fsmall_ej*mdchSN(i,1)/vol_loc*f_LEFT ! carbon   (small size)
            !uold(icell,idust+1)=uold(icell,idust+1)+flarge_ej*mdchSN(i,1)/vol_loc*f_LEFT ! carbon   (large size)
            !uold(icell,idust+2)=uold(icell,idust+2)+fsmall_ej*mdchSN(i,2)/vol_loc*f_LEFT ! silicate (small size)
@@ -800,20 +800,20 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 #endif
         else
 #if NDUST==1
-           uadd(0,idust  )=uadd(0,idust  )+mZdSN(i)/vol_loc*f_LEFT
+           uadd(i,0,idust  )=uadd(i,0,idust  )+mZdSN(i)/vol_loc*f_LEFT
            !uold(icell,idust  )=uold(icell,idust  )+mZdSN(i)/vol_loc*f_LEFT
 #endif
 #if NDUST==2
-           uadd(0,idust  )=uadd(0,idust  )+fsmall_ej*mZdSN(i)/vol_loc*f_LEFT ! small size
-           uadd(0,idust+1)=uadd(0,idust+1)+flarge_ej*mZdSN(i)/vol_loc*f_LEFT ! large size
+           uadd(i,0,idust  )=uadd(i,0,idust  )+fsmall_ej*mZdSN(i)/vol_loc*f_LEFT ! small size
+           uadd(i,0,idust+1)=uadd(i,0,idust+1)+flarge_ej*mZdSN(i)/vol_loc*f_LEFT ! large size
            !uold(icell,idust  )=uold(icell,idust  )+fsmall_ej*mZdSN(i)/vol_loc*f_LEFT ! small size
            !uold(icell,idust+1)=uold(icell,idust+1)+flarge_ej*mZdSN(i)/vol_loc*f_LEFT ! large size
 #endif
         endif
      endif
      do ich=1,nchem
-        umul(0,ichem+ich-1) = umul(0,ichem+ich-1)*fleftSN
-        uadd(icell,ichem+ich-1) = mchSN(i,ich)/vol_loc*f_LEFT + uadd(0,ichem+ich-1)*fleftSN
+        umul(i,0,ichem+ich-1) = umul(i,0,ichem+ich-1)*fleftSN
+        uadd(i,icell,ichem+ich-1) = mchSN(i,ich)/vol_loc*f_LEFT + uadd(i,0,ichem+ich-1)*fleftSN
         !uold(icell,ichem+ich-1) = mchSN(i,ich)/vol_loc*f_LEFT + d*z_ch(ich)*fleftSN
      end do
      !do ii=i_fractions,nvar
@@ -827,7 +827,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
      eloadSN(i) = eloadSN(i) + eth*vol_loc*floadSN(i)
 
      ! reduce total energy as we are distributing it to the neighbours
-     uadd(0,5) = uadd(0,5) - (ekk+eth)*floadSN(i)
+     uadd(i,0,5) = uadd(i,0,5) - (ekk+eth)*floadSN(i)
      !uold(icell,5) = uold(icell,5) - (ekk+eth)*floadSN(i)
  
 
@@ -836,7 +836,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
      u = pSN(i,1)/mSN(i)
      v = pSN(i,2)/mSN(i)
      w = pSN(i,3)/mSN(i)
-     uadd(0,5) = uadd(0,5) + 0.5d0*d*(u**2 + v**2 + w**2)*f_LEFT
+     uadd(i,0,5) = uadd(i,0,5) + 0.5d0*d*(u**2 + v**2 + w**2)*f_LEFT
      !uold(icell,5) = uold(icell,5) + 0.5d0*d*(u**2 + v**2 + w**2)*f_LEFT
     
      ! add the contribution from the original kinetic energy of SN to outflow
@@ -894,14 +894,16 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
                  endif
                  do ii=1,ndust  !!$dust_dev
                     Mdust (ii)=pvar(idust-1+ii)
-                    dMdust(ii)=-(1d0-(1d0-MIN(1-exp(-dust_SNdest_eff*0.1/asize(ii)),1.0d0)*MIN(MS100/Mgas,1.0d0))**dble_NSN)*Mdust(ii)
+                    dfdust = -(1d0-(1d0-MIN(1-exp(-dust_SNdest_eff*0.1/asize(ii)),1.0d0)*MIN(MS100/Mgas,1.0d0))**dble_NSN)
+                    dMdust(ii)=Mdust(ii)*dfdust
                     if(log_mfb) write(*,'(A,i3,a,5e15.8,I9)')'(1) for bin : Mshock,Mgas,Mdust,dMdust,nSN=' &
                          & ,ii, ':',MS100*scale_msun*vol_loc,Mgas*scale_msun*vol_loc,Mdust(ii)*scale_msun*vol_loc &
                          & ,-dMdust(ii)*scale_msun*vol_loc,dble_NSN,icell
                     newMdust(ii)=MAX(Mdust(ii)+dMdust(ii),1d-5*mmet(ii))
                     if(log_mfb) write(*,'(a,3e15.8)') 'Md+dMd, 1d-5*Z, newMd =',Mdust(ii)+dMdust(ii) &
                          & ,1d-5*mmet(ii),newMdust(ii)
-                    umul(j,idust-1+ii) = umul(j,idust-1+ii) * (1-(1d0-(1d0-MIN(1-exp(-dust_SNdest_eff*0.1/asize(ii)),1.0d0)*MIN(MS100/Mgas,1.0d0))**dble_NSN))
+                    umul(i,j,idust-1+ii) = umul(i,j,idust-1+ii) * (1-dfdust)
+                    uadd(i,j,idust-1+ii) = uadd(i,j,idust-1+ii) * (1-dfdust)
                     pvar(idust-1+ii)=newMdust(ii)
                     dM_SNd_Ia(ii)=dM_SNd_Ia(ii)+ dMdust(ii)*vol_loc
                  enddo
@@ -936,10 +938,10 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
            u=(ploadSN(i,1)/dble(nSNnei)+p_solid(i,j)*vSNnei(1,j))/vol_nei/d
            v=(ploadSN(i,2)/dble(nSNnei)+p_solid(i,j)*vSNnei(2,j))/vol_nei/d
            w=(ploadSN(i,3)/dble(nSNnei)+p_solid(i,j)*vSNnei(3,j))/vol_nei/d
-           uadd(j,1)=uadd(j,1)+d
-           uadd(j,2)=uadd(j,2)+d*u
-           uadd(j,3)=uadd(j,3)+d*v
-           uadd(j,4)=uadd(j,4)+d*w
+           uadd(i,j,1)=uadd(i,j,1)+d
+           uadd(i,j,2)=uadd(i,j,2)+d*u
+           uadd(i,j,3)=uadd(i,j,3)+d*v
+           uadd(i,j,4)=uadd(i,j,4)+d*w
            pvar(1)=pvar(1)+d
            pvar(2)=pvar(2)+d*u
            pvar(3)=pvar(3)+d*v
@@ -953,7 +955,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
            v   = pvar(3)/d
            w   = pvar(4)/d
            ekk = 0.5*d*(u**2 + v**2 + w**2)
-           uadd(j,5) = uadd(j,5) + max(etot0, ekk+eth0+emag) - pvar(5)
+           uadd(i,j,5) = uadd(i,j,5) + max(etot0, ekk+eth0+emag) - pvar(5)
            pvar(5) = max(etot0, ekk+eth0+emag)
 
            ! sanity check
@@ -974,16 +976,16 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
            end do
 #endif
            if(metal)then
-               uadd(j,imetal)=uadd(j,imetal)+mzloadSN(i)/dble(nSNnei)/vol_nei
+               uadd(i,j,imetal)=uadd(i,j,imetal)+mzloadSN(i)/dble(nSNnei)/vol_nei
                pvar(imetal)=pvar(imetal)+mzloadSN(i)/dble(nSNnei)/vol_nei
            end if
            do ich=1,nchem
-               uadd(j,ichem+ich-1)=uadd(j,ichem+ich-1)+mchloadSN(i,ich)/dble(nSNnei)/vol_nei
+               uadd(i,j,ichem+ich-1)=uadd(i,j,ichem+ich-1)+mchloadSN(i,ich)/dble(nSNnei)/vol_nei
                pvar(ichem+ich-1)=pvar(ichem+ich-1)+mchloadSN(i,ich)/dble(nSNnei)/vol_nei
            end do
            if(dust)then
               do ii=1,ndust!!$dust_dev
-                 uadd(j,idust-1+ii)=uadd(j,idust-1+ii)+mZdloadSN(i,ii)/dble(nSNnei)/vol_nei
+                 uadd(i,j,idust-1+ii)=uadd(i,j,idust-1+ii)+mZdloadSN(i,ii)/dble(nSNnei)/vol_nei
                  pvar(idust-1+ii)=pvar(idust-1+ii)+mZdloadSN(i,ii)/dble(nSNnei)/vol_nei
               enddo
            end if
@@ -1000,48 +1002,6 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 
         end if
      end do ! loop over 48 neighbors
-
-     do i=1,np
-        ind_cell = ncoarse+ind_grid(i)+(ind_pos_cell(i)-1)*ngridmax
-        nwco=0; icpuSNnei=0
-        do j=0,nSNnei
-
-           if(j == 0) then
-              icell = ncoarse+ind_grid(i)+(ind_pos_cell(i)-1)*ngridmax
-           else
-              fpos(1:3) = xc2(1:3,i)+xSNnei(1:3,j)*dx
-              call get_icell_from_pos (fpos, ilevel+1, igrid, icell,ilevel2)
-              if(cpu_map(father(igrid)) /= myid) then ! need mpi
-                  cycle
-              end if
-           end if
-           if(ilevel>ilevel2 .and. j /= 0)then ! touching level-1 cells
-              do ii=i_fractions,nvar
-                 fractions(ii) = unew(icell,ii) / unew(icell,1)
-              end do
-              do ii=1,i_fractions-1
-!$omp atomic update
-                  unew(icell,ii) = unew(icell,ii) * umul(i,j,ii) + uadd(i,j,ii)
-              end do
-              do ii=i_fractions,nvar ! fractional quantities that we don't want to change
-!$omp atomic write
-                 unew(icell,ii) = fractions(ii) * unew(icell,1)
-              end do
-           else
-              do ii=i_fractions,nvar
-                 fractions(ii) = uold(icell,ii) / uold(icell,1)
-              end do
-              do ii=1,i_fractions-1
-!$omp atomic update
-                  uold(icell,ii) = uold(icell,ii) * umul(i,j,ii) + uadd(i,j,ii)
-              end do
-              do ii=i_fractions,nvar ! fractional quantities that we don't want to change
-!$omp atomic write
-                 uold(icell,ii) = fractions(ii) * uold(icell,1)
-              end do
-           end if
-        end do
-     end do
 
 #ifndef WITHOUTMPI
      if(nwco>0)then  ! for SNs across different cpu
@@ -1086,6 +1046,47 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
      endif
 #endif
 
+  end do ! loop over SN cell
+
+  do i=1,np ! loop over SN cell
+     ind_cell = ncoarse+ind_grid(i)+(ind_pos_cell(i)-1)*ngridmax
+     nwco=0; icpuSNnei=0
+     do j=0,nSNnei
+        if(j == 0) then
+           icell = ncoarse+ind_grid(i)+(ind_pos_cell(i)-1)*ngridmax
+        else
+           fpos(1:3) = xc2(1:3,i)+xSNnei(1:3,j)*dx
+           call get_icell_from_pos (fpos, ilevel+1, igrid, icell,ilevel2)
+           if(cpu_map(father(igrid)) /= myid) then ! need mpi
+               cycle
+           end if
+        end if
+        if(ilevel>ilevel2 .and. j /= 0)then ! touching level-1 cells
+           do ii=i_fractions,nvar
+               fractions(ii) = unew(icell,ii) / unew(icell,1)
+           end do
+           do ii=1,i_fractions-1
+               !$omp atomic update
+               unew(icell,ii) = unew(icell,ii) * umul(i,j,ii) + uadd(i,j,ii)
+           end do
+           do ii=i_fractions,nvar ! fractional quantities that we don't want to change
+               !$omp atomic write
+               unew(icell,ii) = fractions(ii) * unew(icell,1)
+           end do
+        else
+           do ii=i_fractions,nvar
+               fractions(ii) = uold(icell,ii) / uold(icell,1)
+           end do
+           do ii=1,i_fractions-1
+               !$omp atomic update
+               uold(icell,ii) = uold(icell,ii) * umul(i,j,ii) + uadd(i,j,ii)
+           end do
+           do ii=i_fractions,nvar ! fractional quantities that we don't want to change
+               !$omp atomic write
+               uold(icell,ii) = fractions(ii) * uold(icell,1)
+           end do
+        end if
+     end do
   end do ! loop over SN cell
 
 end subroutine mech_fine_snIa
