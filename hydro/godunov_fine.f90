@@ -56,7 +56,7 @@ subroutine check_uold_unew(ilevel,check_mynumber)
 #endif
 
   if(numbtot(1,ilevel)==0)return
-  if(verbose)write(*,111)ilevel
+  if(verbose)write(*,111)ilevel,check_mynumber
 
   ! Set unew to uold for myid cells
   do ind=1,twotondim
@@ -174,14 +174,14 @@ subroutine check_uold_unew(ilevel,check_mynumber)
         endif
 
         if(metal)then
-            if(unew(icell,imetal)<0.0d0)then
-               write(*,'(A,2I9,e18.9,2I9)')'check unew(metal) in active CPU:',icell,myid,unew(icell,imetal),check_mynumber,ilevel
-            endif
+            !if(unew(icell,imetal)<0.0d0)then
+            !   write(*,'(A,2I9,e18.9,2I9)')'check unew(metal) in active CPU:',icell,myid,unew(icell,imetal),check_mynumber,ilevel
+            !endif
             if(uold(icell,imetal)<0.0d0)then
                write(*,'(A,2I9,e18.9,2I9)')'check uold(metal) in active CPU:',icell,myid,uold(icell,imetal),check_mynumber,ilevel
             endif
-            if(uold(icell,imetal)/uold(icell,1)>1.0d1)then
-               write(*,'(A,2I9,2e18.9,2I9)')'check uold(metal)/unew(rho) in active CPU:',icell,myid,uold(icell,imetal), uold(icell,1),check_mynumber,ilevel
+            if(uold(icell,imetal)/uold(icell,1)>1d0)then
+               write(*,'(A,2I9,2e18.9,2I9)')'check uold(metal)/uold(rho) in active CPU:',icell,myid,uold(icell,imetal), uold(icell,1),check_mynumber,ilevel
             endif
         end if
         if(dust .and. metal)then
@@ -200,9 +200,9 @@ subroutine check_uold_unew(ilevel,check_mynumber)
         end if
 
 
-!!$        if(icell==1002142)then
-!!$           write(*,'(A,2I9,4e18.9)')'***:',myid,icell,unew(icell,imetal),unew(icell,idust),uold(icell,imetal),uold(icell,idust)
-!!$        endif
+        !if(icell==35744 .and. myid==33)then
+        !   write(*,'(A,2I9,4e18.9,2I9)')'***:',myid,icell,unew(icell,1),unew(icell,imetal),uold(icell,1),uold(icell,imetal),check_mynumber,ilevel
+        !endif
 
      end do
   end do
@@ -227,7 +227,7 @@ subroutine check_uold_unew(ilevel,check_mynumber)
 !!$  end do
 !!$  end do
 
-111 format('   Entering set_unew for level ',i2)
+111 format('   Entering check_uold_unew for level ',i2,i9)
 
 end subroutine check_uold_unew
 !###########################################################
@@ -748,7 +748,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
               u1(i,j,ichem+ichSi-1)=u1(i,j,ichem+ichSi-1)-mdustSil*SioverSil
               u1(i,j,ichem+ichO -1)=u1(i,j,ichem+ichO -1)-mdustSil* OoverSil
               enddo
-           else
+           elseif(dust)then
               ilow=idust;ihigh=ilow+dndsize
               do i=1,nbuffer
                  u1(i,j,imetal)=u1(i,j,imetal)-SUM(u1(i,j,ilow:ihigh))
@@ -801,7 +801,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
               uloc(ind_exist(i),i3,j3,k3,ichem+ichSi-1)=uloc(ind_exist(i),i3,j3,k3,ichem+ichSi-1)-mdustSil*SioverSil
               uloc(ind_exist(i),i3,j3,k3,ichem+ichO -1)=uloc(ind_exist(i),i3,j3,k3,ichem+ichO -1)-mdustSil* OoverSil
            enddo
-        else
+        elseif(dust)then
            ilow=idust;ihigh=ilow+dndsize
            do i=1,nexist
               uloc(ind_exist(i),i3,j3,k3,imetal)=uloc(ind_exist(i),i3,j3,k3,imetal)-SUM(uloc(ind_exist(i),i3,j3,k3,ilow:ihigh))
@@ -974,7 +974,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
                    & (SUM(flux(i,i3   ,j3   ,k3   ,ilow:ihigh,idim)) &
                    & -SUM(flux(i,i3+i0,j3+j0,k3+k0,ilow:ihigh,idim)))* OoverSil/SioverSil
            enddo
-        else
+        elseif(dust)then
            ilow=idust;ihigh=ilow+dndsize
            do i=1,ncache
               unew(ind_cell(i),imetal)=unew(ind_cell(i),imetal)+ &
@@ -1058,7 +1058,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
            uflow(i,ichem+ichSi-1)=uflow(i,ichem+ichSi-1)+SUM(uflow(i,ilow:ihigh))
            uflow(i,ichem+ichO -1)=uflow(i,ichem+ichO -1)+SUM(uflow(i,ilow:ihigh))*OoverSil/SioverSil
         enddo
-     else
+     elseif(dust)then
         ilow=idust;ihigh=ilow+dndsize
         do i=1,nb_noneigh
            uflow(i,imetal)=uflow(i,imetal)+ &
@@ -1131,7 +1131,7 @@ subroutine godfine1(ind_grid,ncache,ilevel)
            uflow(i,ichem+ichSi-1)=uflow(i,ichem+ichSi-1)+SUM(uflow(i,ilow:ihigh))
            uflow(i,ichem+ichO -1)=uflow(i,ichem+ichO -1)+SUM(uflow(i,ilow:ihigh))*OoverSil/SioverSil
         enddo
-     else
+     elseif(dust)then
         ilow=idust;ihigh=ilow+dndsize
         do i=1,nb_noneigh
            uflow(i,imetal)=uflow(i,imetal)+ &

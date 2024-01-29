@@ -613,7 +613,7 @@ subroutine read_hydro_params(nml_ok)
      ndchemtype=2
      if(ndust==2)dndsize=0
      if(ndust==4)dndsize=1
-  else
+  elseif(dust)then
      ndchemtype=1
      if(ndust==1)dndsize=0
      if(ndust==2)dndsize=1
