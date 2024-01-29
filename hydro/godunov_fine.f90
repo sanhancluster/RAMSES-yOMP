@@ -62,10 +62,9 @@ subroutine check_uold_unew(ilevel,check_mynumber)
   do ind=1,twotondim
      iskip=ncoarse+(ind-1)*ngridmax
      do i=1,active(ilevel)%ngrid
+       icell=active(ilevel)%igrid(i)+iskip
 
         if(dust_chem)then
-           icell=active(ilevel)%igrid(i)+iskip
-
            ! For uold
            Zsolar=uold(icell,imetal)/uold(icell,1)/0.02
            do ich=1,nchem
@@ -174,26 +173,32 @@ subroutine check_uold_unew(ilevel,check_mynumber)
 !!$           endif
         endif
 
+        if(metal)then
+            if(unew(icell,imetal)<0.0d0)then
+               write(*,'(A,2I9,e18.9,2I9)')'check unew(metal) in active CPU:',icell,myid,unew(icell,imetal),check_mynumber,ilevel
+            endif
+            if(uold(icell,imetal)<0.0d0)then
+               write(*,'(A,2I9,e18.9,2I9)')'check uold(metal) in active CPU:',icell,myid,uold(icell,imetal),check_mynumber,ilevel
+            endif
+            if(uold(icell,imetal)/uold(icell,1)>1.0d1)then
+               write(*,'(A,2I9,2e18.9,2I9)')'check uold(metal)/unew(rho) in active CPU:',icell,myid,uold(icell,imetal), uold(icell,1),check_mynumber,ilevel
+            endif
+        end if
+        if(dust .and. metal)then
+            if(unew(icell,idust)<0.0d0)then
+               write(*,'(A,2I9,e18.9,2I9)')'check unew in active CPU:',icell,myid,unew(icell,idust),check_mynumber,ilevel
+            endif
+            if(uold(icell,idust)<0.0d0)then
+               write(*,'(A,2I9,e18.9,2I9)')'check uold in active CPU:',icell,myid,uold(icell,idust),check_mynumber,ilevel
+            endif
+            if(unew(icell,imetal)<unew(icell,idust))then
+               write(*,'(A,2I9,2e18.9,2I9)')'check unew(metal) in active CPU:',icell,myid,unew(icell,imetal),unew(icell,idust),check_mynumber,ilevel
+            endif
+            if(uold(icell,imetal)<uold(icell,idust))then
+               write(*,'(A,2I9,2e18.9,2I9)')'check uold(metal) in active CPU:',icell,myid,uold(icell,imetal),uold(icell,idust),check_mynumber,ilevel
+            endif
+        end if
 
-        if(unew(icell,imetal)<0.0d0)then
-           write(*,'(A,2I9,e18.9,2I9)')'check unew(metal) in active CPU:',icell,myid,unew(icell,imetal),check_mynumber,ilevel
-        endif
-        if(uold(icell,imetal)<0.0d0)then
-           write(*,'(A,2I9,e18.9,2I9)')'check uold(metal) in active CPU:',icell,myid,uold(icell,imetal),check_mynumber,ilevel
-        endif
-        if(unew(icell,idust)<0.0d0)then
-           write(*,'(A,2I9,e18.9,2I9)')'check unew in active CPU:',icell,myid,unew(icell,idust),check_mynumber,ilevel
-        endif
-        if(uold(icell,idust)<0.0d0)then
-           write(*,'(A,2I9,e18.9,2I9)')'check uold in active CPU:',icell,myid,uold(icell,idust),check_mynumber,ilevel
-        endif
-
-        if(unew(icell,imetal)<unew(icell,idust))then
-           write(*,'(A,2I9,2e18.9,2I9)')'check unew(metal) in active CPU:',icell,myid,unew(icell,imetal),unew(icell,idust),check_mynumber,ilevel
-        endif
-        if(uold(icell,imetal)<uold(icell,idust))then
-           write(*,'(A,2I9,2e18.9,2I9)')'check uold(metal) in active CPU:',icell,myid,uold(icell,imetal),uold(icell,idust),check_mynumber,ilevel
-        endif
 
 !!$        if(icell==1002142)then
 !!$           write(*,'(A,2I9,4e18.9)')'***:',myid,icell,unew(icell,imetal),unew(icell,idust),uold(icell,imetal),uold(icell,idust)

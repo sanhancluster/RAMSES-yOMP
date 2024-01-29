@@ -20,7 +20,7 @@ subroutine phi_fine_cg(ilevel,icount)
   !
   !   http://www.sciencedirect.com/science/article/pii/S0167819113000719 (layout and pipelining)
   !
-  !   http://www.vis.uni-stuttgart.de/~weiskopf/publications/pdp10.pdf (2D preconditioner generalized to 3D in code)
+  !   https://ieeexplore.ieee.org/document/5452414 (2D preconditioner generalized to 3D in code)
   !
   ! r     : stored in f(i, 1)
   ! u     : stored in f(i, 2)
