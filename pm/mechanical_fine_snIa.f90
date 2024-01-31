@@ -707,10 +707,10 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 
                  dMdust(ii) = Mdust(ii)*dfdust !!(eqn 13 Granato,2021)+size dependance like thermal sputtering
                  newMdust(ii) = MAX(Mdust(ii)+dMdust(ii),1d-5*mmet(ii)) !!new dust mass after dest
-                 if(log_mfb) write(*,'(A,i3,A,5e15.8,I9)')'(1) for bin : Mshock,Mgas,Mdust,dMdust,nSN' &
+                 if(log_mfb_mega) write(*,'(A,i3,A,5e15.8,I9)')'(1) for bin : Mshock,Mgas,Mdust,dMdust,nSN' &
                       &, ii, ':',MS100*scale_msun*vol_loc,Mgas*scale_msun*vol_loc,Mdust(ii)*scale_msun*vol_loc &
                       &, -dMdust(ii)*scale_msun*vol_loc,dble_NSN,icell
-                 if(log_mfb) write(*,'(a,3e15.8)') 'Md+dMd, 1d-5*Z, newMd =',Mdust(ii)+dMdust(ii)&
+                 if(log_mfb_mega) write(*,'(a,3e15.8)') 'Md+dMd, 1d-5*Z, newMd =',Mdust(ii)+dMdust(ii)&
                       &, 1d-5*mmet(ii),newMdust(ii)
                  dM_SNd_Ia(ii)=dM_SNd_Ia(ii)+ dMdust(ii)*vol_loc
               enddo !!on bin
@@ -896,11 +896,11 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
                     Mdust (ii)=pvar(idust-1+ii)
                     dfdust = -(1d0-(1d0-MIN(1-exp(-dust_SNdest_eff*0.1/asize(ii)),1.0d0)*MIN(MS100/Mgas,1.0d0))**dble_NSN)
                     dMdust(ii)=Mdust(ii)*dfdust
-                    if(log_mfb) write(*,'(A,i3,a,5e15.8,I9)')'(1) for bin : Mshock,Mgas,Mdust,dMdust,nSN=' &
+                    if(log_mfb_mega) write(*,'(A,i3,a,5e15.8,I9)')'(1) for bin : Mshock,Mgas,Mdust,dMdust,nSN=' &
                          & ,ii, ':',MS100*scale_msun*vol_loc,Mgas*scale_msun*vol_loc,Mdust(ii)*scale_msun*vol_loc &
                          & ,-dMdust(ii)*scale_msun*vol_loc,dble_NSN,icell
                     newMdust(ii)=MAX(Mdust(ii)+dMdust(ii),1d-5*mmet(ii))
-                    if(log_mfb) write(*,'(a,3e15.8)') 'Md+dMd, 1d-5*Z, newMd =',Mdust(ii)+dMdust(ii) &
+                    if(log_mfb_mega) write(*,'(a,3e15.8)') 'Md+dMd, 1d-5*Z, newMd =',Mdust(ii)+dMdust(ii) &
                          & ,1d-5*mmet(ii),newMdust(ii)
                     umul(i,j,idust-1+ii) = umul(i,j,idust-1+ii) * (1+dfdust)
                     uadd(i,j,idust-1+ii) = uadd(i,j,idust-1+ii) * (1+dfdust)
@@ -1470,11 +1470,11 @@ subroutine mech_fine_snIa_mpi(ilevel)
                  do ii=1,ndust!!$dust_dev
                     Mdust(ii)=pvar(idust-1+ii)
                     dMdust(ii)=-(1d0-(1d0-MIN(1-exp(-dust_SNdest_eff*0.1/asize(ii)),1.0d0)*MIN(MS100/Mgas,1.0d0))**dble_NSN)*Mdust(ii)
-                    if(log_mfb) write(*,'(A,i3,a,5e15.8,I9)')'(1) for bin : Mshock,Mgas,Mdust,dMdust,nSN=' &
+                    if(log_mfb_mega) write(*,'(A,i3,a,5e15.8,I9)')'(1) for bin : Mshock,Mgas,Mdust,dMdust,nSN=' &
                          &, ii, ':',MS100*scale_msun*vol_loc,Mgas*scale_msun*vol_loc,Mdust(ii)*scale_msun*vol_loc &
                          &, -dMdust(ii)*scale_msun*vol_loc,dble_NSN,icell
                     newMdust(ii)=MAX(Mdust(ii)+dMdust(ii),1d-5*mmet(ii))
-                    if(log_mfb) write(*,'(a,3e15.8)') 'Md+dMd, 1d-5*Z, newMd =',Mdust(ii)+dMdust(ii),1d-5*mmet(ii),newMdust(ii)
+                    if(log_mfb_mega) write(*,'(a,3e15.8)') 'Md+dMd, 1d-5*Z, newMd =',Mdust(ii)+dMdust(ii),1d-5*mmet(ii),newMdust(ii)
                     pvar(idust-1+ii)=newMdust(ii)
                     dM_SNd_Ia(ii)=dM_SNd_Ia(ii)+dMdust(ii)*vol_loc
                  enddo
