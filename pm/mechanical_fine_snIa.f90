@@ -771,16 +771,13 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
      !uold(icell,4) = uold(icell,4)*fleftSN + pSN(i,3)/vol_loc*f_LEFT
 
      if(metal)then
-        umul(i,0,imetal) = umul(i,0,imetal) * fleftSN
-        uadd(i,0,imetal) = mZSN(i)/vol_loc*f_LEFT + uadd(i,0,imetal) * fleftSN
+        uadd(i,0,imetal) = uadd(i,0,imetal) + mZSN(i)/vol_loc*f_LEFT
         !uold(icell,imetal) = mZSN(i)/vol_loc*f_LEFT + d*z*fleftSN
      endif
     if(dust)then
-        do ii=1,ndust
-           umul(i,0,idust-1+ii) = umul(i,0,idust-1+ii) * fleftSN
-           uadd(i,0,idust-1+ii) = uadd(i,0,idust-1+ii) * fleftSN
+        !do ii=1,ndust
            !uold(icell,idust-1+ii)=d*zd(ii)*fleftSN
-        enddo
+        !enddo
         if(dust_chem)then
 #if NDUST==2
            do ii=1,ndust
@@ -812,8 +809,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
         endif
      endif
      do ich=1,nchem
-        umul(i,0,ichem+ich-1) = umul(i,0,ichem+ich-1)*fleftSN
-        uadd(i,0,ichem+ich-1) = mchSN(i,ich)/vol_loc*f_LEFT + uadd(i,0,ichem+ich-1)*fleftSN
+        uadd(i,0,ichem+ich-1) = mchSN(i,ich)/vol_loc*f_LEFT + uadd(i,0,ichem+ich-1)
         !uold(icell,ichem+ich-1) = mchSN(i,ich)/vol_loc*f_LEFT + d*z_ch(ich)*fleftSN
      end do
      !do ii=i_fractions,nvar
