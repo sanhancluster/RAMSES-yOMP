@@ -130,21 +130,21 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
 #endif
 
   ! Loop over cpus
-!!$omp parallel private(ip,ind_grid,ind_pos_cell,nSNe,mSNe,pSNe,nphSNe,mchSNe,mdchSNe,mZSNe,mZdSNe,igrid,npart1,npart2,ipart,next_part, &
-!!$omp & x0,m8,mz8,mzd8,p8,n8,nph8,mch8,mdch8,ind_son,ind,iskip,ind_cell,mejecta,mass0,ok_star,nsnIa_star,Zejecta,Dejecta) &
-!!$omp & reduction(+:nSNc,nsnIa_tot) default(none) &
+!$omp parallel private(ip,ind_grid,ind_pos_cell,nSNe,mSNe,pSNe,nphSNe,mchSNe,mdchSNe,mZSNe,mZdSNe,igrid,npart1,npart2,ipart,next_part, &
+!$omp & x0,m8,mz8,mzd8,p8,n8,nph8,mch8,mdch8,ind_son,ind,iskip,ind_cell,mejecta,mass0,ok_star,nsnIa_star,Zejecta,Dejecta) &
+!$omp & reduction(+:nSNc,nsnIa_tot) default(none) &
 #if NDUST > 0
-!!$omp & reduction(+:dM_prod_Ia) &
+!$omp & reduction(+:dM_prod_Ia) &
 #else
-!!$omp & shared(dM_prod_Ia) &
+!$omp & shared(dM_prod_Ia) &
 #endif
-!!$omp & shared(ncpu,numbl,ilevel,myid,active,reception,numbp,xg,dx,skip_loc,headp,nextp,typep,use_initial_mass,mp0, &
-!!$omp & scale_msun,mp,sn2_real_delay,tp,snII_Zdep_yield,zp,snII_freq,yield,dteff,idp,xp,scale, &
-!!$omp & ncoarse,ngridmax,son,vp,metal,dust,dust_chem,MC_tracer,tmpp,eta_sn,mejecta_Ia,Zejecta_chem_Ia,ZDejecta_chem_Ia,nchunk, &
-!!$omp & dust_cond_eff_Ia,fsmall_ej,flarge_ej)
+!$omp & shared(ncpu,numbl,ilevel,myid,active,reception,numbp,xg,dx,skip_loc,headp,nextp,typep,use_initial_mass,mp0, &
+!$omp & scale_msun,mp,sn2_real_delay,tp,snII_Zdep_yield,zp,snII_freq,yield,dteff,idp,xp,scale, &
+!$omp & ncoarse,ngridmax,son,vp,metal,dust,dust_chem,MC_tracer,tmpp,eta_sn,mejecta_Ia,Zejecta_chem_Ia,ZDejecta_chem_Ia,nchunk, &
+!$omp & dust_cond_eff_Ia,fsmall_ej,flarge_ej)
      ! Loop over grids
   ip=0
-!!$omp do schedule(dynamic,nchunk)
+!$omp do schedule(dynamic,nchunk)
   do jgrid=1,active(ilevel)%ngrid
      igrid=active(ilevel)%igrid(jgrid)
 
@@ -287,12 +287,12 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
         enddo
      end if
   end do ! End loop over grids
-!!$omp end do nowait
+!$omp end do nowait
   if (ip>0) then
      call mech_fine_snIa(ind_grid,ind_pos_cell,ip,ilevel,dteff,nSNe,mSNe,pSNe,mZSNe,mZdSNe,nphSNe,mchSNe,mdchSNe)
      ip=0
   endif
-!!$omp end parallel
+!$omp end parallel
 
   if (MC_tracer) then
      ! MC Tracer =================================================
@@ -380,7 +380,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
   !-----------------------------------------------------------------------
   integer::i,j,nwco,nwco_here,idim,icell,igrid,ista,iend,ilevel2
   integer::ind_cell,ncell,irad,ii,ich
-  real(dp)::d,u,v,w,e,z,eth,ekk,Tk,d0,u0,v0,w0,dteff,eadd
+  real(dp)::d,u,v,w,e,z,eth,ekk,Tk,d0,u0,v0,w0,dteff,eadd,utmp
   real(dp)::dx,dx_loc,scale,vol_loc,nH_cen,fleftSN
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_kms
   real(dp)::scale_msun,msun2g
@@ -1064,17 +1064,6 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
            do ii=i_fractions,nvar ! fractional quantities that we don't want to change
                fractions(ii) = unew(icell,ii) / unew(icell,1)
            end do
-           do ii=1,i_fractions-1 ! update shared array
-!$omp atomic update
-               unew(icell,ii) = unew(icell,ii) * umul(i,j,ii)
-!$omp atomic update
-               unew(icell,ii) = unew(icell,ii) + uadd(i,j,ii)
-           end do
-           d = unew(icell,1)
-           do ii=i_fractions,nvar ! fractional quantities that we don't want to change
-!$omp atomic write
-               unew(icell,ii) = fractions(ii) * d
-           end do
            if(dust_chem)then ! update dust
               ilow=1;ihigh=ilow+dndsize
               mmet(ilow:ihigh)=unew(icell,ichem+ichC-1)
@@ -1087,6 +1076,17 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
            else
               mmet(1:ndust)=unew(icell,imetal)
            endif
+           do ii=1,i_fractions-1 ! update shared array
+               utmp = unew(icell,ii)
+!$omp atomic update
+               unew(icell,ii) = unew(icell,ii) + uadd(i,j,ii) + utmp * (umul(i,j,ii)-1)
+!$omp end atomic
+           end do
+           d = unew(icell,1)
+           do ii=i_fractions,nvar ! fractional quantities that we don't want to change
+!$omp atomic write
+               unew(icell,ii) = fractions(ii) * d
+           end do
            do ii=1,ndust  !!$dust_dev
 !$omp atomic update
               unew(icell,ii) = MAX(unew(icell,ii),1d-5*mmet(ii))
@@ -1095,17 +1095,6 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
         else
            do ii=i_fractions,nvar ! fractional quantities that we don't want to change
                fractions(ii) = uold(icell,ii) / uold(icell,1)
-           end do
-           do ii=1,i_fractions-1 ! update shared array
-!$omp atomic update
-               uold(icell,ii) = uold(icell,ii) * umul(i,j,ii)
-!$omp atomic update
-               uold(icell,ii) = uold(icell,ii) + uadd(i,j,ii)
-           end do
-           d = uold(icell,1)
-           do ii=i_fractions,nvar ! fractional quantities that we don't want to change
-!$omp atomic write
-               uold(icell,ii) = fractions(ii) * d
            end do
            if(dust_chem)then ! update dust
               ilow=1;ihigh=ilow+dndsize
@@ -1119,6 +1108,17 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
            else
               mmet(1:ndust)=uold(icell,imetal)
            endif
+           do ii=1,i_fractions-1 ! update shared array
+               utmp = uold(icell,ii)
+!$omp atomic update
+               uold(icell,ii) = uold(icell,ii) + uadd(i,j,ii) + utmp * (umul(i,j,ii)-1)
+!$omp end atomic
+           end do
+           d = uold(icell,1)
+           do ii=i_fractions,nvar ! fractional quantities that we don't want to change
+!$omp atomic write
+               uold(icell,ii) = fractions(ii) * d
+           end do
            do ii=1,ndust  !!$dust_dev
 !$omp atomic update
               uold(icell,ii) = MAX(uold(icell,ii),1d-5*mmet(ii))
