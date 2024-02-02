@@ -1721,6 +1721,7 @@ subroutine get_number_of_sn2(birth_time,dteff,zp_star,id_star,mass0,mass_t,M_SNI
   real(kind=dp),dimension(1:3)::cob=(/4.208666E-02, 2.152643E-02, 7.893866E-02/)
   real(kind=dp),dimension(1:3)::coc=(/-8.612668E-02,-1.698731E-01,1.867337E-01/)
   real(kind=dp),external::ran1_ts
+  integer::iv(32),iy
   logical:: done_star
 
 
@@ -1764,10 +1765,11 @@ subroutine get_number_of_sn2(birth_time,dteff,zp_star,id_star,mass0,mass_t,M_SNI
   endif
 
   localseed = -abs(id_star) !make sure that the number is negative
+  iv=0; iy=0
 
   nsn_age2 = 0
   do i=1,nsn_tot
-     xdum =  ran1_ts(localseed)
+     xdum =  ran1_ts(localseed,iv,iy)
      ! inverse function for y=co0+sqrt(co1*x+co2)
      ydum = ((xdum-co0)**2.-co2)/co1
      if(ydum.le.age2)then
@@ -1817,9 +1819,9 @@ end
 !################################################################
 !################################################################
 !################################################################
-function ran1_ts(idum)
+function ran1_ts(idum,iv,iy)
    ! A thead-safe version of ran1
-   ! idum must be < 0, which is same as the case of ran1 initializing every time
+   ! idum,iv,iy must be recorded (as private) as they mutate during call
    implicit none
    integer:: idum,IA,IM,IQ,IR,NTAB,NDIV
    real(kind=8):: ran1_ts,AM,EPS,RNMX
@@ -1827,15 +1829,16 @@ function ran1_ts(idum)
             &NTAB=32,NDIV=1+(IM-1)/NTAB,EPS=1.2e-7,RNMX=1.-EPS)
    integer::j,k,iv(NTAB),iy
    ! initialize
-   idum=max(-idum,1)
-   do j=NTAB+8,1,-1
-      k=idum/IQ
-      idum=IA*(idum-k*IQ)-IR*k
-      if (idum.lt.0) idum=idum+IM
-      if (j.le.NTAB) iv(j)=idum
-   end do
-   iy=iv(1)
-
+   if (idum.le.0.or.iy.eq.0) then! initialize
+      idum=max(-idum,1)
+      do j=NTAB+8,1,-1
+         k=idum/IQ
+         idum=IA*(idum-k*IQ)-IR*k
+         if (idum.lt.0) idum=idum+IM
+         if (j.le.NTAB) iv(j)=idum
+      end do
+      iy=iv(1)
+   end if
    k=idum/IQ
    idum=IA*(idum-k*IQ)-IR*k
    if (idum.lt.0) idum=idum+IM
