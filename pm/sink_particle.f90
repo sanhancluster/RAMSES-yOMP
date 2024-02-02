@@ -3025,7 +3025,7 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
   ! This routine is called by subroutine bondi_hoyle.
   !-----------------------------------------------------------------------
   integer::i,j,idim,nx_loc,isink,jpart,ind,ind_grid_now
-  real(dp)::r2,d,u,v,w,e
+  real(dp)::r2,d,u,v,w,e,c2
 #ifdef SOLVERmhd
   real(dp)::bx1,bx2,by1,by2,bz1,bz2
 #endif
@@ -3377,7 +3377,8 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
 #ifdef SOLVERmhd
            e=e-0.125d0*((bx1+bx2)**2+(by1+by2)**2+(bz1+bz2)**2)
 #endif
-              cgas=max(sqrt(gamma*(gamma-1d0)*e/d), smallc)
+              c2 = max(gamma*(gamma-1d0)*e/d, smallc**2)
+              cgas=sqrt(c2)
               ! Compute the drag force exerted by the gas on the sink particle
               vrel(1)=vp(ind_part(j),1)-u
               vrel(2)=vp(ind_part(j),2)-v
