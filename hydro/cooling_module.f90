@@ -501,7 +501,7 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
   real(kind=8),dimension(1:nvector)::nH,T2,deltaT2,zsolar,boost
   real(kind=8),dimension(1:nvector,1:nchem)::zchem
   real(kind=8),dimension(1:nvector,1:ndust)::fdust          ! Dust (YD) !!$dust_dev
-  real(kind=8),dimension(1:nvector)::sigma,mach,boost_acc   ! Dust (YD) !!$dust_dev
+  real(kind=8),dimension(1:nvector)::sigma,mach,boost_acc_dust   ! Dust (YD) !!$dust_dev
 !!$  real(kind=8),dimension(1:nvector,1:ndust)::fdustkey       ! Dust (YD) !!$dust_dev
   real(kind=8),dimension(1:ndust)::key2real,Zsunchem        ! Dust (YD) !!$dust_dev
   real(kind=8)::cool_dust,cool_dust_prime                   ! Dust (YD)
@@ -555,6 +555,7 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
   integer,dimension(1:ncell)::ind,i_nH
   logical::tau_negative
   real(dp),dimension(1:ndust,1:4)::dM_dust_add
+  real(dp) :: erfc_pre_f08
 
   call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
   year=3600_dp*24_dp*365_dp
@@ -652,7 +653,7 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
      sigs=log(1d0+(0.4d0*mach(i))**2)
      sigs2=sigs*sigs
      smax=log(1d4/nh(i))
-     boost_acc(i)=0.5d0*exp(sigs2)*erfc((1.5d0*sigs2-smax)/(dsqrt(2d0)*sigs))
+     boost_acc_dust(i)=0.5d0*exp(sigs2)*erfc((1.5d0*sigs2-smax)/(dsqrt(2d0)*sigs))
      time_max(i)=dt*precoeff*nH(i)
      time(i)=0d0
      wmax(i)=1d0/time_max(i)
@@ -962,7 +963,7 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
               else
                  do ii=1,ndust
                     t_acc(ii)=t0_acc(ii)* 1d3/nH(ind(i)) *sqrt(50d0/100d0)*(Zsunchem(ii)*rhoG0/rhoZ0(ii)) / Sconstant &
-                         & / boost_acc(ind(i))
+                         & / MAX(boost_acc_dust(ind(i)), 1d-20)
                  enddo
               endif
            case('chaabouni')
@@ -1436,7 +1437,7 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
                     write(*,*)'t_acc     t_des     t_sha     t_coa'
                     write(*,'(4es10.3,A)')t_acc(ii)/3.15d13,t_des(ii)/3.15d13,t_sha(ii)/3.15d13,t_coa(ii)/3.15d13,' Myr'
                     write(*,'(es10.3,3i10)')error_rel,i,ind(i),n
-                    if(sticking_coef=='subgrid')write(*,'(A,6es10.3)')'boost_acc=',boost_acc(ind(i)),sigma(ind(i))/1d5,sqrt(1.666667d0*kB*T2(ind(i))/mH)/1d5,mach(ind(i)),nh(ind(i)),tau(ind(i))
+                    if(sticking_coef=='subgrid')write(*,'(A,6es10.3)')'boost_acc_dust=',boost_acc_dust(ind(i)),sigma(ind(i))/1d5,sqrt(1.666667d0*kB*T2(ind(i))/mH)/1d5,mach(ind(i)),nh(ind(i)),tau(ind(i))
                     stop
                  endif
                  if(fdust(ind(i),ii)<0.)then
@@ -2534,5 +2535,39 @@ function HsurH0(z,omega0,omegaL,OmegaR)
   real(kind=8) :: HsurH0,z,omega0,omegaL,omegaR
   HsurH0=sqrt(Omega0*(1.d0+z)**3+OmegaR*(1.d0+z)**2+OmegaL)
 end function HsurH0
+
+!##############################################################
+!##############################################################
+!##############################################################
+!##############################################################
+function erfc_pre_f08(x)
+
+! complementary error function
+  use amr_commons, ONLY: dp
+  implicit none
+  real(dp) erfc_pre_f08
+  real(dp) x, y
+  real(kind=8) pv, ph
+  real(kind=8) q0, q1, q2, q3, q4, q5, q6, q7
+  real(kind=8) p0, p1, p2, p3, p4, p5, p6, p7
+  parameter(pv= 1.26974899965115684d+01, ph= 6.10399733098688199d+00)
+  parameter(p0= 2.96316885199227378d-01, p1= 1.81581125134637070d-01)
+  parameter(p2= 6.81866451424939493d-02, p3= 1.56907543161966709d-02)
+  parameter(p4= 2.21290116681517573d-03, p5= 1.91395813098742864d-04)
+  parameter(p6= 9.71013284010551623d-06, p7= 1.66642447174307753d-07)
+  parameter(q0= 6.12158644495538758d-02, q1= 5.50942780056002085d-01)
+  parameter(q2= 1.53039662058770397d+00, q3= 2.99957952311300634d+00)
+  parameter(q4= 4.95867777128246701d+00, q5= 7.41471251099335407d+00)
+  parameter(q6= 1.04765104356545238d+01, q7= 1.48455557345597957d+01)
+
+  y = x*x
+  y = EXP(-y)*x*(p7/(y+q7)+p6/(y+q6) + p5/(y+q5)+p4/(y+q4)+p3/(y+q3) &
+       &       + p2/(y+q2)+p1/(y+q1)+p0/(y+q0))
+  if (x < ph) y = y+2d0/(exp(pv*x)+1.0)
+  erfc_pre_f08 = y
+
+  return
+
+end function erfc_pre_f08
 end module cooling_module
 
