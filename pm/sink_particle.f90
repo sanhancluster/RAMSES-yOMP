@@ -2882,15 +2882,15 @@ subroutine grow_bondi(ilevel)
                  ! Force only one isink to pass accrete_bondi (Huge performance gain!)
                  if(ip==nvector.or.isink/=-idp(ipart))then
                     if(isink/=0) then
+                       if(counter == 0) then
+                           ig = ig - 1
+                       end if
                        call accrete_bondi(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,ompseed,isink)
                        ip=0
-                       ig=0
+                       ig=1
+                       ind_grid(ig)=igrid
                     end if
                     isink=-idp(ipart)
-                 end if
-                 if(ig==0)then
-                    ig=1
-                    ind_grid(ig)=igrid
                  end if
                  ip=ip+1
                  ind_part(ip)=ipart
@@ -3140,10 +3140,17 @@ subroutine accrete_bondi(ind_grid,ind_part,ind_grid_part,ng,np,ilevel,seed,isink
   end do
   if(error)then
      write(*,*)'problem in accrete_bondi'
-     write(*,*)ilevel,ng,np
-     do j=1,np
+     write(*,*)ilevel,ng,np,myid,isink
+     do i=1,ng
+        write(*,*) ind_grid(i)
         do idim=1,ndim
-           write(*,*)x(j,idim)
+           write(*,*)xg(ind_grid(i),idim),x0(i,idim)
+        end do
+     end do
+     do j=1,np
+        write(*,*) ind_part(j),ind_grid_part(j)
+        do idim=1,ndim
+           write(*,*)xp(ind_part(j),idim),x(j,idim)
         end do
      end do
      stop
