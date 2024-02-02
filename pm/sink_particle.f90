@@ -2868,12 +2868,8 @@ subroutine grow_bondi(ilevel)
 
         ! Gather sink and cloud particles
         if(npart2>0)then
-           counter = 0
            ipart=headp(igrid)
-           if(ip/=nvector)then ! cache is not full yet
-               ig=ig+1
-               ind_grid(ig)=igrid
-           end if
+           counter = 0
            ! Loop over particles
            do jpart=1,npart1
               ! Save next particle   <--- Very important !!!
@@ -2883,16 +2879,16 @@ subroutine grow_bondi(ilevel)
               if (is_cloud(typep(ipart))) then
                  ! Force only one isink to pass accrete_bondi (Huge performance gain!)
                  if(ip==nvector.or.isink/=-idp(ipart))then ! cache is full or current particle is from new sink
-                    if(isink/=0) then
-                       if(counter == 0) then
-                           ig = ig - 1
-                       end if
+                    if(isink/=0) then ! not first time
                        call accrete_bondi(ind_grid,ind_part,ind_grid_part,ig,ip,ilevel,ompseed,isink)
-                       ip=0
-                       ig=1
-                       ind_grid(ig)=igrid
                     end if
                     isink=-idp(ipart)
+                    ip=0
+                    ig=1
+                    ind_grid(ig)=igrid ! update ind_grid
+                 elseif(counter == 0) then ! first cloud in this grid -> update ind_grid
+                    ig=ig+1
+                    ind_grid(ig)=igrid
                  end if
                  ip=ip+1
                  ind_part(ip)=ipart
@@ -2902,9 +2898,6 @@ subroutine grow_bondi(ilevel)
               ipart=next_part  ! Go to next particle
            end do
            ! End loop over particles
-           if (counter == 0 .and. ig > 0) then
-              ig = ig - 1
-           end if
         end if
      end do
 !$omp end do nowait
