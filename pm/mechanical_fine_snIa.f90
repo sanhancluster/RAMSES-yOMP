@@ -380,7 +380,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
   !-----------------------------------------------------------------------
   integer::i,j,nwco,nwco_here,idim,icell,igrid,ista,iend,ilevel2
   integer::ind_cell,ncell,irad,ii,ich
-  real(dp)::d,u,v,w,e,z,eth,ekk,Tk,d0,u0,v0,w0,dteff,eadd,utmp
+  real(dp)::d,u,v,w,e,z,eth,ekk,Tk,d0,u0,v0,w0,dteff,eadd
   real(dp)::dx,dx_loc,scale,vol_loc,nH_cen,fleftSN
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_kms
   real(dp)::scale_msun,msun2g
@@ -416,6 +416,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
   real(dp),dimension(1:ndust)::mmet
   ! temporal arrays for OMP
   real(dp),dimension(1:nvector,0:nSNnei,1:nvarMHD)::umul,uadd ! product, addition. 0 indicates central cell
+  real(dp)::utmp
 
   msun2g=1.989d33; Zload=0d0; km2cm=1d5;
 
