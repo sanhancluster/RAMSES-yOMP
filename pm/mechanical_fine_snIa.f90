@@ -380,7 +380,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
   !-----------------------------------------------------------------------
   integer::i,j,nwco,nwco_here,idim,icell,igrid,ista,iend,ilevel2
   integer::ind_cell,ncell,irad,ii,ich
-  real(dp)::d,u,v,w,e,z,eth,ekk,Tk,d0,u0,v0,w0,dteff,eadd
+  real(dp)::d,u,v,w,e,z,eth,ekk,Tk,d0,u0,v0,w0,dteff,eadd,utmp
   real(dp)::dx,dx_loc,scale,vol_loc,nH_cen,fleftSN
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_kms
   real(dp)::scale_msun,msun2g
@@ -416,11 +416,11 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
   real(dp),dimension(1:ndust)::mmet
   ! temporal arrays for OMP
   real(dp),dimension(1:nvector,0:nSNnei,1:nvarMHD)::umul,uadd ! product, addition. 0 indicates central cell
-  real(dp)::utmp
 
   msun2g=1.989d33; Zload=0d0; km2cm=1d5;
 
-  umul=1d0; uadd=0d0
+  umul = 1d0
+  uadd = 0d0
 
   ! starting index for passive variables except for imetal and chem
   i_fractions = ichem+nchem
@@ -509,15 +509,14 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
      ! due to mechanical feedback
      T2min=T2_star*(d*scale_nH/n_star)**(g_star-1.0)
      if(Tk<T2min)then
-        eadd = T2min*d/scale_T2/(gamma-1.0)*1.2195 - e
+        eadd = (T2min-Tk)*d/scale_T2/(gamma-1.0)*1.2195
         uadd(i,0,5) = uadd(i,0,5) + eadd
-        !e=T2min*d/scale_T2/(gamma-1.0)*1.2195
-        !uold(icell,5) = 0.5d0*d*(u**2+v**2+w**2) + e + emag
-!#if NENER>0
-!        do irad=1,nener
-!           uold(icell,5) = uold(icell,5) + uold(icell,ndim+2+irad)
-!        end do
-!#endif
+     endif
+    
+     if(metal)then
+        z   = uold(icell,imetal)/d
+     else
+        z   = z_ave*0.02
      endif
 
      !==========================================
@@ -557,12 +556,6 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
      endif
 
      if(log_mfb)then
-        if(metal)then
-           z   = uold(icell,imetal)/d
-        else
-           z   = z_ave*0.02
-        endif
-
 398     format('MFBIa = ',f7.3,1x,f7.3,1x,f5.1,1x,f5.3,1x,f9.5,1x,f7.3,1x,f7.3)
         write(*,398) log10(d*scale_nH),log10(Tk),num_sn,floadSN(i),1./aexp-1,log10(dx_loc*scale_l/3.08d18),log10(z/0.02)
      endif
@@ -658,11 +651,6 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
      v     = uold(icell,3)/d
      w     = uold(icell,4)/d
      e     = uold(icell,5) + uadd(i,0,5)
-#if NENER>0
-     do irad=1,nener
-        e = e - uold(icell,ndim+2+irad)
-     enddo
-#endif
      emag=0.0d0
 #ifdef SOLVERmhd
      do idim=1,ndim
@@ -671,7 +659,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 #endif
 
      ekk   = 0.5*d*(u**2 + v**2 + w**2)
-     eth   = e - ekk - emag  ! thermal pressure
+     eth   = e - ekk - emag - erad  ! thermal pressure
 
      ! ionisation fractions, ref, etc.
      !do ii=i_fractions,nvar
@@ -687,7 +675,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
            if(dust_SNdest)then
               dble_NSN=dble(nSN(i))
               MS100=6800d0/scale_msun*E_SNIa/1d51/vol_loc*f_LEFT ! Compute the amount of shocked gas
-              Mgas =uold(icell,1)
+              Mgas = uold(icell,1)
               !if(dust_chem)then
               !   ilow=1;ihigh=ilow+dndsize
               !   mmet(ilow:ihigh)=uold(icell,ichem+ichC-1)
@@ -714,7 +702,6 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
                  !     &, -dMdust(ii)*scale_msun*vol_loc,dble_NSN,icell
                  !if(log_mfb_mega) write(*,'(a,3e15.8)') 'Md+dMd, 1d-5*Z, newMd =',Mdust(ii)+dMdust(ii)&
                  !     &, 1d-5*mmet(ii),newMdust(ii)
-                 !uold(icell,idust-1+ii)=newMdust(ii)
                  dM_SNd_Ia(ii)=dM_SNd_Ia(ii)+ dMdust(ii)*vol_loc
               enddo !!on bin
            endif
@@ -774,14 +761,16 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
      !uold(icell,4) = uold(icell,4)*fleftSN + pSN(i,3)/vol_loc*f_LEFT
 
      if(metal)then
-        umul(i,0,imetal) = umul(i,0,imetal)*fleftSN
-        uadd(i,0,imetal) = uadd(i,0,imetal) + mZSN(i)/vol_loc*f_LEFT
+        !umul(i,0,imetal) = umul(i,0,imetal)*fleftSN
+        uadd(i,0,imetal) = uadd(i,0,imetal) + mZSN(i)/vol_loc*f_LEFT &
+                & - d*z*floadSN(i)
         !uold(icell,imetal) = mZSN(i)/vol_loc*f_LEFT + d*z*fleftSN
      endif
     if(dust)then
         do ii=1,ndust
-           umul(i,0,idust-1+ii) = umul(i,0,ichem+ich-1)*fleftSN
-           !uold(icell,idust-1+ii)=d*zd(ii)*fleftSN
+        !   umul(i,0,idust-1+ii) = umul(i,0,idust-1+ii)*fleftSN
+            uadd(i,0,idust-1+ii) = uadd(i,0,idust-1+ii) - d*zd(ii)*floadSN(i)
+        !   !uold(icell,idust-1+ii)=d*zd(ii)*fleftSN
         enddo
         if(dust_chem)then
 #if NDUST==2
@@ -814,8 +803,9 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
         endif
      endif
      do ich=1,nchem
-        umul(i,0,ichem+ich-1) = umul(i,0,ichem+ich-1)*fleftSN
-        uadd(i,0,ichem+ich-1) = mchSN(i,ich)/vol_loc*f_LEFT + uadd(i,0,ichem+ich-1)
+        !umul(i,0,ichem+ich-1) = umul(i,0,ichem+ich-1)*fleftSN
+        uadd(i,0,ichem+ich-1) = uadd(i,0,ichem+ich-1) + mchSN(i,ich)/vol_loc*f_LEFT &
+                & - d*z_ch(ich)*floadSN(i)
         !uold(icell,ichem+ich-1) = mchSN(i,ich)/vol_loc*f_LEFT + d*z_ch(ich)*fleftSN
      end do
      !do ii=i_fractions,nvar
@@ -882,18 +872,18 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
                  dble_NSN=dble(nSN(i))
                  MS100=6800d0/scale_msun*E_SNIa/1d51/vol_loc*f_LOAD ! Compute the amount of shocked gas
                  Mgas=pvar(1)
-                 !if(dust_chem)then
-                 !   ilow=1;ihigh=ilow+dndsize
-                 !   mmet(ilow:ihigh)=pvar(ichem+ichC-1)
-                 !   ilow=ihigh+1;ihigh=ilow+dndsize
-                 !   mmet(ilow:ihigh)=MIN(pvar(ichem-1+ichMg)/(nsilMg*muMg) & ! This is the metallicity of
-                 !                   &   ,pvar(ichem-1+ichFe)/(nsilFe*muFe) & ! the available elements
-                 !                   &   ,pvar(ichem-1+ichSi)/(nsilSi*muSi) & ! in the chemical composition
-                 !                   &   ,pvar(ichem-1+ichO )/(nsilO *muO ))& ! of silicates,which is turned
-                 !                   &   *nsilSi*muSi                         ! into the key element Si
-                 !else
-                 !   mmet(1:ndust)=pvar(imetal)
-                 !endif
+                 if(dust_chem)then
+                    ilow=1;ihigh=ilow+dndsize
+                    mmet(ilow:ihigh)=pvar(ichem+ichC-1)
+                    ilow=ihigh+1;ihigh=ilow+dndsize
+                    mmet(ilow:ihigh)=MIN(pvar(ichem-1+ichMg)/(nsilMg*muMg) & ! This is the metallicity of
+                                    &   ,pvar(ichem-1+ichFe)/(nsilFe*muFe) & ! the available elements
+                                    &   ,pvar(ichem-1+ichSi)/(nsilSi*muSi) & ! in the chemical composition
+                                    &   ,pvar(ichem-1+ichO )/(nsilO *muO ))& ! of silicates,which is turned
+                                    &   *nsilSi*muSi                         ! into the key element Si
+                 else
+                    mmet(1:ndust)=pvar(imetal)
+                 endif
                  do ii=1,ndust  !!$dust_dev
                     Mdust (ii)=pvar(idust-1+ii)
                     dfdust = -(1d0-(1d0-MIN(1-exp(-dust_SNdest_eff*0.1/asize(ii)),1.0d0)*MIN(MS100/Mgas,1.0d0))**dble_NSN)
@@ -901,12 +891,10 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
                     !if(log_mfb_mega) write(*,'(A,i3,a,5e15.8,I9)')'(1) for bin : Mshock,Mgas,Mdust,dMdust,nSN=' &
                     !     & ,ii, ':',MS100*scale_msun*vol_loc,Mgas*scale_msun*vol_loc,Mdust(ii)*scale_msun*vol_loc &
                     !     & ,-dMdust(ii)*scale_msun*vol_loc,dble_NSN,icell
-                    !newMdust(ii)=MAX(Mdust(ii)+dMdust(ii),1d-5*mmet(ii)) ! OMPNOTE: will update later
+                    newMdust(ii)=MAX(Mdust(ii)+dMdust(ii),1d-5*mmet(ii))
                     !if(log_mfb_mega) write(*,'(a,3e15.8)') 'Md+dMd, 1d-5*Z, newMd =',Mdust(ii)+dMdust(ii) &
                     !     & ,1d-5*mmet(ii),newMdust(ii)
-                    umul(i,j,idust-1+ii) = umul(i,j,idust-1+ii) * (1+dfdust)
-                    uadd(i,j,idust-1+ii) = uadd(i,j,idust-1+ii) * (1+dfdust)
-                    !pvar(idust-1+ii)=newMdust(ii)
+                    pvar(idust-1+ii)=newMdust(ii)
                     dM_SNd_Ia(ii)=dM_SNd_Ia(ii)+ dMdust(ii)*vol_loc
                  enddo
               endif
@@ -940,7 +928,6 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
            u=(ploadSN(i,1)/dble(nSNnei)+p_solid(i,j)*vSNnei(1,j))/vol_nei/d
            v=(ploadSN(i,2)/dble(nSNnei)+p_solid(i,j)*vSNnei(2,j))/vol_nei/d
            w=(ploadSN(i,3)/dble(nSNnei)+p_solid(i,j)*vSNnei(3,j))/vol_nei/d
-
            uadd(i,j,1)=uadd(i,j,1)+d
            uadd(i,j,2)=uadd(i,j,2)+d*u
            uadd(i,j,3)=uadd(i,j,3)+d*v
@@ -980,16 +967,16 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 #endif
            if(metal)then
                uadd(i,j,imetal)=uadd(i,j,imetal)+mzloadSN(i)/dble(nSNnei)/vol_nei
-               !pvar(imetal)=pvar(imetal)+mzloadSN(i)/dble(nSNnei)/vol_nei
+               pvar(imetal)=pvar(imetal)+mzloadSN(i)/dble(nSNnei)/vol_nei
            end if
            do ich=1,nchem
                uadd(i,j,ichem+ich-1)=uadd(i,j,ichem+ich-1)+mchloadSN(i,ich)/dble(nSNnei)/vol_nei
-               !pvar(ichem+ich-1)=pvar(ichem+ich-1)+mchloadSN(i,ich)/dble(nSNnei)/vol_nei
+               pvar(ichem+ich-1)=pvar(ichem+ich-1)+mchloadSN(i,ich)/dble(nSNnei)/vol_nei
            end do
            if(dust)then
               do ii=1,ndust!!$dust_dev
                  uadd(i,j,idust-1+ii)=uadd(i,j,idust-1+ii)+mZdloadSN(i,ii)/dble(nSNnei)/vol_nei
-                 !pvar(idust-1+ii)=pvar(idust-1+ii)+mZdloadSN(i,ii)/dble(nSNnei)/vol_nei
+                 pvar(idust-1+ii)=pvar(idust-1+ii)+mZdloadSN(i,ii)/dble(nSNnei)/vol_nei
               enddo
            end if
            !do ii=i_fractions,nvar
@@ -1052,75 +1039,167 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
   end do ! loop over SN cell
 
   do i=1,np ! loop over SN cell
-     ind_cell = ncoarse+ind_grid(i)+(ind_pos_cell(i)-1)*ngridmax
-     do j=0,nSNnei
-        if(j == 0) then ! this cell
-           icell = ind_cell
-        else ! neighboring cell
-           fpos(1:3) = xc2(1:3,i)+xSNnei(1:3,j)*dx
-           call get_icell_from_pos (fpos, ilevel+1, igrid, icell,ilevel2)
-           if(cpu_map(father(igrid)) /= myid) then ! need mpi
-               cycle
-           end if
-        end if
-        if(ilevel>ilevel2 .and. j /= 0)then ! touching level-1 cells
-           do ii=i_fractions,nvar ! fractional quantities that we don't want to change
-               fractions(ii) = unew(icell,ii) / unew(icell,1)
-           end do
-           if(dust_chem)then ! update dust
-              ilow=1;ihigh=ilow+dndsize
-              mmet(ilow:ihigh)=unew(icell,ichem+ichC-1)
-              ilow=ihigh+1;ihigh=ilow+dndsize
-              mmet(ilow:ihigh)=MIN(unew(icell,ichem-1+ichMg)/(nsilMg*muMg) & ! This is the metallicity of
-                              &   ,unew(icell,ichem-1+ichFe)/(nsilFe*muFe) & ! the available elements
-                              &   ,unew(icell,ichem-1+ichSi)/(nsilSi*muSi) & ! in the chemical composition
-                              &   ,unew(icell,ichem-1+ichO )/(nsilO *muO ))& ! of silicates,which is turned
-                              &   *nsilSi*muSi                               ! into the key element Si
-           else
-              mmet(1:ndust)=unew(icell,imetal)
-           endif
-           do ii=1,i_fractions-1 ! update shared array
-               utmp = unew(icell,ii)
-!$omp atomic update
-               unew(icell,ii) = unew(icell,ii) + uadd(i,j,ii) + utmp * (umul(i,j,ii)-1)
-           end do
-           d = unew(icell,1)
-           do ii=i_fractions,nvar ! fractional quantities that we don't want to change
+     do j=1,nSNnei
+        fpos(1:3) = xc2(1:3,i)+xSNnei(1:3,j)*dx
+        call get_icell_from_pos (fpos, ilevel+1, igrid, icell,ilevel2)
+        if(cpu_map(father(igrid)) == myid) then
+           vol_nei = vol_loc*(2d0**ndim)**(ilevel-ilevel2)
+           if(ilevel>ilevel2)then ! touching level-1 cells
+              do ii=i_fractions,nvar ! fractional quantities that we don't want to change
+                  fractions(ii) = unew(icell,ii) / unew(icell,1)
+              end do
+              emag=0d0
+              erad=0d0
+!$omp critical
+              do ii=1,i_fractions-1 ! update shared array
+                  uadd(i,j,ii) = uadd(i,j,ii) + (umul(i,j,ii)-1d0) * unew(icell,ii)
+!!$omp atomic capture
+                  pvar(ii) = unew(icell,ii)
+                  unew(icell,ii) = unew(icell,ii) + uadd(i,j,ii)
+!!$omp end atomic
+              end do
+
+              ! update internal energy
+#ifdef SOLVERmhd
+              do idim=1,ndim
+                 emag=emag+0.125d0*(pvar(idim+ndim+2)+pvar(idim+nvar))**2
+              enddo
+#endif
+#if NENER>0
+              do irad=1,nener
+                  erad = erad + pvar(ndim+2+irad)
+              end do
+#endif
+!              pvar(ii) = unew(icell,ii)
+              d0=max(pvar(1), smallr)
+              ekk0=0.5d0*(pvar(2)**2 + pvar(3)**2 + pvar(4)**2)/d0
+
+              ! For stability
+              eth0=pvar(5)-ekk0-emag-erad
+              T2min=T2_star*(d0*scale_nH/n_star)**(g_star-1.0)
+              ekk = 0.5d0*((pvar(2)+uadd(i,j,2))**2 + (pvar(3)+uadd(i,j,3))**2 + (pvar(4)+uadd(i,j,4))**2) &
+                      & / max(pvar(1)+uadd(i,j,1), smallr)
+
+              eadd = max(0d0,T2min*d0/scale_T2/(gamma-1.0)-eth0) + max(ek_solid(i,j)/vol_nei, ekk-ekk0)
+              ! the minimum thermal energy input floor
+              !uadd(i,j,5) = uadd(i,j,5) + max(etot0, ekk+eth0+emag) + erad - pvar(5)
+!!$omp atomic update
+              unew(icell,5) = unew(icell,5) + eadd
+!$omp end critical
+
+              pvar(5) = pvar(5) + max(ek_solid(i,j)/vol_nei, ekk-ekk0) + eadd
+
+              ! sanity check
+              Tk = (pvar(5)-ekk-emag-erad)/d*scale_T2*(gamma-1)
+              if(Tk<0)then
+                  print *,'TKERR: mech (post-call): Tk<0 =',Tk
+                  print *,'nH [H/cc]= ',d*scale_nH
+                  print *,'u  [km/s]= ',u*scale_v/1d5
+                  print *,'v  [km/s]= ',v*scale_v/1d5
+                  print *,'w  [km/s]= ',w*scale_v/1d5
+                  print *,'T0 [K]   = ',Tk0
+                  stop
+              endif
+
+              d = unew(icell,1)
+              do ii=i_fractions,nvar ! fractional quantities that we don't want to change
 !$omp atomic write
-               unew(icell,ii) = fractions(ii) * d
-           end do
-           do ii=1,ndust  !!$dust_dev
+                  unew(icell,ii) = fractions(ii) * d
+              end do
+              if(dust_chem)then ! update dust
+                 ilow=1;ihigh=ilow+dndsize
+                 mmet(ilow:ihigh)=unew(icell,ichem+ichC-1)
+                 ilow=ihigh+1;ihigh=ilow+dndsize
+                 mmet(ilow:ihigh)=MIN(unew(icell,ichem-1+ichMg)/(nsilMg*muMg) & ! This is the metallicity of
+                                 &   ,unew(icell,ichem-1+ichFe)/(nsilFe*muFe) & ! the available elements
+                                 &   ,unew(icell,ichem-1+ichSi)/(nsilSi*muSi) & ! in the chemical composition
+                                 &   ,unew(icell,ichem-1+ichO )/(nsilO *muO ))& ! of silicates,which is turned
+                                 &   *nsilSi*muSi                               ! into the key element Si
+              else
+                 mmet(1:ndust)=unew(icell,imetal)
+              endif
+              do ii=1,ndust  !!$dust_dev
 !$omp atomic update
               unew(icell,ii) = MAX(unew(icell,ii),1d-5*mmet(ii))
            enddo
 
-        else
-           do ii=i_fractions,nvar ! fractional quantities that we don't want to change
-               fractions(ii) = uold(icell,ii) / uold(icell,1)
-           end do
-           if(dust_chem)then ! update dust
-              ilow=1;ihigh=ilow+dndsize
-              mmet(ilow:ihigh)=uold(icell,ichem+ichC-1)
-              ilow=ihigh+1;ihigh=ilow+dndsize
-              mmet(ilow:ihigh)=MIN(uold(icell,ichem-1+ichMg)/(nsilMg*muMg) & ! This is the metallicity of
-                              &   ,uold(icell,ichem-1+ichFe)/(nsilFe*muFe) & ! the available elements
-                              &   ,uold(icell,ichem-1+ichSi)/(nsilSi*muSi) & ! in the chemical composition
-                              &   ,uold(icell,ichem-1+ichO )/(nsilO *muO ))& ! of silicates,which is turned
-                              &   *nsilSi*muSi                               ! into the key element Si
            else
-              mmet(1:ndust)=uold(icell,imetal)
-           endif
-           do ii=1,i_fractions-1 ! update shared array
-               utmp = uold(icell,ii)
+              do ii=i_fractions,nvar ! fractional quantities that we don't want to change
+                  fractions(ii) = uold(icell,ii) / uold(icell,1)
+              end do
+              emag=0d0
+              erad=0d0
+!!$omp critical
+              do ii=1,i_fractions-1 ! update shared array
+                  uadd(i,j,ii) = uadd(i,j,ii) + (umul(i,j,ii)-1d0) * uold(icell,ii)
+!$omp atomic capture
+                  pvar(ii) = uold(icell,ii)
+                  uold(icell,ii) = uold(icell,ii) + uadd(i,j,ii)
+!$omp end atomic
+              end do
+
+              ! update internal energy
+#ifdef SOLVERmhd
+              do idim=1,ndim
+                 emag=emag+0.125d0*(pvar(idim+ndim+2)+pvar(idim+nvar))**2
+              enddo
+#endif
+#if NENER>0
+              do irad=1,nener
+                  erad = erad + pvar(ndim+2+irad)
+              end do
+#endif
+!              pvar(ii) = uold(icell,ii)
+              d0=max(pvar(1), smallr)
+              ekk0=0.5d0*(pvar(2)**2+pvar(3)**2+pvar(4)**2)/d0
+
+              ekk = 0.5d0*((pvar(2)+uadd(i,j,2))**2 + (pvar(3)+uadd(i,j,3))**2 + (pvar(4)+uadd(i,j,4))**2) &
+                      & / max(pvar(1)+uadd(i,j,1), smallr)
+
+              ! For stability
+              eth0=pvar(5)-ekk0-emag-erad
+              T2min=T2_star*(d0*scale_nH/n_star)**(g_star-1.0)
+              eadd = max(ek_solid(i,j)/vol_nei, ekk-ekk0)
 !$omp atomic update
-               uold(icell,ii) = uold(icell,ii) + uadd(i,j,ii) + utmp * (umul(i,j,ii)-1)
-           end do
-           d = uold(icell,1)
-           do ii=i_fractions,nvar ! fractional quantities that we don't want to change
+              uold(icell,5) = max(uold(icell,5),T2min*d0/scale_T2/(gamma-1.0)+ekk+emag+erad)
+!$omp atomic update
+              uold(icell,5) = uold(icell,5) + eadd
+
+              ! the minimum thermal energy input floor
+              !uadd(i,j,5) = uadd(i,j,5) + max(etot0, ekk+eth0+emag) + erad - pvar(5)
+!!$omp end critical
+              pvar(5) = max(pvar(5),T2min*d0/scale_T2/(gamma-1.0)+ekk+emag+erad) + eadd
+
+              ! sanity check
+              Tk = (pvar(5)-ekk-emag-erad)/d*scale_T2*(gamma-1)
+              if(Tk<0)then
+                  print *,'TKERR: mech (post-call): Tk<0 =',Tk
+                  print *,'nH [H/cc]= ',d*scale_nH
+                  print *,'u  [km/s]= ',u*scale_v/1d5
+                  print *,'v  [km/s]= ',v*scale_v/1d5
+                  print *,'w  [km/s]= ',w*scale_v/1d5
+                  print *,'T0 [K]   = ',Tk0
+                  stop
+              endif
+
+              d = uold(icell,1)
+              do ii=i_fractions,nvar ! fractional quantities that we don't want to change
 !$omp atomic write
-               uold(icell,ii) = fractions(ii) * d
-           end do
-           do ii=1,ndust  !!$dust_dev
+                  uold(icell,ii) = fractions(ii) * d
+              end do
+              if(dust_chem)then ! update dust
+                 ilow=1;ihigh=ilow+dndsize
+                 mmet(ilow:ihigh)=uold(icell,ichem+ichC-1)
+                 ilow=ihigh+1;ihigh=ilow+dndsize
+                 mmet(ilow:ihigh)=MIN(uold(icell,ichem-1+ichMg)/(nsilMg*muMg) & ! This is the metallicity of
+                                 &   ,uold(icell,ichem-1+ichFe)/(nsilFe*muFe) & ! the available elements
+                                 &   ,uold(icell,ichem-1+ichSi)/(nsilSi*muSi) & ! in the chemical composition
+                                 &   ,uold(icell,ichem-1+ichO )/(nsilO *muO ))& ! of silicates,which is turned
+                                 &   *nsilSi*muSi                               ! into the key element Si
+              else
+                 mmet(1:ndust)=uold(icell,imetal)
+              endif
+              do ii=1,ndust  !!$dust_dev
 !$omp atomic update
               uold(icell,ii) = MAX(uold(icell,ii),1d-5*mmet(ii))
            enddo
@@ -1156,7 +1235,7 @@ subroutine mech_fine_snIa_mpi(ilevel)
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_kms
   real(dp)::scale_msun,msun2g=1.989d33, pvar(1:nvarMHD),etot0
   real(dp)::skip_loc(1:3),d,u,v,w,ekk,eth,d0,u0,v0,w0,eth0,ekk0,Tk0,ekk_ej,T2min
-  real(dp)::MS100,Mgas,dble_NSN,dfdust                    ! Dust (YD)
+  real(dp)::MS100,Mgas,dble_NSN                           ! Dust (YD)
   real(dp),dimension(1:ndust)::ZdloadSN_i                 !!$dust_dev
   real(dp),dimension(1:ndust),save::Mdust,dMdust,newMdust !!$dust_dev
   integer::igrid,icell,ilevel,ilevel2,irad,ii,ich
@@ -1172,9 +1251,6 @@ subroutine mech_fine_snIa_mpi(ilevel)
   real(dp),dimension(1:3)::fpos
   integer::ilow,ihigh
   real(dp),dimension(1:ndust)::mmet
-  ! temporal arrays for OMP
-  real(dp),dimension(:,:,:),allocatable::umul,uadd ! product, addition
-  real(dp)::utmp
 
   if(ndim.ne.3) return
 
@@ -1350,15 +1426,9 @@ subroutine mech_fine_snIa_mpi(ilevel)
      allocate(ek_solid(1:np,1:nSNnei))
      allocate(snowplough(1:np,1:nSNnei))
      p_solid=0d0;ek_solid=0d0;snowplough=.false.
-     allocate(umul(1:np,1:nSNnei,1:nvarMHD))
-     allocate(uadd(1:np,1:nSNnei,1:nvarMHD))
-     umul=1d0;uadd=0d0
   endif
 
   ! Compute the momentum first before redistributing mass
-!!$omp parallel do &
-!!$omp & private(xSN_i,mSN_i,mloadSN_i,fload_i,dm_ejecta,num_sn,ZloadSN_i,rSt_i,M_SNIa_var,fpos,igrid,icell,ilevel2, &
-!!$omp & Z_nei,d_nei,dratio,f_w_cell,nH_nei,Z_neisol,psn_thor98,psn_tr,chi_tr,f_w_crit,vload_rad,vload,f_esn2)
   do i=1,np
 
      xSN_i(1:3) = SNrecv(1:3,i)
@@ -1430,10 +1500,6 @@ subroutine mech_fine_snIa_mpi(ilevel)
 
 
   ! Apply the SNe to this cpu domain
-!!$omp parallel do default(shared) &
-!!$omp & private(xSN_i,mSN_i,mloadSN_i,ploadSN_i,ZloadSN_i,chloadSN_i,ZdloadSN_i,fpos,igrid,icell,ilevel2,vol_nei, &
-!!$omp & pvar,fractions,dble_NSN,MS100,Mgas,ilow,ihigh,mmet,Mdust,dMdust,newMdust,emag, &
-!!$omp & d0,u0,v0,w0,ekk0,eth0,Tk0,T2min,d,u,v,w,i,j,ii,ekk_ej,etot0) reduction(+:dM_SNd_Ia)
   do i=1,np
 
      xSN_i(1:3) = SNrecv(1:3,i)
@@ -1461,9 +1527,9 @@ subroutine mech_fine_snIa_mpi(ilevel)
            else
               pvar(1:nvarMHD) = uold(icell,1:nvarMHD)
            endif
-           !do ii=i_fractions,nvar
-           !   fractions(ii)=pvar(ii)/pvar(1)
-           !enddo
+           do ii=i_fractions,nvar
+              fractions(ii)=pvar(ii)/pvar(1)
+           enddo
      
            if(dust)then
               ! First destroy the corresponding amount of dust in the cell
@@ -1471,30 +1537,27 @@ subroutine mech_fine_snIa_mpi(ilevel)
                  dble_NSN=dble(SNrecv(11,i))
                  MS100=6800d0/scale_msun*E_SNIa/1d51/vol_loc*f_LOAD ! Compute the amount of shocked gas
                  Mgas =pvar(1)
-                 !if(dust_chem)then
-                 !   ilow=1;ihigh=ilow+dndsize
-                 !   mmet(ilow:ihigh)=pvar(ichem+ichC-1)
-                 !   ilow=ihigh+1;ihigh=ilow+dndsize
-                 !   mmet(ilow:ihigh)=MIN(pvar(ichem-1+ichMg)/(nsilMg*muMg) & ! This is the metallicity of
-                 !                   &   ,pvar(ichem-1+ichFe)/(nsilFe*muFe) & ! the available elements
-                 !                   &   ,pvar(ichem-1+ichSi)/(nsilSi*muSi) & ! in the chemical composition
-                 !                   &   ,pvar(ichem-1+ichO )/(nsilO *muO ))& ! of silicates,which is turned
-                 !                   &   *nsilSi*muSi                         ! into the key element Si
-                 !else
-                 !   mmet(1:ndust)=pvar(imetal)
-                 !endif
+                 if(dust_chem)then
+                    ilow=1;ihigh=ilow+dndsize
+                    mmet(ilow:ihigh)=pvar(ichem+ichC-1)
+                    ilow=ihigh+1;ihigh=ilow+dndsize
+                    mmet(ilow:ihigh)=MIN(pvar(ichem-1+ichMg)/(nsilMg*muMg) & ! This is the metallicity of
+                                    &   ,pvar(ichem-1+ichFe)/(nsilFe*muFe) & ! the available elements
+                                    &   ,pvar(ichem-1+ichSi)/(nsilSi*muSi) & ! in the chemical composition
+                                    &   ,pvar(ichem-1+ichO )/(nsilO *muO ))& ! of silicates,which is turned
+                                    &   *nsilSi*muSi                         ! into the key element Si
+                 else
+                    mmet(1:ndust)=pvar(imetal)
+                 endif
                  do ii=1,ndust!!$dust_dev
                     Mdust(ii)=pvar(idust-1+ii)
-                    dfdust = -(1d0-(1d0-MIN(1-exp(-dust_SNdest_eff*0.1/asize(ii)),1.0d0)*MIN(MS100/Mgas,1.0d0))**dble_NSN)
-                    dMdust(ii)=Mdust(ii)*dfdust
-                    !if(log_mfb_mega) write(*,'(A,i3,a,5e15.8,I9)')'(1) for bin : Mshock,Mgas,Mdust,dMdust,nSN=' &
-                    !     &, ii, ':',MS100*scale_msun*vol_loc,Mgas*scale_msun*vol_loc,Mdust(ii)*scale_msun*vol_loc &
-                    !     &, -dMdust(ii)*scale_msun*vol_loc,dble_NSN,icell
-                    !newMdust(ii)=MAX(Mdust(ii)+dMdust(ii),1d-5*mmet(ii))
-                    !if(log_mfb_mega) write(*,'(a,3e15.8)') 'Md+dMd, 1d-5*Z, newMd =',Mdust(ii)+dMdust(ii),1d-5*mmet(ii),newMdust(ii)
-                    umul(i,j,idust-1+ii) = umul(i,j,idust-1+ii) * (1+dfdust)
-                    uadd(i,j,idust-1+ii) = uadd(i,j,idust-1+ii) * (1+dfdust)
-                    !pvar(idust-1+ii)=newMdust(ii)
+                    dMdust(ii)=-(1d0-(1d0-MIN(1-exp(-dust_SNdest_eff*0.1/asize(ii)),1.0d0)*MIN(MS100/Mgas,1.0d0))**dble_NSN)*Mdust(ii)
+                    if(log_mfb_mega) write(*,'(A,i3,a,5e15.8,I9)')'(1) for bin : Mshock,Mgas,Mdust,dMdust,nSN=' &
+                         &, ii, ':',MS100*scale_msun*vol_loc,Mgas*scale_msun*vol_loc,Mdust(ii)*scale_msun*vol_loc &
+                         &, -dMdust(ii)*scale_msun*vol_loc,dble_NSN,icell
+                    newMdust(ii)=MAX(Mdust(ii)+dMdust(ii),1d-5*mmet(ii))
+                    if(log_mfb_mega) write(*,'(a,3e15.8)') 'Md+dMd, 1d-5*Z, newMd =',Mdust(ii)+dMdust(ii),1d-5*mmet(ii),newMdust(ii)
+                    pvar(idust-1+ii)=newMdust(ii)
                     dM_SNd_Ia(ii)=dM_SNd_Ia(ii)+dMdust(ii)*vol_loc
                  enddo
               endif !(dust_SNdest)
@@ -1528,10 +1591,6 @@ subroutine mech_fine_snIa_mpi(ilevel)
            v=(ploadSN_i(2)/dble(nSNnei)+p_solid(i,j)*vSNnei(2,j))/vol_nei/d
            w=(ploadSN_i(3)/dble(nSNnei)+p_solid(i,j)*vSNnei(3,j))/vol_nei/d
 
-           uadd(i,j,1)=uadd(i,j,1)+d
-           uadd(i,j,2)=uadd(i,j,2)+d*u
-           uadd(i,j,3)=uadd(i,j,3)+d*v
-           uadd(i,j,4)=uadd(i,j,4)+d*w
            pvar(1)=pvar(1)+d
            pvar(2)=pvar(2)+d*u
            pvar(3)=pvar(3)+d*v
@@ -1545,117 +1604,34 @@ subroutine mech_fine_snIa_mpi(ilevel)
            v   = pvar(3)/d
            w   = pvar(4)/d
            ekk = 0.5*d*(u**2 + v**2 + w**2)
-           uadd(i,j,5) = uadd(i,j,5) + max(etot0, ekk+eth0+emag) - pvar(5)
-           !pvar(5) = max(etot0, ekk+eth0+emag)
+           pvar(5) = max(etot0, ekk+eth0+emag)+erad
 
-#if NENER>0
-           do irad=1,nener
-              pvar(5) = pvar(5) + pvar(ndim+2+irad)
-           end do
-#endif
 
            if(metal)then
-              uadd(i,j,imetal)=uadd(i,j,imetal)+mloadSN_i/dble(nSNnei)*ZloadSN_i/vol_nei
-              !pvar(imetal)=pvar(imetal)+mloadSN_i/dble(nSNnei)*ZloadSN_i/vol_nei
+              pvar(imetal)=pvar(imetal)+mloadSN_i/dble(nSNnei)*ZloadSN_i/vol_nei
            end if
            do ich=1,nchem
-              uadd(i,j,ichem+ich-1)=uadd(i,j,ichem+ich-1)+mloadSN_i/dble(nSNnei)*chloadSN_i(ich)/vol_nei
-              !pvar(ichem+ich-1)=pvar(ichem+ich-1)+mloadSN_i/dble(nSNnei)*chloadSN_i(ich)/vol_nei
+              pvar(ichem+ich-1)=pvar(ichem+ich-1)+mloadSN_i/dble(nSNnei)*chloadSN_i(ich)/vol_nei
            end do
            if(dust)then
               do ii=1,ndust!!$dust_dev
-                 uadd(i,j,idust-1+ii)=uadd(i,j,idust-1+ii)+mloadSN_i/dble(nSNnei)*ZdloadSN_i(ii)/vol_nei
-                 !pvar(idust-1+ii)=pvar(idust-1+ii)+mloadSN_i/dble(nSNnei)*ZdloadSN_i(ii)/vol_nei
+                 pvar(idust-1+ii)=pvar(idust-1+ii)+mloadSN_i/dble(nSNnei)*ZdloadSN_i(ii)/vol_nei
               enddo
            endif
-           !do ii=i_fractions,nvar
-           !   pvar(ii)=fractions(ii)*pvar(1)
-           !end do
+           do ii=i_fractions,nvar
+              pvar(ii)=fractions(ii)*pvar(1)
+           end do
 
            ! update the hydro variable
-           !if(ilevel>ilevel2)then ! touching level-1 cells
-           !   unew(icell,1:nvarMHD) = pvar(1:nvarMHD)
-           !else
-           !   uold(icell,1:nvarMHD) = pvar(1:nvarMHD)
-           !endif
+           if(ilevel>ilevel2)then ! touching level-1 cells
+              unew(icell,1:nvarMHD) = pvar(1:nvarMHD)
+           else
+              uold(icell,1:nvarMHD) = pvar(1:nvarMHD)
+           endif
  
         endif ! if this belongs to me
 
 
-     end do ! loop over neighbors
-  end do ! loop over SN cells
-
-!!$omp parallel do default(shared) &
-!!$omp & private(xSN_i,fpos,igrid,icell,ilevel2,fractions,i,ii,ilow,ihigh,mmet,utmp,d)
-  do i=1,np ! loop over SN cell
-     xSN_i(1:3) = SNrecv(1:3,i)
-     do j=1,nSNnei ! neighboring cells only
-        fpos(1:3) = xSN_i(1:3)+xSNnei(1:3,j)*dx
-        call get_icell_from_pos (fpos, ilevel+1, igrid, icell, ilevel2)
-        if(cpu_map(father(igrid))==myid)then
-           if(ilevel>ilevel2)then ! touching level-1 cells
-              do ii=i_fractions,nvar
-                 fractions(ii)=unew(icell,ii)/unew(icell,1)
-              enddo
-              if(dust_chem)then ! update dust
-                 ilow=1;ihigh=ilow+dndsize
-                 mmet(ilow:ihigh)=unew(icell,ichem+ichC-1)
-                 ilow=ihigh+1;ihigh=ilow+dndsize
-                 mmet(ilow:ihigh)=MIN(unew(icell,ichem-1+ichMg)/(nsilMg*muMg) & ! This is the metallicity of
-                                 &   ,unew(icell,ichem-1+ichFe)/(nsilFe*muFe) & ! the available elements
-                                 &   ,unew(icell,ichem-1+ichSi)/(nsilSi*muSi) & ! in the chemical composition
-                                 &   ,unew(icell,ichem-1+ichO )/(nsilO *muO ))& ! of silicates,which is turned
-                                 &   *nsilSi*muSi                               ! into the key element Si
-              else
-                 mmet(1:ndust)=unew(icell,imetal)
-              endif
-              do ii=1,i_fractions-1 ! update shared array
-                 utmp = unew(icell,ii)
-!$omp atomic update
-                 unew(icell,ii) = unew(icell,ii) + uadd(i,j,ii) + utmp * (umul(i,j,ii)-1)
-              end do
-              d = unew(icell,1)
-              do ii=i_fractions,nvar
-!$omp atomic write
-                 unew(icell,ii)=fractions(ii)*d
-              end do
-              do ii=1,ndust  !!$dust_dev
-!$omp atomic update
-                 unew(icell,ii) = MAX(unew(icell,ii),1d-5*mmet(ii))
-              enddo
-
-           else
-              do ii=i_fractions,nvar
-                 fractions(ii)=uold(icell,ii)/uold(icell,1)
-              enddo
-              if(dust_chem)then ! update dust
-                 ilow=1;ihigh=ilow+dndsize
-                 mmet(ilow:ihigh)=uold(icell,ichem+ichC-1)
-                 ilow=ihigh+1;ihigh=ilow+dndsize
-                 mmet(ilow:ihigh)=MIN(uold(icell,ichem-1+ichMg)/(nsilMg*muMg) & ! This is the metallicity of
-                                 &   ,uold(icell,ichem-1+ichFe)/(nsilFe*muFe) & ! the available elements
-                                 &   ,uold(icell,ichem-1+ichSi)/(nsilSi*muSi) & ! in the chemical composition
-                                 &   ,uold(icell,ichem-1+ichO )/(nsilO *muO ))& ! of silicates,which is turned
-                                 &   *nsilSi*muSi                               ! into the key element Si
-              else
-                 mmet(1:ndust)=uold(icell,imetal)
-              endif
-              do ii=1,i_fractions-1 ! update shared array
-                 utmp = uold(icell,ii)
-!$omp atomic update
-                 uold(icell,ii) = uold(icell,ii) + uadd(i,j,ii) + utmp * (umul(i,j,ii)-1)
-              end do
-              d = uold(icell,1)
-              do ii=i_fractions,nvar
-!$omp atomic write
-                 uold(icell,ii)=fractions(ii)*d
-              end do
-              do ii=1,ndust  !!$dust_dev
-!$omp atomic update
-                 uold(icell,ii) = MAX(uold(icell,ii),1d-5*mmet(ii))
-              enddo
-           endif
-        endif ! if this belongs to me
      end do ! loop over neighbors
   end do ! loop over SN cells
 
