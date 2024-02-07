@@ -380,7 +380,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
   !-----------------------------------------------------------------------
   integer::i,j,nwco,nwco_here,idim,icell,igrid,ista,iend,ilevel2
   integer::ind_cell,ncell,irad,ii,ich
-  real(dp)::d,u,v,w,e,z,eth,ekk,Tk,d0,u0,v0,w0,dteff,eadd,utmp
+  real(dp)::d,u,v,w,e,z,eth,ekk,Tk,d0,u0,v0,w0,dteff,eadd
   real(dp)::dx,dx_loc,scale,vol_loc,nH_cen,fleftSN
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_kms
   real(dp)::scale_msun,msun2g
@@ -416,6 +416,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
   real(dp),dimension(1:ndust)::mmet
   ! temporal arrays for OMP
   real(dp),dimension(1:nvector,0:nSNnei,1:nvarMHD)::umul,uadd ! product, addition. 0 indicates central cell
+  real(dp)::utmp
 
   msun2g=1.989d33; Zload=0d0; km2cm=1d5;
 
@@ -692,8 +693,8 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
                  Mdust (ii)=uold(icell,idust-1+ii)
                  !! OMPNOTE: replaced to fractional difference
                  dfdust = -(1d0-(1d0-MIN(1-exp(-dust_SNdest_eff*0.1/asize(ii)),1.0d0)*MIN(MS100/Mgas,1.0d0))**dble_NSN)
-                 umul(i,0,idust-1+ii) = umul(i,0,idust-1+ii) * (1+dfdust)
-                 uadd(i,0,idust-1+ii) = uadd(i,0,idust-1+ii) * (1+dfdust)
+                 umul(i,0,idust-1+ii) = umul(i,0,idust-1+ii) * (1d0 + dfdust)
+                 uadd(i,0,idust-1+ii) = uadd(i,0,idust-1+ii) * (1d0 + dfdust)
 
                  dMdust(ii) = Mdust(ii)*dfdust !!(eqn 13 Granato,2021)+size dependance like thermal sputtering
                  !newMdust(ii) = MAX(Mdust(ii)+dMdust(ii),1d-5*mmet(ii)) !!new dust mass after dest
@@ -887,6 +888,8 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
                  do ii=1,ndust  !!$dust_dev
                     Mdust (ii)=pvar(idust-1+ii)
                     dfdust = -(1d0-(1d0-MIN(1-exp(-dust_SNdest_eff*0.1/asize(ii)),1.0d0)*MIN(MS100/Mgas,1.0d0))**dble_NSN)
+                    umul(i,j,idust-1+ii) = umul(i,j,idust-1+ii) * (1d0 + dfdust)
+                    uadd(i,j,idust-1+ii) = uadd(i,j,idust-1+ii) * (1d0 + dfdust)
                     dMdust(ii)=Mdust(ii)*dfdust
                     !if(log_mfb_mega) write(*,'(A,i3,a,5e15.8,I9)')'(1) for bin : Mshock,Mgas,Mdust,dMdust,nSN=' &
                     !     & ,ii, ':',MS100*scale_msun*vol_loc,Mgas*scale_msun*vol_loc,Mdust(ii)*scale_msun*vol_loc &
@@ -928,6 +931,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
            u=(ploadSN(i,1)/dble(nSNnei)+p_solid(i,j)*vSNnei(1,j))/vol_nei/d
            v=(ploadSN(i,2)/dble(nSNnei)+p_solid(i,j)*vSNnei(2,j))/vol_nei/d
            w=(ploadSN(i,3)/dble(nSNnei)+p_solid(i,j)*vSNnei(3,j))/vol_nei/d
+
            uadd(i,j,1)=uadd(i,j,1)+d
            uadd(i,j,2)=uadd(i,j,2)+d*u
            uadd(i,j,3)=uadd(i,j,3)+d*v
@@ -1120,7 +1124,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
               endif
               do ii=1,ndust  !!$dust_dev
 !$omp atomic update
-              unew(icell,ii) = MAX(unew(icell,ii),1d-5*mmet(ii))
+              unew(icell,idust-1+ii) = MAX(unew(icell,idust-1+ii),1d-5*mmet(ii))
            enddo
 
            else
@@ -1201,7 +1205,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
               endif
               do ii=1,ndust  !!$dust_dev
 !$omp atomic update
-              uold(icell,ii) = MAX(uold(icell,ii),1d-5*mmet(ii))
+              uold(icell,idust-1+ii) = MAX(uold(icell,idust-1+ii),1d-5*mmet(ii))
            enddo
 
         end if
@@ -1628,10 +1632,7 @@ subroutine mech_fine_snIa_mpi(ilevel)
            else
               uold(icell,1:nvarMHD) = pvar(1:nvarMHD)
            endif
- 
         endif ! if this belongs to me
-
-
      end do ! loop over neighbors
   end do ! loop over SN cells
 
