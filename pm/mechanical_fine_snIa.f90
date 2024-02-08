@@ -1093,13 +1093,12 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
               end do
               emag=0d0
               erad=0d0
-!$omp critical
               do ii=1,i_fractions-1 ! update shared array
                   uadd(i,j,ii) = uadd(i,j,ii) + (umul(i,j,ii)-1d0) * unew(icell,ii)
-!!$omp atomic capture
+!$omp atomic capture
                   pvar(ii) = unew(icell,ii)
                   unew(icell,ii) = unew(icell,ii) + uadd(i,j,ii)
-!!$omp end atomic
+!$omp end atomic
               end do
 
               ! update internal energy
@@ -1115,34 +1114,24 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 #endif
 !              pvar(ii) = unew(icell,ii)
               d0=max(pvar(1), smallr)
-              ekk0=0.5d0*(pvar(2)**2 + pvar(3)**2 + pvar(4)**2)/d0
+              ekk0=0.5d0*(pvar(2)**2+pvar(3)**2+pvar(4)**2)/d0
 
-              ! For stability
-              eth0=pvar(5)-ekk0-emag-erad
-              T2min=T2_star*(d0*scale_nH/n_star)**(g_star-1.0)
               ekk = 0.5d0*((pvar(2)+uadd(i,j,2))**2 + (pvar(3)+uadd(i,j,3))**2 + (pvar(4)+uadd(i,j,4))**2) &
                       & / max(pvar(1)+uadd(i,j,1), smallr)
 
-              eadd = max(0d0,T2min*d0/scale_T2/(gamma-1.0)-eth0) + max(ek_solid(i,j)/vol_nei, ekk-ekk0)
+              ! For stability
+              !eth0=pvar(5)-ekk0-emag-erad
+              T2min=T2_star*(d0*scale_nH/n_star)**(g_star-1.0)
+              eadd = max(ek_solid(i,j)/vol_nei, ekk-ekk0)
+!$omp atomic update
+              unew(icell,5) = unew(icell,5) + eadd
+!$omp atomic update
+              unew(icell,5) = max(unew(icell,5),T2min*d0/scale_T2/(gamma-1.0)+ekk+emag+erad+eadd)
+
+              pvar(5) = unew(icell,5)
+
               ! the minimum thermal energy input floor
               !uadd(i,j,5) = uadd(i,j,5) + max(etot0, ekk+eth0+emag) + erad - pvar(5)
-!!$omp atomic update
-              unew(icell,5) = unew(icell,5) + eadd
-!$omp end critical
-
-              pvar(5) = pvar(5) + max(ek_solid(i,j)/vol_nei, ekk-ekk0) + eadd
-
-              ! sanity check
-              Tk = (pvar(5)-ekk-emag-erad)/d*scale_T2*(gamma-1)
-              if(Tk<0)then
-                  print *,'TKERR: mech (post-call): Tk<0 =',Tk
-                  print *,'nH [H/cc]= ',d*scale_nH
-                  print *,'u  [km/s]= ',u*scale_v/1d5
-                  print *,'v  [km/s]= ',v*scale_v/1d5
-                  print *,'w  [km/s]= ',w*scale_v/1d5
-                  print *,'T0 [K]   = ',Tk0
-                  stop
-              endif
 
               d = unew(icell,1)
               do ii=i_fractions,nvar ! fractional quantities that we don't want to change
@@ -1172,7 +1161,6 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
               end do
               emag=0d0
               erad=0d0
-!!$omp critical
               do ii=1,i_fractions-1 ! update shared array
                   uadd(i,j,ii) = uadd(i,j,ii) + (umul(i,j,ii)-1d0) * uold(icell,ii)
 !$omp atomic capture
@@ -1200,30 +1188,18 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
                       & / max(pvar(1)+uadd(i,j,1), smallr)
 
               ! For stability
-              eth0=pvar(5)-ekk0-emag-erad
+              !eth0=pvar(5)-ekk0-emag-erad
               T2min=T2_star*(d0*scale_nH/n_star)**(g_star-1.0)
               eadd = max(ek_solid(i,j)/vol_nei, ekk-ekk0)
 !$omp atomic update
-              uold(icell,5) = max(uold(icell,5),T2min*d0/scale_T2/(gamma-1.0)+ekk+emag+erad)
-!$omp atomic update
               uold(icell,5) = uold(icell,5) + eadd
+!$omp atomic update
+              uold(icell,5) = max(uold(icell,5),T2min*d0/scale_T2/(gamma-1.0)+ekk+emag+erad+eadd)
+
+              pvar(5) = uold(icell,5)
 
               ! the minimum thermal energy input floor
               !uadd(i,j,5) = uadd(i,j,5) + max(etot0, ekk+eth0+emag) + erad - pvar(5)
-!!$omp end critical
-              pvar(5) = max(pvar(5),T2min*d0/scale_T2/(gamma-1.0)+ekk+emag+erad) + eadd
-
-              ! sanity check
-              Tk = (pvar(5)-ekk-emag-erad)/d*scale_T2*(gamma-1)
-              if(Tk<0)then
-                  print *,'TKERR: mech (post-call): Tk<0 =',Tk
-                  print *,'nH [H/cc]= ',d*scale_nH
-                  print *,'u  [km/s]= ',u*scale_v/1d5
-                  print *,'v  [km/s]= ',v*scale_v/1d5
-                  print *,'w  [km/s]= ',w*scale_v/1d5
-                  print *,'T0 [K]   = ',Tk0
-                  stop
-              endif
 
               d = uold(icell,1)
               do ii=i_fractions,nvar ! fractional quantities that we don't want to change
@@ -1247,6 +1223,19 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
                  uold(icell,idust-1+ii) = MAX(uold(icell,idust-1+ii),1d-5*mmet(ii))
               enddo
            end if
+
+           pvar(5) = max(pvar(5),T2min*d0/scale_T2/(gamma-1.0)+ekk+emag+erad) + eadd
+           ! sanity check
+           Tk = (pvar(5)-ekk-emag-erad)/d*scale_T2*(gamma-1)
+           if(Tk<0)then
+               print *,'TKERR: mech (post-call): Tk<0 =',Tk
+               print *,'nH [H/cc]= ',d*scale_nH
+               print *,'u  [km/s]= ',u*scale_v/1d5
+               print *,'v  [km/s]= ',v*scale_v/1d5
+               print *,'w  [km/s]= ',w*scale_v/1d5
+               print *,'T0 [K]   = ',Tk0
+               stop
+           endif
         end if
      end do
   end do ! loop over SN cell
