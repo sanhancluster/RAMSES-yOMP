@@ -1126,7 +1126,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 !$omp atomic update
               unew(icell,5) = unew(icell,5) + eadd
 !$omp atomic update
-              unew(icell,5) = max(unew(icell,5),T2min*d0/scale_T2/(gamma-1.0)+ekk+emag+erad+eadd)
+              unew(icell,5) = max(unew(icell,5),T2min*d0/scale_T2/(gamma-1.0)+ekk0+emag+erad+eadd)
 
               pvar(5) = unew(icell,5)
 
@@ -1194,7 +1194,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 !$omp atomic update
               uold(icell,5) = uold(icell,5) + eadd
 !$omp atomic update
-              uold(icell,5) = max(uold(icell,5),T2min*d0/scale_T2/(gamma-1.0)+ekk+emag+erad+eadd)
+              uold(icell,5) = max(uold(icell,5),T2min*d0/scale_T2/(gamma-1.0)+ekk0+emag+erad+eadd)
 
               pvar(5) = uold(icell,5)
 
@@ -1224,7 +1224,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
               enddo
            end if
 
-           pvar(5) = max(pvar(5),T2min*d0/scale_T2/(gamma-1.0)+ekk+emag+erad) + eadd
+           pvar(5) = max(pvar(5),T2min*d0/scale_T2/(gamma-1.0)+ekk0+emag+erad) + eadd
            ! sanity check
            Tk = (pvar(5)-ekk-emag-erad)/d*scale_T2*(gamma-1)
            if(Tk<0)then
