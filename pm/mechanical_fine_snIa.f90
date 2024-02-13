@@ -874,7 +874,6 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 !$omp atomic update
          uold(icell,ii) = uold(icell,ii) + uadd(i,0,ii)
      end do
-     fleftSN = 1d0 - floadSN(i)
      d = uold(icell,1)
      do ii=i_fractions,nvar ! fractional quantities that we don't want to change
 !$omp atomic write
@@ -883,7 +882,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 
      do ii=1,ndust  !!$dust_dev
 !$omp atomic update
-        uold(icell,ii) = MAX(uold(icell,ii),1d-5*mmet(ii))
+        uold(icell,idust-1+ii) = MAX(uold(icell,idust-1+ii),1d-5*mmet(ii))
      enddo
   end do
   !-------------------------------------------------------------
@@ -960,16 +959,17 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
               erad = erad + pvar(ndim+2+irad)
            end do
 #endif
-           d0=max(pvar(1), smallr)
-           u0=pvar(2)/d0
-           v0=pvar(3)/d0
-           w0=pvar(4)/d0
-           ekk0=0.5d0*d0*(u0**2+v0**2+w0**2)
-           eth0=pvar(5)-ekk0-emag-erad
+           !d0=max(pvar(1), smallr)
+           !u0=pvar(2)/d0
+           !v0=pvar(3)/d0
+           !w0=pvar(4)/d0
+           !ekk0=0.5d0*d0*(u0**2+v0**2+w0**2)
+           !eth0=pvar(5)-ekk0-emag-erad
 
            ! For stability
-           T2min=T2_star*(d0*scale_nH/n_star)**(g_star-1.0)
-           eadd = max(0d0,T2min*d0/scale_T2/(gamma-1.0)-eth0)
+           !T2min=T2_star*(d0*scale_nH/n_star)**(g_star-1.0)
+           !eadd = max(0d0,T2min*d0/scale_T2/(gamma-1.0)-eth0)
+           !uadd(i,j,5)=uadd(i,j,5)+eadd
 
            d= max(mloadSN(i  )/dble(nSNnei)/vol_nei, smallr)
            u=(ploadSN(i,1)/dble(nSNnei)+p_solid(i,j)*vSNnei(1,j))/vol_nei/d
@@ -1101,7 +1101,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 !$omp end atomic
               end do
 
-              ! update internal energy
+              ! update internal energy here, to accont velocity change
 #ifdef SOLVERmhd
               do idim=1,ndim
                  emag=emag+0.125d0*(pvar(idim+ndim+2)+pvar(idim+nvar))**2
@@ -1121,8 +1121,8 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 
               ! For stability
               !eth0=pvar(5)-ekk0-emag-erad
+              eadd = max(ek_solid(i,j)/vol_nei, ekk-ekk0) ! depends on velocity
               T2min=T2_star*(d0*scale_nH/n_star)**(g_star-1.0)
-              eadd = max(ek_solid(i,j)/vol_nei, ekk-ekk0)
 !$omp atomic update
               unew(icell,5) = unew(icell,5) + eadd
 !$omp atomic update
@@ -1169,7 +1169,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 !$omp end atomic
               end do
 
-              ! update internal energy
+              ! update internal energy here, to accont velocity change
 #ifdef SOLVERmhd
               do idim=1,ndim
                  emag=emag+0.125d0*(pvar(idim+ndim+2)+pvar(idim+nvar))**2
@@ -1189,8 +1189,8 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 
               ! For stability
               !eth0=pvar(5)-ekk0-emag-erad
+              eadd = max(ek_solid(i,j)/vol_nei, ekk-ekk0) ! depends on velocity
               T2min=T2_star*(d0*scale_nH/n_star)**(g_star-1.0)
-              eadd = max(ek_solid(i,j)/vol_nei, ekk-ekk0)
 !$omp atomic update
               uold(icell,5) = uold(icell,5) + eadd
 !$omp atomic update
