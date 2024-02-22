@@ -711,7 +711,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
                  mmet(1:ndust)=pvar(imetal)
               endif
               do ii=1,ndust  !!$dust_dev
-                 Mdust (ii)=pvar(idust-1+ii) + uadd(i,0,idust-1+ii)
+                 Mdust (ii)=pvar(idust-1+ii)
                  dfdust = -(1d0-(1d0-MIN(1-exp(-dust_SNdest_eff*0.1/asize(ii)),1.0d0)*MIN(MS100/Mgas,1.0d0))**dble_NSN)
                  dMdust(ii) = Mdust(ii)*dfdust !!(eqn 13 Granato,2021)+size dependance like thermal sputtering
                  if(log_mfb_mega) write(*,'(A,i3,A,5e15.8,I9)')'(1) for bin : Mshock,Mgas,Mdust,dMdust,nSN' &
@@ -724,7 +724,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
               enddo !!on bin
            else
               do ii=1,ndust  !!$dust_dev
-                 newMdust(ii)=pvar(idust-1+ii) + uadd(i,0,idust-1+ii)
+                 newMdust(ii)=pvar(idust-1+ii)
               enddo !!on bin
            endif
            do ii=1,ndust
@@ -941,31 +941,6 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 
   end do ! loop over SN cell
 
-  ! Safety check for change in dust and metal, this should happen very rarely only if OpenMP is on
-  if(dust)then
-     do i=1,np
-        do j=0,nSNnei
-           if(dust_chem) then
-              ilow=1;ihigh=ilow+dndsize
-              mmet(ilow:ihigh)=uadd(i,j,ichem+ichC-1)
-              ilow=ihigh+1;ihigh=ilow+dndsize
-              mmet(ilow:ihigh)=MIN(uadd(i,j,ichem-1+ichMg)/(nsilMg*muMg) & ! This is the metallicity of
-                              &   ,uadd(i,j,ichem-1+ichFe)/(nsilFe*muFe) & ! the available elements
-                              &   ,uadd(i,j,ichem-1+ichSi)/(nsilSi*muSi) & ! in the chemical composition
-                              &   ,uadd(i,j,ichem-1+ichO )/(nsilO *muO ))& ! of silicates,which is turned
-                              &   *nsilSi*muSi                               ! into the key element Si
-           else
-              mmet(1:ndust)=uadd(i,j,imetal)
-           endif
-           do ii=1,ndust  !!$dust_dev
-              if(uadd(i,j,idust-1+ii) > mmet(ii))then
-                 write(*,*) 'Warn: dust increase exceeds metallicity increase', uadd(i,j,idust-1+ii), mmet(ii)
-                 uadd(i,j,idust-1+ii) = MIN(uadd(i,j,idust-1+ii), mmet(ii))
-              end if
-           end do
-        end do
-     end do
-  end if
   !-------------------------------------------------------------
   ! Update shared arrays
   !-------------------------------------------------------------
