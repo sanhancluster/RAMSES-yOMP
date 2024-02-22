@@ -941,6 +941,31 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 
   end do ! loop over SN cell
 
+  ! Safety check for change in dust and metal, this should happen very rarely only if OpenMP is on
+  if(dust)then
+     do i=1,np
+        do j=0,nSNnei
+           if(dust_chem) then
+              ilow=1;ihigh=ilow+dndsize
+              mmet(ilow:ihigh)=uadd(i,j,ichem+ichC-1)
+              ilow=ihigh+1;ihigh=ilow+dndsize
+              mmet(ilow:ihigh)=MIN(uadd(i,j,ichem-1+ichMg)/(nsilMg*muMg) & ! This is the metallicity of
+                              &   ,uadd(i,j,ichem-1+ichFe)/(nsilFe*muFe) & ! the available elements
+                              &   ,uadd(i,j,ichem-1+ichSi)/(nsilSi*muSi) & ! in the chemical composition
+                              &   ,uadd(i,j,ichem-1+ichO )/(nsilO *muO ))& ! of silicates,which is turned
+                              &   *nsilSi*muSi                               ! into the key element Si
+           else
+              mmet(1:ndust)=uadd(i,j,imetal)
+           endif
+           do ii=1,ndust  !!$dust_dev
+              if(uadd(i,j,idust-1+ii) > mmet(ii))then
+                 write(*,*) 'Warn: dust increase exceeds metallicity increase', uadd(i,j,idust-1+ii), mmet(ii)
+                 uadd(i,j,idust-1+ii) = MIN(uadd(i,j,idust-1+ii), mmet(ii))
+              end if
+           end do
+        end do
+     end do
+  end if
   !-------------------------------------------------------------
   ! Update shared arrays
   !-------------------------------------------------------------
