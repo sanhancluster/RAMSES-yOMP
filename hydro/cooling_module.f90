@@ -776,16 +776,16 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
         endif
 
 !!$        if(ind(i)==114.and.nh(ind(i))>1.24000E+01.and.nh(ind(i))< 1.24004E+01)then
-        if(ind(i)==72.and.nh(ind(i))>4.959E-02.and.nh(ind(i))<4.961E-02)then
-!!$           if(ind(i)==1)then
-           okinfocell=.true.
-        else
-           okinfocell=.false.
-        end if
-        if(dustdebug.and.okinfocell)write(*,'(A,6es13.5)')'lambdas (before dust)',cool,zzz(ind(i))*metal,heat,cool_com/nh(ind(i)),heat_com/nh(ind(i)),zzz(ind(i))
+        !if(ind(i)==72.and.nh(ind(i))>4.959E-02.and.nh(ind(i))<4.961E-02)then
+!!$     !      if(ind(i)==1)then
+        !   okinfocell=.true.
+        !else
+        !   okinfocell=.false.
+        !end if
+        !if(dustdebug.and.okinfocell)write(*,'(A,6es13.5)')'lambdas (before dust)',cool,zzz(ind(i))*metal,heat,cool_com/nh(ind(i)),heat_com/nh(ind(i)),zzz(ind(i))
 
-           ! Add dust cooling if needed
-           if(dust_cooling)then
+        ! Add dust cooling if needed
+        if(dust_cooling)then
            do ii=1,ndust !!$dust_dev
               ! The prefactor assumes mu=0.6 and a=0.1 micron (taken from Vogelsberger+18 (Dwek & Werner81))
               xx=9.73d7/tau(ind(i))*asizetwothird(ii)
@@ -943,11 +943,11 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
                  do ii=1,ndust
                     t_acc(ii)=t0_acc(ii)* 1d3/nH(ind(i)) *sqrt(50d0/tau(ind(i)))*(Zsunchem(ii)*rhoG0/rhoZ0(ii)) * (1d0+1d-4*tau(ind(i))**1.5)
                  enddo
-        else
+              else
                  do ii=1,ndust
                     t_acc(ii)=t0_acc(ii)*(Zsunchem(ii)*rhoG0/rhoZ0(ii)) / Sconstant !Assume the gas is at 10^3 /cc and 50 K...
                  enddo
-        endif
+              endif
            case('subgrid')
               lambda_jeans=sqrt(kB*tau(ind(i))*3.14d0/(6.67d-8*mH**2*nH(ind(i))))
               if(tau(ind(i)).gt.1d4.or.nh(ind(i)).lt.0.1d0 &
