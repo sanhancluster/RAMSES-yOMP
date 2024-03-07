@@ -395,7 +395,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
   real(dp)::num_sn,nH_nei,f_w_cell,f_w_crit
   real(dp)::t_rad,r_rad,r_shell,m_cen,ekk_ej
   real(dp)::uavg,vavg,wavg,ul,vl,wl,ur,vr,wr
-  real(dp)::d1,d2,d3,d4,d5,d6,dtot,pvar(1:nvarMHD)
+  real(dp)::d1,d2,d3,d4,d5,d6,dtot,pvar(1:nvarMHD),pvar2(1:nvarMHD)
   real(dp)::vturb,vth,Mach,sig_s2,dratio,mload_cen
   ! For stars affecting across the boundary of a cpu
   integer, dimension(1:nSNnei)::icpuSNnei
@@ -467,6 +467,11 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 
      ! First copy uold variables, this is to avoid inconsistency due to real-time change
      pvar(1:nvarMHD) = uold(icell,1:nvarMHD)
+     pvar2(1:nvarMHD) = uold(icell,1:nvarMHD)
+     if(pvar(1) /= pvar2(1)) then ! Check if uold has changed while reading
+        write(*,*) 'Warn: uold has changed while reading', pvar(1), pvar2(1)
+        pvar(1:nvarMHD) = pvar2(1:nvarMHD)
+     end if
 
      ! Sanity Check
      if((cpu_map(father(igrid)).ne.myid).or.&
@@ -659,6 +664,11 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 
      ! First copy uold variables, this is to avoid inconsistency due to real-time change
      pvar(1:nvarMHD) = uold(icell,1:nvarMHD)
+     pvar2(1:nvarMHD) = uold(icell,1:nvarMHD)
+     if(pvar(1) /= pvar2(1)) then ! Check if uold has changed while reading
+        write(*,*) 'Warn: uold has changed while reading', pvar(1), pvar2(1)
+        pvar(1:nvarMHD) = pvar2(1:nvarMHD)
+     end if
 
      d     = max(pvar(1), smallr)
      u     = pvar(2)/d
@@ -950,6 +960,11 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 
      ! First copy uold variables, this is to avoid inconsistency due to real-time change
      pvar(1:nvarMHD) = uold(icell,1:nvarMHD)
+     pvar2(1:nvarMHD) = uold(icell,1:nvarMHD)
+     if(pvar(1) /= pvar2(1)) then ! Check if uold has changed while reading
+        write(*,*) 'Warn: uold has changed while reading', pvar(1), pvar2(1)
+        pvar(1:nvarMHD) = pvar2(1:nvarMHD)
+     end if
 
      ! First destroy the corresponding amount of dust in the cell
      if(dust .and. dust_SNdest)then ! update dust
@@ -1072,18 +1087,14 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 !$omp atomic write
                   unew(icell,ii) = fractions(ii) * d
               end do
-
-              pvar(5) = max(pvar(5),T2min*d0/scale_T2/(gamma-1.0)+ekk0+emag+erad) + eadd
-              ! sanity check
-              Tk = (pvar(5)-ekk-emag-erad)/d*scale_T2*(gamma-1)
-              if(Tk<0)then
-                 print *,'TKERR: mech (post-call): Tk<0 =',Tk
-                 print *,'nH [H/cc]= ',d*scale_nH
-                 stop
-              endif
            else
               ! First copy uold variables, this is to avoid inconsistency due to real-time change
               pvar(1:nvarMHD) = uold(icell,1:nvarMHD)
+              pvar2(1:nvarMHD) = uold(icell,1:nvarMHD)
+              if(pvar(1) /= pvar2(1)) then ! Check if uold has changed while reading
+                 write(*,*) 'Warn: uold has changed while reading', pvar(1), pvar2(1)
+                 pvar(1:nvarMHD) = pvar2(1:nvarMHD)
+              end if
 
               emag=0d0
               erad=0d0
@@ -1160,7 +1171,6 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
               end do
            end if
 
-           pvar(5) = max(pvar(5),T2min*d0/scale_T2/(gamma-1.0)+ekk0+emag+erad) + eadd
            ! sanity check
            Tk = (pvar(5)-ekk-emag-erad)/d*scale_T2*(gamma-1)
            if(Tk<0)then
