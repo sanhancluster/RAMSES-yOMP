@@ -120,7 +120,7 @@ subroutine mechanical_feedback_snIa_fine(ilevel,icount)
         end if
      end do
   end if
-  ! End MC Tracer
+  ! End MC Tracer-
 
   ncomm_SN=0  ! important to initialize; number of communications (not SNe)
 #ifndef WITHOUTMPI
@@ -395,7 +395,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
   real(dp)::num_sn,nH_nei,f_w_cell,f_w_crit
   real(dp)::t_rad,r_rad,r_shell,m_cen,ekk_ej
   real(dp)::uavg,vavg,wavg,ul,vl,wl,ur,vr,wr
-  real(dp)::d1,d2,d3,d4,d5,d6,dtot,pvar(1:nvarMHD),pvar2(1:nvarMHD)
+  real(dp)::d1,d2,d3,d4,d5,d6,dtot,pvar(1:nvarMHD)
   real(dp)::vturb,vth,Mach,sig_s2,dratio,mload_cen
   ! For stars affecting across the boundary of a cpu
   integer, dimension(1:nSNnei)::icpuSNnei
@@ -466,12 +466,9 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
      call get_icell_from_pos (fpos, ilevel+1, igrid, icell,ilevel2)
 
      ! First copy uold variables, this is to avoid inconsistency due to real-time change
+!$omp critical(omp_snIa)
      pvar(1:nvarMHD) = uold(icell,1:nvarMHD)
-     pvar2(1:nvarMHD) = uold(icell,1:nvarMHD)
-     if(pvar(1) /= pvar2(1)) then ! Check if uold has changed while reading
-        write(*,*) 'Warn: uold has changed while reading', pvar(1), pvar2(1)
-        pvar(1:nvarMHD) = pvar2(1:nvarMHD)
-     end if
+!$omp end critical(omp_snIa)
 
      ! Sanity Check
      if((cpu_map(father(igrid)).ne.myid).or.&
@@ -543,7 +540,8 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
         ncell = 1
         icellvec(1) = icell
         call getnbor(icellvec,ind_nbor,ncell,ilevel)
-        u0 = uold(icell        ,2) 
+!$omp critical(omp_snIa)
+        u0 = uold(icell        ,2)
         v0 = uold(icell        ,3) 
         w0 = uold(icell        ,4) 
         ul = uold(ind_nbor(1,1),2)-u0 
@@ -552,6 +550,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
         vr = uold(ind_nbor(1,4),3)-v0
         wl = uold(ind_nbor(1,5),4)-w0
         wr = uold(ind_nbor(1,6),4)-w0
+!$omp end critical(omp_snIa)
         vturb = sqrt(ul**2 + ur**2 + vl**2 + vr**2 + wl**2 + wr**2)
         vturb = vturb*scale_v ! cm/s
     
@@ -663,12 +662,9 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
      icell = ncoarse+ind_grid(i)+(ind_pos_cell(i)-1)*ngridmax
 
      ! First copy uold variables, this is to avoid inconsistency due to real-time change
+!$omp critical(omp_snIa)
      pvar(1:nvarMHD) = uold(icell,1:nvarMHD)
-     pvar2(1:nvarMHD) = uold(icell,1:nvarMHD)
-     if(pvar(1) /= pvar2(1)) then ! Check if uold has changed while reading
-        write(*,*) 'Warn: uold has changed while reading', pvar(1), pvar2(1)
-        pvar(1:nvarMHD) = pvar2(1:nvarMHD)
-     end if
+!$omp critical(omp_snIa)
 
      d     = max(pvar(1), smallr)
      u     = pvar(2)/d
@@ -955,16 +951,12 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
   ! Update shared arrays
   !-------------------------------------------------------------
   ! update central cell first
+!$omp critical(omp_snIa)
   do i=1,np ! loop over SN cell
      icell = ncoarse+ind_grid(i)+(ind_pos_cell(i)-1)*ngridmax
 
      ! First copy uold variables, this is to avoid inconsistency due to real-time change
      pvar(1:nvarMHD) = uold(icell,1:nvarMHD)
-     pvar2(1:nvarMHD) = uold(icell,1:nvarMHD)
-     if(pvar(1) /= pvar2(1)) then ! Check if uold has changed while reading
-        write(*,*) 'Warn: uold has changed while reading', pvar(1), pvar2(1)
-        pvar(1:nvarMHD) = pvar2(1:nvarMHD)
-     end if
 
      ! First destroy the corresponding amount of dust in the cell
      if(dust .and. dust_SNdest)then ! update dust
@@ -985,9 +977,9 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
         do ii=1,ndust  !!$dust_dev
            dfdust = -(1d0-(1d0-MIN(1-exp(-dust_SNdest_eff*0.1/asize(ii)),1.0d0)*MIN(MS100/Mgas,1.0d0))**dble_NSN)
            dM_SNd_Ia_add(ii)=dM_SNd_Ia_add(ii)+pvar(idust-1+ii)*dfdust*vol_loc
-!$omp atomic update
+!!$omp atomic update
            uold(icell,idust-1+ii) = uold(icell,idust-1+ii) * (1d0 + dfdust)
-!$omp atomic update
+!!$omp atomic update
            uold(icell,idust-1+ii) = MAX(uold(icell,idust-1+ii),1d-5*mmet(ii))
         enddo
      endif
@@ -995,12 +987,12 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
          fractions(ii) = pvar(ii) / pvar(1)
      end do
      do ii=1,i_fractions-1 ! update shared array
-!$omp atomic update
+!!$omp atomic update
          uold(icell,ii) = uold(icell,ii) + uadd(i,0,ii)
      end do
      d = uold(icell,1)
      do ii=i_fractions,nvar ! fractional quantities that we don't want to change
-!$omp atomic write
+!!$omp atomic write
          uold(icell,ii) = fractions(ii) * d ! constant fractional change
      end do
   end do
@@ -1038,17 +1030,17 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
                  do ii=1,ndust  !!$dust_dev
                     dfdust = -(1d0-(1d0-MIN(1-exp(-dust_SNdest_eff*0.1/asize(ii)),1.0d0)*MIN(MS100/Mgas,1.0d0))**dble_NSN)
                     dM_SNd_Ia_add(ii)=dM_SNd_Ia_add(ii)+pvar(idust-1+ii)*dfdust*vol_loc
-!$omp atomic update
+!!$omp atomic update
                     unew(icell,idust-1+ii) = unew(icell,idust-1+ii) * (1d0 + dfdust)
-!$omp atomic update
+!!$omp atomic update
                     unew(icell,idust-1+ii) = MAX(unew(icell,idust-1+ii),1d-5*mmet(ii))
                  enddo
               endif
               do ii=1,i_fractions-1 ! update shared array
-!$omp atomic capture
+!!$omp atomic capture
                   pvar(ii) = unew(icell,ii)
                   unew(icell,ii) = unew(icell,ii) + uadd(i,j,ii)
-!$omp end atomic
+!!$omp end atomic
               end do
 
               ! update internal energy here, to accont velocity change
@@ -1072,9 +1064,9 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
               ! For stability
               eadd = max(ek_solid(i,j)/vol_nei, ekk-ekk0) ! depends on velocity
               T2min=T2_star*(d0*scale_nH/n_star)**(g_star-1.0)
-!$omp atomic update
+!!$omp atomic update
               unew(icell,5) = unew(icell,5) + eadd
-!$omp atomic update
+!!$omp atomic update
               unew(icell,5) = max(unew(icell,5),T2min*d0/scale_T2/(gamma-1.0)+ekk0+emag+erad+eadd)
 
               pvar(5) = unew(icell,5)
@@ -1084,17 +1076,12 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 
               d = unew(icell,1)
               do ii=i_fractions,nvar ! fractional quantities that we don't want to change
-!$omp atomic write
+!!$omp atomic write
                   unew(icell,ii) = fractions(ii) * d
               end do
            else
               ! First copy uold variables, this is to avoid inconsistency due to real-time change
               pvar(1:nvarMHD) = uold(icell,1:nvarMHD)
-              pvar2(1:nvarMHD) = uold(icell,1:nvarMHD)
-              if(pvar(1) /= pvar2(1)) then ! Check if uold has changed while reading
-                 write(*,*) 'Warn: uold has changed while reading', pvar(1), pvar2(1)
-                 pvar(1:nvarMHD) = pvar2(1:nvarMHD)
-              end if
 
               emag=0d0
               erad=0d0
@@ -1119,17 +1106,17 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
                  do ii=1,ndust  !!$dust_dev
                     dfdust = -(1d0-(1d0-MIN(1-exp(-dust_SNdest_eff*0.1/asize(ii)),1.0d0)*MIN(MS100/Mgas,1.0d0))**dble_NSN)
                     dM_SNd_Ia_add(ii)=dM_SNd_Ia_add(ii)+pvar(idust-1+ii)*dfdust*vol_loc
-!$omp atomic update
+!!$omp atomic update
                     uold(icell,idust-1+ii) = uold(icell,idust-1+ii) * (1d0 + dfdust)
-!$omp atomic update
+!!$omp atomic update
                     uold(icell,idust-1+ii) = MAX(uold(icell,idust-1+ii),1d-5*mmet(ii))
                  enddo
               endif
               do ii=1,i_fractions-1 ! update shared array
-!$omp atomic capture
+!!$omp atomic capture
                   pvar(ii) = uold(icell,ii)
                   uold(icell,ii) = uold(icell,ii) + uadd(i,j,ii)
-!$omp end atomic
+!!$omp end atomic
               end do
 
               ! update internal energy here, to accont velocity change
@@ -1154,9 +1141,9 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
               !eth0=pvar(5)-ekk0-emag-erad
               eadd = max(ek_solid(i,j)/vol_nei, ekk-ekk0) ! depends on velocity
               T2min=T2_star*(d0*scale_nH/n_star)**(g_star-1.0)
-!$omp atomic update
+!!$omp atomic update
               uold(icell,5) = uold(icell,5) + eadd
-!$omp atomic update
+!!$omp atomic update
               uold(icell,5) = max(uold(icell,5),T2min*d0/scale_T2/(gamma-1.0)+ekk0+emag+erad+eadd)
 
               pvar(5) = uold(icell,5)
@@ -1166,7 +1153,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
 
               d = uold(icell,1)
               do ii=i_fractions,nvar ! fractional quantities that we don't want to change
-!$omp atomic write
+!!$omp atomic write
                   uold(icell,ii) = fractions(ii) * d
               end do
            end if
@@ -1181,6 +1168,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
         end if
      end do
   end do ! loop over SN cell
+!$omp critical(omp_snIa)
 
 end subroutine mech_fine_snIa
 !################################################################
