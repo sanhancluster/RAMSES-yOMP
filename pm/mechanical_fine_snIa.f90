@@ -664,7 +664,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
      ! First copy uold variables, this is to avoid inconsistency due to real-time change
 !$omp critical(omp_snIa)
      pvar(1:nvarMHD) = uold(icell,1:nvarMHD)
-!$omp critical(omp_snIa)
+!$omp end critical(omp_snIa)
 
      d     = max(pvar(1), smallr)
      u     = pvar(2)/d
@@ -1168,7 +1168,7 @@ subroutine mech_fine_snIa(ind_grid,ind_pos_cell,np,ilevel,dteff,nSN,mSN,pSN,mZSN
         end if
      end do
   end do ! loop over SN cell
-!$omp critical(omp_snIa)
+!$omp end critical(omp_snIa)
 
 end subroutine mech_fine_snIa
 !################################################################
