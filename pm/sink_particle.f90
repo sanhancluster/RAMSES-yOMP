@@ -5430,7 +5430,7 @@ subroutine AGN_feedback
 
   ! Compute some averaged quantities before doing the AGN energy input
   call average_AGN(xAGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiveAGN,jAGN,vol_gas,mass_gas,psy_norm,vol_blast &
-       & ,mass_blast,ind_blast,nAGN,iAGN_myid,ok_blast_agn,EsaveAGN,X_radio)
+       & ,mass_blast,ind_blast,nAGN,iAGN_myid,ok_blast_agn,EsaveAGN,X_radio, dMsmbh_AGN)
 
   ! Check if AGN goes into thermal blast wave mode
 !$omp parallel do private(temp_blast)
@@ -5533,7 +5533,7 @@ end subroutine AGN_feedback
 !################################################################
 !################################################################
 subroutine average_AGN(xAGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiveAGN,jAGN,vol_gas,mass_gas,psy_norm,vol_blast &
-     & ,mass_blast,ind_blast,nAGN,iAGN_myid,ok_blast_agn,EsaveAGN,X_radio)
+     &,mass_blast,ind_blast,nAGN,iAGN_myid,ok_blast_agn,EsaveAGN,X_radio,dMsmbh_AGN)
   use pm_commons
   use amr_commons
   use hydro_commons
@@ -5554,7 +5554,7 @@ subroutine average_AGN(xAGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiveAGN,jAGN,vol_
   !------------------------------------------------------------------------
   integer, intent(in) :: nAGN
   integer, intent(in), dimension(1:nAGN) :: iAGN_myid
-  real(dp), intent(in), dimension(1:nAGN) :: X_radio, EsaveAGN
+  real(dp), intent(in), dimension(1:nAGN) :: X_radio, EsaveAGN, dMsmbh_AGN
   real(dp), dimension(1:nAGN, 1:3), intent(in) :: jAGN, xAGN, dMBH_AGN, dMEd_AGN
   ! real(dp), dimension(1:nAGN, 1:3), intent(out) :: xAGN
   real(dp), dimension(1:nAGN), intent(out) :: mAGN, dAGNcell
@@ -5634,7 +5634,7 @@ subroutine average_AGN(xAGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiveAGN,jAGN,vol_
 !$omp & box_origin,box_extents,capsule_r,capsule_start,capsule_end) &
 !$omp & reduction(+:vol_gas,psy_norm,mass_gas) &
 !$omp & shared(levelmin,nlevelmax,scale,active,ncoarse,ngridmax,son,xg,skip_loc,nAGN,xAGN,EsaveAGN,rmax2,uold, &
-!$omp & ind_blast,X_radio,X_floor,ok_blast_agn,jAGN,rmax,box_u,box_v,box_w,box,capsule,mAGN,mloadAGN,dMsmbh,vol_blast, &
+!$omp & ind_blast,X_radio,X_floor,ok_blast_agn,jAGN,rmax,box_u,box_v,box_w,box,capsule,mAGN,mloadAGN,dMsmbh_AGN,vol_blast, &
 !$omp & smallr,dAGNcell,imetal,passiveAGN,mass_blast)
   do ilevel=levelmin,nlevelmax
      ! Computing local volume (important for averaging hydro quantities)
@@ -5732,7 +5732,7 @@ subroutine average_AGN(xAGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiveAGN,jAGN,vol_
                                 dr_cell=max(abs(dxx),abs(dyy),abs(dzz))
 
                                 dzjet= dxx*j_x + dyy*j_y + dzz*j_z
-                                
+
                                 ! Work in simulation's frame
                                 capsule_start = xAGN(iAGN, :) - rmax * jAGN(iAGN, :) / jtot
                                 capsule_end = xAGN(iAGN, :) + rmax * jAGN(iAGN, :) / jtot
@@ -5780,16 +5780,18 @@ subroutine average_AGN(xAGN,dMBH_AGN,dMEd_AGN,mAGN,dAGNcell,passiveAGN,jAGN,vol_
                                    ekk=0.5d0*d*(u*u+v*v+w*w)
                                    eint=uold(ind_blast(iAGN),5)-ekk
                                    vol_blast  (iAGN)=vol_loc
-                                   mAGN(iAGN)=min(mloadAGN*dMsmbh(iAGN),0.25d0*d*vol_loc)
+                                   mAGN(iAGN)=min(mloadAGN*dMsmbh_AGN(iAGN),0.25d0*d*vol_loc)
                                    dAGNcell(iAGN) = d * vol_loc
 
+                                   d=max(uold(ind_blast(iAGN),1)-mAGN(iAGN)/vol_loc,smallr)
                                    do ivar = imetal, nvar
-                                      passiveAGN(iAGN, ivar) = uold(ind_blast(iAGN), ivar)/d
-                                      uold(ind_blast(iAGN), ivar) = uold(ind_blast(iAGN), ivar) &
-                                           & - passiveAGN(iAGN, ivar)*mAGN(iAGN)/vol_loc
+                                      passiveAGN(iAGN, ivar) = uold(ind_blast(iAGN), ivar)/uold(ind_blast(iAGN),1)!d
+                                      !uold(ind_blast(iAGN), ivar) = uold(ind_blast(iAGN), ivar) &
+                                      !     & - passiveAGN(iAGN, ivar)*mAGN(iAGN)/vol_loc
+                                      uold(ind_blast(iAGN), ivar) = passiveAGN(iAGN, ivar)*d
                                    end do
 
-                                   d=max(uold(ind_blast(iAGN),1)-mAGN(iAGN)/vol_loc, smallr)
+                                   !d=max(uold(ind_blast(iAGN),1)-mAGN(iAGN)/vol_loc, smallr)
                                    uold(ind_blast(iAGN),1)=d
                                    uold(ind_blast(iAGN),2)=d*u
                                    uold(ind_blast(iAGN),3)=d*v
