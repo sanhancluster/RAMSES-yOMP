@@ -73,7 +73,7 @@
   integer::kpart,lpart,mpart,opart,gpart,ngas,nhalo
   !integer, dimension(nvector)::ids
   real(dp)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_m
-  real(dp),dimension(1:nvector)::tt,zz,uu
+  real(dp),dimension(1:nvector)::tt,uu
   real,dimension(1:nvector,1:3)::xx_sp,vv_sp
   real,dimension(1:nvector)::mm_sp,tt_sp,zz_sp,uu_sp
   real(dp)::mgas_tot
@@ -1242,7 +1242,6 @@ contains
 
 #ifdef DICE
   subroutine load_dice
-
     dice_init=.true.
     ! Conversion factor from user units to cgs units
     call units(scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
@@ -1548,6 +1547,8 @@ contains
                 xx(i,:)   = xx_sp(i,:)*(gadget_scale_l/scale_l)*ic_scale_pos
                 vv(i,:)   = vv_sp(i,:)*(gadget_scale_v/scale_v)*ic_scale_vel
                 mm(i)     = mm_sp(i)*(gadget_scale_m/scale_m)*ic_scale_mass
+                ! mm(i)     = 10e6 ! ramses_dice_omp_m10e6
+                
                 if(cosmo) then
                    if(type_index .eq. 1) mass_sph = mm(i)
                    if(xx(i,1)<  0.0d0  )xx(i,1)=xx(i,1)+dble(nx)
@@ -1736,6 +1737,7 @@ contains
     ifout = ic_ifout
     t = ic_t_restart
     ! DICE patch
+    
   end subroutine load_dice
 
 #endif
