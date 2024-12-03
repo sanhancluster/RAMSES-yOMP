@@ -702,6 +702,7 @@ subroutine coolfine1(ind_grid,ngrid,ilevel,dM_dust_add)
         end do
      endif
 
+#if NDUST>0
      if(dust)then
 
         if(.not.dust_dest_within_cool)then !! dust_cooling=false
@@ -1014,6 +1015,7 @@ subroutine coolfine1(ind_grid,ngrid,ilevel,dM_dust_add)
 !!$        endif
 
      endif !!endif(dust)
+#endif
 
 #ifdef RT
      if(neq_chem) then

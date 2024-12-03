@@ -9,10 +9,10 @@ NENER = 0
 NGROUPS = 0
 NIONS = 0
 METALS = 1 # metal
-NCHEM = 0 # chemical species
-NDUST = 0 # dust species
+NCHEM = 9 # chemical species
+NDUST = 4 # dust species
 #Extra variables beyond those required by dimensions, or listed above
-NVAR_EXTRA = 0 # 1 extra variable for virial parameter in dust
+NVAR_EXTRA = 1 # 1 extra variable for virial parameter in dust
 SOLVER = hydro
 #############################################################################
 # Options
@@ -21,7 +21,7 @@ RT = 0
 DICE = 0
 REFMASK = 0 # refinement mask for zoom simulation; set to 0 for full volume
 LONGINT = 0
-QUADHILBERT = 0 # for simulations that go beyond level >= 19
+QUADHILBERT = 1 # for simulations that go beyond level >= 19
 # Set to 1 to use old MPI include statements instead of more recent `use mpi`.
 USE_OLD_MPI_INCLUDE = 0
 EXEC = ramses

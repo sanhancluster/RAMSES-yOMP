@@ -844,8 +844,10 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
                     do ii=jj1,jj2
                        rhoZ0(ii)  =rhoZ0(ii)+dustloc
                     enddo
+#if NDUST>0
                     if(dustdebug.and.okinfocell)write(*,'(A,3es13.5)')'Z2(tot,gas,dust)=',rhoZ0(1)/(0.02*nH(ind(i))),(rhoZ0(1)-dustloc)/(0.02*nH(ind(i))),dustloc/(0.02*nH(ind(i)))
-                 enddo
+#endif
+                    enddo
               else
                  rhoZ0(1:ndust)=zzz(ind(i))*0.02*nH(ind(i))
                  do jj=1,ndchemtype
@@ -858,7 +860,9 @@ subroutine solve_cooling(nH,T2,zsolar,fdust,sigma,boost,dt,deltaT2,ncell,ilevel)
                     do ii=jj1,jj2
                        rhoZ0(ii)  =rhoZ0(ii)+dustloc
                     enddo
+#if NDUST>0
                     if(dustdebug.and.okinfocell)write(*,'(A,3es13.5)')'Z2(tot,gas,dust)=',rhoZ0(1)/(0.02*nH(ind(i))),(rhoZ0(1)-dustloc)/(0.02*nH(ind(i))),dustloc/(0.02*nH(ind(i)))
+#endif
                  enddo
               endif
            else

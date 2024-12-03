@@ -626,6 +626,7 @@ subroutine read_hydro_params(nml_ok)
 #endif
      if(metal)           write(*,*) '   imetal   = ',imetal
      if(nchem>0)         write(*,*) '   ichems   = ',ichem,'-',ichem+nchem-1
+#if NDUST>0
      if(dust) then
         write(*,*) 'cooling  = ',cooling
         write(*,*) '   =============***Dust Parameters***=============   '
@@ -676,6 +677,7 @@ subroutine read_hydro_params(nml_ok)
            write(*,*) '   ivirial2 = ',ivirial2
         end if
      endif
+#endif
      if(aton)            write(*,*) '   ixion    = ',ixion
 #ifdef RT
      if(rt) write(*,*) '   iIons    = ',ichem
